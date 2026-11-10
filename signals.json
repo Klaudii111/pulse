@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-11-10T20:46:32+00:00",
+ "generated_at": "2026-11-10T21:47:08+00:00",
  "mode": "paper",
  "regime": {
   "state": "risk_on",
-  "spy_vs_sma200_pct": 3.39,
+  "spy_vs_sma200_pct": 2.97,
   "note": "Risk-on: SPY nad 200denním průměrem."
  },
  "tracks": {
@@ -51,31 +51,19 @@
      "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; patří mezi nejsilnější tituly za posledních 12 měsíců; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 57.38 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
      "en": "Why: the price has risen over the past year and holds above its 200-day average; it is among the strongest names over the last 12 months; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 57.38, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
     },
-    "last_price": 62.18,
-    "last_price_at": "2026-11-10T20:46:25+00:00",
-    "pnl_pct_position": 0.387,
-    "pnl_r": 0.053,
-    "progress": 0.026,
+    "last_price": 62.21,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.436,
+    "pnl_r": 0.059,
+    "progress": 0.03,
     "price_path": [
      {
       "t": "2026-11-09T16:00:00-05:00",
       "p": 61.94
      },
      {
-      "t": "2026-11-10T14:47:34+00:00",
-      "p": 61.37
-     },
-     {
-      "t": "2026-11-10T16:44:12+00:00",
-      "p": 62.11
-     },
-     {
-      "t": "2026-11-10T18:45:41+00:00",
-      "p": 62.185
-     },
-     {
-      "t": "2026-11-10T20:46:25+00:00",
-      "p": 62.18
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 62.21
      }
     ]
    },
@@ -115,31 +103,19 @@
      "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 178.91 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
      "en": "Why: the price has risen over the past year and holds above its 200-day average; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 178.91, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
     },
-    "last_price": 189.07,
-    "last_price_at": "2026-11-10T20:46:23+00:00",
-    "pnl_pct_position": 0.393,
-    "pnl_r": 0.079,
-    "progress": 0.039,
+    "last_price": 188.88,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.292,
+    "pnl_r": 0.058,
+    "progress": 0.029,
     "price_path": [
      {
       "t": "2026-11-09T16:00:00-05:00",
       "p": 188.33
      },
      {
-      "t": "2026-11-10T14:47:29+00:00",
-      "p": 187.595
-     },
-     {
-      "t": "2026-11-10T16:44:18+00:00",
-      "p": 187.466
-     },
-     {
-      "t": "2026-11-10T18:45:38+00:00",
-      "p": 187.99
-     },
-     {
-      "t": "2026-11-10T20:46:23+00:00",
-      "p": 189.07
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 188.88
      }
     ]
    },
@@ -179,31 +155,67 @@
      "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 86.42 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
      "en": "Why: the price has risen over the past year and holds above its 200-day average; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 86.42, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
     },
-    "last_price": 91.014,
-    "last_price_at": "2026-11-10T20:46:25+00:00",
-    "pnl_pct_position": 0.136,
-    "pnl_r": 0.028,
-    "progress": 0.014,
+    "last_price": 91.03,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.154,
+    "pnl_r": 0.031,
+    "progress": 0.016,
     "price_path": [
      {
       "t": "2026-11-09T16:00:00-05:00",
       "p": 90.89
      },
      {
-      "t": "2026-11-10T14:47:31+00:00",
-      "p": 90.68
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 91.03
+     }
+    ]
+   },
+   {
+    "id": "MESIC-2026-11-10-MRNA-8",
+    "symbol": "MRNA",
+    "name": "Moderna",
+    "asset_class": "stock",
+    "horizon": "MESIC",
+    "action": "BUY",
+    "created_at": "2026-11-10T21:47:06+00:00",
+    "entry": 250.83,
+    "stop": 190.3164,
+    "target": 371.8571,
+    "exit_date": "2026-12-10",
+    "risk_pct_account": 0.255,
+    "target_pct_account": 0.51,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Trend (12 měsíců)",
+      "en": "Trend (12 months)"
      },
      {
-      "t": "2026-11-10T16:44:21+00:00",
-      "p": 90.93
-     },
+      "cs": "Momentum (top 10 %)",
+      "en": "Momentum (top 10%)"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; patří mezi nejsilnější tituly za posledních 12 měsíců. Neplatí, pokud cena klesne na stop 190.32 nebo do 2026-12-10 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
+     "en": "Why: the price has risen over the past year and holds above its 200-day average; it is among the strongest names over the last 12 months. Invalidated if the price falls to the stop 190.32, or if the target is not reached by 2026-12-10 (the position is then closed, or extended if the signal still holds)."
+    },
+    "last_price": 250.83,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.0,
+    "pnl_r": 0.0,
+    "progress": 0.0,
+    "price_path": [
      {
-      "t": "2026-11-10T18:45:42+00:00",
-      "p": 91.2
-     },
-     {
-      "t": "2026-11-10T20:46:25+00:00",
-      "p": 91.014
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 250.83
      }
     ]
    }
