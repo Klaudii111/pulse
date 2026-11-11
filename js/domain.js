@@ -5,6 +5,8 @@ import * as F from './format.js';
 import { LESSONS } from './lessons.js';
 import { t, L } from './i18n/index.js';
 import * as Live from './live.js';
+import { nextUsOpen } from './views/signals.js';
+import { priceOf, pnlAt, outcome, costs } from './wallet.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
 
@@ -337,7 +339,8 @@ export function orderLines(s) {
  * How a signal is doing right now, in plain words, with one colour (tone: up / down / gold / flat).
  * move = price move of the trade in % (what money put into the trade did), dir-aware.
  * Used by signal cards, the "all signals" list, Dnes positions, Results (open + closed) and the detail. */
-export const NEAR_PROGRESS = 0.6; // 60 % of the way to target / stop = "getting close"
+export const NEAR_PROGRESS = 0.6;
+export const FLAT_PCT = 0.1; // 1.9.1: within ±0,1 % a result is "≈ 0 · zatím na nule" (grey), never red / green // 60 % of the way to target / stop = "getting close"
 export function exampleStake() {
   const ccy = calcState().ccy;
   return { amount: 10000, ccy };
@@ -372,7 +375,6 @@ export function userMoney(s) {
   const rr = s.rr || (s.target != null && stopDist ? Math.abs(s.target - s.entry) / s.entry * 100 / stopDist : null);
   return { account: c.account, ccy: c.ccy, risk: p.pct, now: r == null ? null : r * oneR, atTarget: rr ? rr * oneR : null, atStop: -oneR };
 }
-const sm = (v, ccy) => (v > 0.5 ? '+' : '') + F.money(v, ccy, 0);
 
 export function liveStatus(s, now = clock()) {
   const r = liveStatus0(s, now);
@@ -383,9 +385,9 @@ function liveStatus0(s, now) {
   const st = s.status && s.status !== 'open' ? s.status : (s.intraday_hit || (isTimeExit(s, now) ? 'time_exit' : 'open'));
   const mv = priceMove(s);
   const um = userMoney(s);
-  const you = um.now != null ? t('st.you', { m: sm(um.now, um.ccy) }) : '';
-  /* text = line 1 (price move, plain words), hint = how far to target / stop; sub = compact "you + hint" for rows */
-  const mk = (o) => ({ ...o, sub: [you, o.hint].filter(Boolean).join(' · ') });
+  /* text = line 1 (price move, plain words), hint = how far to target / stop; sub = the hint for rows.
+     1.9.1: no money "for you" here – real money only on the user's own trades (cardState), hypothetical money is grey. */
+  const mk = (o) => ({ ...o, sub: o.hint || '' });
   if (st === 'target') return mk({ code: 'target', tone: 'up', text: t('st.target'), hint: t('st.closedWin', { v: F.spct(mv, 1) }), move: mv, done: true });
   if (st === 'stop') return mk({ code: 'stop', tone: 'down', text: t('st.stop'), hint: t('st.closedLoss', { v: F.spct(mv, 1) }), move: mv, done: true });
   if (st === 'time_exit') return mk({ code: 'time', tone: (mv ?? 0) >= 0 ? 'up' : 'down', text: t('st.time'), hint: t('st.closedRes', { v: F.spct(mv ?? 0, 1) }), move: mv, done: true });
@@ -398,7 +400,7 @@ function liveStatus0(s, now) {
   const moveTxt = mv >= 0 ? t('st.win', { v: F.spct(mv, 1) }) : t('st.lose', { v: F.spct(mv, 1) });
   if ((prox && prox.side === 'stop') || progS >= NEAR_PROGRESS) return mk({ code: 'near-stop', tone: 'down', text: `${t('st.nearStop')} · ${moveTxt}`, hint: t('st.toStop', { v: F.pct(d.toStop, 1) }), move: mv });
   if ((prox && prox.side === 'target') || prog >= NEAR_PROGRESS) return mk({ code: 'near-target', tone: 'up', text: t('st.nearTarget', { v: F.pct(d.toTarget, 1) }), hint: moveTxt, move: mv });
-  if (Math.abs(mv) < 0.05) return mk({ code: 'flat', tone: 'flat', text: t('st.flat'), hint: t('st.both', { t: F.pct(d.toTarget, 1), s: F.pct(d.toStop, 1) }), move: mv });
+  if (Math.abs(mv) < FLAT_PCT) return mk({ code: 'flat', tone: 'flat', text: t('st.flat'), hint: t('st.both', { t: F.pct(d.toTarget, 1), s: F.pct(d.toStop, 1) }), move: mv });
   if (mv > 0) return mk({ code: 'win', tone: 'up', text: moveTxt, hint: t('st.toTarget', { v: F.pct(d.toTarget, 1) }), move: mv });
   return mk({ code: 'lose', tone: 'down', text: moveTxt, hint: t('st.toStop', { v: F.pct(d.toStop, 1) }), move: mv });
 }
@@ -419,3 +421,94 @@ export function convert(v, from, to, data) {
   const fx = fxRates(data);
   return (v / (fx[from] || 1)) * (fx[to] || 1);
 }
+
+/* ---------- 1.9.1: money near zero ----------
+   Within ±0,1 % (pct) the result is "≈ 0 Kč · zatím na nule" in grey; otherwise signed money. Returns {text, tone}. */
+export function moneyTone(v, ccy, pct = null) {
+  if (v == null || !Number.isFinite(v)) return { text: '–', tone: 'flat', zero: false };
+  const zero = pct != null ? Math.abs(pct) < FLAT_PCT : Math.abs(v) < 0.5;
+  if (zero) return { text: t('st.zero', { m: F.money(0, ccy, 0) }), tone: 'flat', zero: true };
+  return { text: (v > 0 ? '+' : '') + F.money(v, ccy, 0), tone: v > 0 ? 'up' : 'down', zero: false };
+}
+
+/* ---------- 1.9.1: ONE user-facing state per signal (cards on Dnes / Signály / Výsledky / Moje, the detail) ----------
+ * Everything the user reads about "what do I do" comes from here: the badge, the sentence, the colour and the button.
+ * The robot is NOT part of it (its line is a separate, neutral fact – brief.robotLine).
+ *   code: buy (kup teď) | soon (kup při otevření burzy) | wait (počkej na cenu, limit) | order (čeká tvůj limitní příkaz)
+ *         | mine (máš koupeno) | late (na nákup pozdě) | done (ukončeno)
+ *   tone: up | gold | flat   (red never: a beginner reads red as "something is wrong with me")
+ *   cta:  'invest' | 'limit' | null
+ *   my:   the user's REAL result on this signal (play-money trade or a trade marked in Můj deník) or null
+ *   ifBought: what the user's calculator stake would show now – only for signals the user does not hold (grey) */
+function walletFor(s) {
+  const w = store.get('wallet', null);
+  return { w, pos: (w?.positions || []).filter((p) => p.sigId === s.id), ord: (w?.orders || []).find((o) => o.sigId === s.id) || null };
+}
+export function isDoneSig(s, now = clock()) {
+  return (s.status && s.status !== 'open') || !!s.intraday_hit || isTimeExit(s, now);
+}
+function myRealResult(s, data, pos, j) {
+  if (pos.length) {
+    const ccy = store.get('wallet', null)?.ccy || calcState().ccy;
+    let pnl = 0, margin = 0;
+    pos.forEach((p) => { const q = data ? priceOf(p.sym, data) : null; const px = q ? q.p : p.entry; pnl += Math.max(-p.margin, pnlAt(p, px)); margin += p.margin || 0; });
+    return { money: pnl, ccy, pct: margin > 0 ? (pnl / margin) * 100 : null, src: 'wallet' };
+  }
+  if (j && (j.state === 'in' || j.state === 'closed')) {
+    const r = myResult(s, j);
+    if (!r) return null;
+    return { money: r.money, ccy: j.ccy || calcState().ccy, pct: r.pct, src: 'journal' };
+  }
+  return null;
+}
+export function cardState(s, data = null, now = clock()) {
+  const { pos, ord } = walletFor(s);
+  const j = journal()[s.id];
+  const sell = s.action === 'SELL';
+  const e = F.price(s.entry);
+  const mineIn = pos.length > 0 || j?.state === 'in';
+  const my = (mineIn || j?.state === 'closed') ? myRealResult(s, data, pos, j) : null;
+  const um = userMoney(s);
+  const ifBought = !my && um.now != null ? um : null;
+  const base = { mine: !!my, my, ifBought, move: priceMove(s), pos, ord };
+  if (isDoneSig(s, now)) {
+    return { ...base, code: 'done', tone: 'flat', badge: t('u.chip.done'), text: t(my ? 'u.do.endMine' : 'u.do.end'), cta: null };
+  }
+  if (mineIn) return { ...base, code: 'mine', tone: 'gold', badge: t(sell ? 'u.chip.mineSell' : 'u.chip.mine'), text: t(sell ? 'u.do.holdSell' : 'u.do.hold'), cta: null };
+  if (ord) return { ...base, code: 'order', tone: 'gold', badge: t('u.chip.order'), text: t('u.do.order', { v: F.price(ord.limit) }), cta: null };
+  /* 1.9.1 "what if I did not invest right away?" – exactly three answers (CONFIG.ENTRY via entryState):
+     (a) ok: price still near the entry -> invest now; (b) limit: the price ran a bit -> a limit order at the original
+     entry, valid until the signal ends; (c) late / expired -> skip it. Market closed + (a) -> a limit for the open. */
+  const est = entryState(s, now);
+  if (!est || est.code === 'late' || est.code === 'expired') {
+    return { ...base, code: 'late', tone: 'flat', badge: t('u.chip.late'), text: t('u.do.late'), cta: null, est };
+  }
+  const mv = base.move ?? 0;
+  if (est.code === 'limit') {
+    return { ...base, code: 'wait', tone: 'gold', est, badge: t('u.chip.wait'), text: t(sell ? 'u.do.waitSell' : 'u.do.wait', { d: F.pct(Math.abs(mv), 1), v: e }), cta: 'limit' };
+  }
+  if (!Live.marketOpen(now)) {
+    const o = nextUsOpen(now);
+    const days = o ? F.daysUntil(o, now) : 1;
+    const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
+    return { ...base, code: 'soon', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'),
+      text: t(sell ? 'u.do.soonSell' : 'u.do.soon', { day, time: o ? F.time(o) : '15:30', v: e }), cta: 'limit' };
+  }
+  return { ...base, code: 'buy', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'), text: t(sell ? 'u.do.nowSell' : 'u.do.now', { d: F.spct(mv, 1), v: e }), cta: 'invest' };
+}
+
+/* 1.9.1: the example on every signal card – "Vlož např. 10 000 Kč → při cíli +1 880 Kč, při stopu −940 Kč".
+   Same function as the investment sheet preview (wallet.outcome, leverage 1:1), so the numbers match everywhere. */
+export const EXAMPLE_DEP = { CZK: 10000, EUR: 400, USD: 500 };
+export const DEP_CHIPS = { CZK: [5000, 10000, 25000], EUR: [200, 400, 1000], USD: [250, 500, 1000] };
+export function walletCcy() { return store.get('wallet', null)?.ccy || calcState().ccy; }
+export function example(s, amount = null, lev = 1) {
+  const ccy = walletCcy();
+  const a = amount ?? EXAMPLE_DEP[ccy] ?? 10000;
+  const side = s.action === 'SELL' ? 'SELL' : 'BUY';
+  const o = outcome({ side, entry: s.entry, amount: a, lev, sl: s.stop, tp: s.target });
+  return { amount: a, ccy, atTarget: o.atTarget, atStop: o.atStop };
+}
+/* signals the user tapped "Teď ne" on (hidden from Dnes, still in Signály) */
+export const dismissed = () => { const d = store.get('notNow', []); return Array.isArray(d) ? d : []; };
+export function dismiss(id) { store.set('notNow', [id, ...dismissed().filter((x) => x !== id)].slice(0, 300)); }

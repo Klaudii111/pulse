@@ -242,7 +242,7 @@ function closedIn(data, hz) {
 }
 
 function hzDesc(data, hz) {
-  const n = openIn(data, hz).filter((x) => !B.isDone(x, D.clock())).length;
+  const n = openIn(data, hz).filter((x) => !['late', 'done'].includes(D.cardState(x, data, D.clock()).code)).length;
   return t(`u.hzDesc.${hz}`, { n, u: F.unit('signal', n) });
 }
 
@@ -252,25 +252,24 @@ function sigBody(ctx) {
   const hz = curHz(), f = curUf();
   if (hz !== 'ALL' && hidden(hz)) return `<section class="calm u-empty">${calmArt()}<div><h3 class="calm-t">${t('u.den.t')}</h3><p class="calm-s">${t('u.den.s')}</p></div></section>`;
   if (hz !== 'ALL' && !D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
+  /* 1.9.1: the same card as Dnes "Nový signál" for every signal; invested -> "Máš investováno · …";
+     too late and ended signals in collapsed groups. The robot's info is only in the detail. */
   const sigsIn = openIn(data, hz);
-  const bk = B.buckets(sigsIn, now);
-  /* same as the ROBOT DRŽÍ box on Dnes: what the robot holds on its paper account + too late to buy */
-  bk.robot = sigsIn.filter((x) => B.robotHolds(x, data) && !bk.robot.includes(x) && !bk.done.includes(x)).concat(bk.robot);
-  const chips = `<div class="uf-chips" role="group" aria-label="${t('u.filter')}">${UF.map((k) => {
-    const n = k === 'done' ? bk.done.length + closedIn(data, hz).length : bk[k].length;
-    return `<button type="button" class="uf-chip" data-action="sig-uf" data-id="${k}" aria-pressed="${k === f}">${t(`u.f.${k}`)}<span class="num">${n}</span></button>`;
-  }).join('')}</div>`;
-  let list;
-  if (f === 'done') {
-    const rows = bk.done.concat(closedIn(data, hz)).slice(0, 60);
-    list = rows.length ? `<div class="dev-list">${rows.map((x, i) => signalRow(x, now, i)).join('')}</div>` : `<p class="empty-line">${t('u.empty.done')}</p>`;
-  } else {
-    const l = bk[f];
-    list = l.length ? `<div class="grid-signals">${l.map((x, i) => B.card(x, { data, now, i })).join('')}</div>`
-      : `<p class="empty-line">${f === 'buy' ? t('u.empty.buy', { when: F.esc(nextCheck(data, now)) }) : t(`u.empty.${f}`)}</p>`;
-  }
-  const lead = f === 'robot' ? `<p class="u-robot-note">${icon('info', 'icon-xs')}<span>${t('u.robotNote')}</span></p>` : '';
-  return chips + lead + list;
+  const by = { act: [], late: [], done: [] };
+  sigsIn.forEach((x) => {
+    const c = D.cardState(x, data, now).code;
+    if (c === 'late') by.late.push(x); else if (c === 'done') by.done.push(x); else by.act.push(x);
+  });
+  const rank = { mine: 0, order: 1, buy: 2, soon: 2, wait: 3 };
+  by.act.sort((a, b) => (rank[D.cardState(a, data, now).code] - rank[D.cardState(b, data, now).code]) || String(b.created_at).localeCompare(String(a.created_at)));
+  const ended = by.done.concat(closedIn(data, hz)).slice(0, 60);
+  const list = by.act.length ? `<div class="sc-list">${by.act.map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`
+    : `<p class="empty-line">${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
+  const late = by.late.length ? `<details class="sg-group"><summary>${t('sg.late')}<span class="num">${by.late.length}</span>${icon('chev-down', 'icon-xs')}</summary>
+    <p class="sg-note">${t('sg.lateS')}</p><div class="sc-list">${by.late.map((x, i) => B.offer(x, { data, now, i })).join('')}</div></details>` : '';
+  const done = ended.length ? `<details class="sg-group"><summary>${t('sg.done')}<span class="num">${ended.length}</span>${icon('chev-down', 'icon-xs')}</summary>
+    <div class="dev-list">${ended.map((x, i) => signalRow(x, now, i)).join('')}</div></details>` : '';
+  return list + late + done;
 }
 
 /* "Další kontrola za X min" (market open) or the next official run */
@@ -283,7 +282,7 @@ export function nextCheck(data, now) {
 export function render(ctx) {
   const { data, state } = ctx;
   const head = `<header class="page-head"><div><h1 class="page-title">${t('sig.title')}</h1>
-    <p class="page-sub">${data?.signals ? t('common.updated', { time: F.dmTime(data.signals.generated_at) }) : t('common.loading')}</p></div></header>`;
+    <p class="page-sub">${t('sig.sub')}</p></div></header>`;
   if (!data?.signals) {
     if (state.error) return head + errorBlock();
     return head + `<div class="grid-signals">${skCard()}${skCard()}${skCard()}</div>`;
@@ -316,7 +315,7 @@ export function signalRow(s, now, i = 0, { extra = false } = {}) {
     <span class="srow-top">
       ${monogram(s.symbol, s.name)}
       <span class="srow-id"><span class="srow-t"><span class="ticker">${F.esc(s.symbol)}</span><span class="side-tag ${s.action === 'SELL' ? 'sell' : ''}">${F.SIDE[s.action]}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}${mine?.state === 'in' ? `<span class="my-tag">${t('sig.mine.in')}</span>` : mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 1) })}</span>` : ''}</span>
-        <span class="srow-n">${F.esc(s.name || '')}</span></span>
+        <span class="srow-n">${F.esc(B.whatIs(s.symbol, s.name).name)}</span></span>
       <span class="srow-r">${daySpark(s, st)}<span class="srow-v sig-pnl num">${mv != null ? F.spct(mv, 2) : '–'}</span></span>
     </span>
     ${track(s, { now })}

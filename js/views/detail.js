@@ -162,16 +162,19 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   }
 
   /* 1.9.0: the four answers first – co to je (head), co mám udělat já, co udělal robot, jak se daří – then the chart */
-  const us = B.userState(s, now);
-  const td = B.todo(s, us, now);
+  /* 1.9.1: one state from D.cardState (badge, sentence, colour, button) – the robot line is a separate neutral fact */
+  const cs = D.cardState(s, ctx.data, now);
   const bot = B.robotLine(s, ctx.data);
   const brief = `<div class="d-brief">
-      <p class="bc-tags">${B.stateChip(s, us)}<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
-      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
-      <p class="bc-todo is-big b-todo tone-${td.tone}">${F.esc(td.text)}</p>${td.sub ? `<p class="bc-sub">${F.esc(td.sub)}</p>` : ''}
+      <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
+      <p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
+      ${cs.my ? B.myLine(cs) : ''}
+      ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
+      <div class="bc-quiet">
       ${bot ? `<p class="bc-bot b-bot">${icon('shield', 'icon-xs')}<span>${F.esc(bot)}</span></p>` : ''}
       ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}
-      ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
+      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
+      </div>
     </div>`;
   const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
   const legend = mk.size ? `<p class="pc-legend">${mk.has('robot') ? `<span class="lg-robot">▲ ${t('mark.robot')}</span>` : ''}${mk.has('me') ? `<span class="lg-me">▲ ${t('mark.me')}</span>` : ''}${mk.has('exit') ? `<span class="lg-exit">▼ ${t('mark.exit')}</span>` : ''}</p>` : '';
@@ -335,15 +338,19 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
 /* Sticky action bar: my fictional position on this signal -> "Ukončit teď"; otherwise invest + how to stop at a broker */
 function ctaHtml(ctx, s) {
   const mine = (W.get().positions || []).filter((p) => p.sigId === s.id);
-  const um = D.userMoney(s);
-  const sm = (v, c) => (v > 0.5 ? '+' : '') + F.money(v, c, 0);
   if (mine.length) {
     const sum = W.summary(ctx.data).rows.filter((p) => p.sigId === s.id).reduce((a, p) => a + p.pnl, 0);
-    return `<button type="button" class="btn btn-block btn-stopnow ${sum >= 0 ? 'up' : 'down'}" data-stopnow>${icon('close', 'icon-sm')}${t('st.stopNow')}<b class="num">${sm(sum, W.get().ccy)}</b></button>
+    const margin = mine.reduce((a, p) => a + (p.margin || 0), 0);
+    const mt = D.moneyTone(sum, W.get().ccy, margin > 0 ? (sum / margin) * 100 : null);
+    return `<button type="button" class="btn btn-block btn-stopnow ${mt.tone}" data-stopnow>${icon('close', 'icon-sm')}${t('st.stopNow')}<b class="num">${F.esc(mt.text)}</b></button>
       <p class="inv-note">${t('st.stopNowMine')}</p>`;
   }
-  return `<a class="btn btn-primary btn-block btn-invest" href="#/terminal?s=${encodeURIComponent(s.id)}" data-close-nav>${icon('spark', 'icon-sm')}${t('inv.btn')}</a>
-    <p class="inv-note">${um.now != null ? t('st.stopNowS', { m: sm(um.now, um.ccy) }) : t('inv.fict')}</p>`;
+  /* 1.9.1: the button follows the card state (buy now / limit at the entry); no broker sentence */
+  const cs = D.cardState(s, ctx.data, ctx.now());
+  if (!cs.cta) return `<p class="inv-note">${F.esc(cs.text)}</p>`;
+  const lim = cs.cta === 'limit';
+  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</button>
+    <p class="inv-note">${t('inv.fict')}</p>`;
 }
 
 function journalForm(s, j) {

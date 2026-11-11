@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.9.0',
+  APP_VERSION: '1.9.1',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -95,6 +95,8 @@ export const CONFIG = {
     VAPID_PUBLIC_KEY: 'BD0oeaaYjhr7mhGIt8u2gExJKV7lX2XKlKeZ8LG_I-HHxS2WZyTjw-jWlzoy8ePWTV0zqU4sBpRy_mGbKYPTInQ',
     SUBSCRIBE_URL: '/api/push/subscribe', // POST JSON {subscription, lang}
     UNSUBSCRIBE_URL: '/api/push/unsubscribe', // POST JSON {endpoint}
+    /* 1.9.1: my open play-money trades, so the server can push "1 % od cíle" / "cíl zasažen" while the app is closed */
+    TRADES_URL: '/api/push/trades', // POST JSON {endpoint, trades:[{id,key,side,entry,sl,tp,lev,deposit,ccy}]}
     ENABLED: typeof location === 'undefined' || !location.hostname.endsWith('github.io'),
   },
 

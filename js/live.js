@@ -33,17 +33,33 @@ const toMs = (t) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.pa
 const hist = new Map();          // symbol -> [{t: iso, p}] collected while the app is open (Terminál chart)
 const metaMap = new Map();      // symbol -> { src, delayed, open, at } (quotes.json 1.9.0 / stream)
 export const meta = (sym) => metaMap.get(sym) || null;
-function takeMeta(sym, q) {
-  if (!q || (q.src == null && q.delayed == null && q.open == null)) return;
+function takeMeta(sym, q, server = false) {
+  if (!q || (q.src == null && q.delayed == null && q.open == null && q.prev_close == null)) return;
   const m = metaMap.get(sym) || {};
-  metaMap.set(sym, { src: q.src ?? m.src, delayed: q.delayed ?? m.delayed, open: typeof q.open === 'boolean' ? q.open : m.open, at: typeof q.open === 'boolean' ? Date.now() : m.at });
+  /* 1.9.1: the server's previous close and day change (quotes.json) are kept apart from the price stream */
+  const pcS = server && +q.prev_close > 0 ? +q.prev_close : m.pcS;
+  const chg = server && Number.isFinite(+q.chg_pct) && q.chg_pct != null ? +q.chg_pct : m.chg;
+  metaMap.set(sym, { src: q.src ?? m.src, delayed: q.delayed ?? m.delayed, open: typeof q.open === 'boolean' ? q.open : m.open, at: typeof q.open === 'boolean' ? Date.now() : m.at, pcS, chg });
+}
+
+/* 1.9.1: today's change in % for a market tile. Previous close from quotes.json wins over any other source
+   (a worker / stream price must never be compared with somebody else's close: DAX once showed −8,91 % instead of +1,20 %).
+   No usable close -> the server's chg_pct; a change that disagrees with the server's by > 2 points -> the server's. */
+export function dayChange(sym) {
+  const q = prices.get(sym);
+  const m = metaMap.get(sym) || {};
+  const pc = m.pcS > 0 ? m.pcS : q?.pc > 0 ? q.pc : null;
+  let ch = q && pc ? (q.p / pc - 1) * 100 : null;
+  if (m.chg != null && (ch == null || !Number.isFinite(ch) || Math.abs(ch - m.chg) > 2)) ch = m.chg;
+  if (ch == null || !Number.isFinite(ch) || Math.abs(ch) > 40) return null;
+  return ch;
 }
 function take(sym, p, ts, pc) {
   if (!(p > 0) || !ts) return false;
   const cur = prices.get(sym);
   if (cur && ts < cur.t) return false; // never let an older price overwrite a newer one
   if (!cur || ts > cur.t || p !== cur.p) {
-    prices.set(sym, { p, t: Math.max(ts, cur?.t || 0), pc: pc ?? cur?.pc });
+    prices.set(sym, { p, t: Math.max(ts, cur?.t || 0), pc: metaMap.get(sym)?.pcS || pc || cur?.pc });
     const h = hist.get(sym) || []; const last = h[h.length - 1];
     if (!last || Date.parse(last.t) < ts) { h.push({ t: new Date(ts).toISOString(), p }); if (h.length > 1500) h.shift(); hist.set(sym, h); }
     return true;
@@ -72,7 +88,7 @@ async function pollServer() {
     if (!at || Date.now() - at > (L.QUOTES_STALE_SEC || 120) * 1000) { serverOpen = null; if (source !== 'worker') dataAt = Math.max(dataAt, at); return false; }
     if (typeof j.market_open === 'boolean') serverOpen = j.market_open;
     let any = false;
-    Object.entries(j.q || {}).forEach(([sym, q]) => { takeMeta(sym, q); if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close)) any = true; });
+    Object.entries(j.q || {}).forEach(([sym, q]) => { takeMeta(sym, q, true); if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close)) any = true; });
     source = 'server'; dataAt = Math.max(at, streamAt);
     if (any) mark();
     return true;

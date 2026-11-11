@@ -3,7 +3,8 @@
 import * as F from '../format.js';
 import * as B from '../brief.js';
 import * as D from '../domain.js';
-import { t } from '../i18n/index.js';
+import { t, tag } from '../i18n/index.js';
+import * as W from '../wallet.js';
 import { icon, monogram, sparkline } from '../ui.js';
 
 const ok = (p) => p && p.account && Number.isFinite(+p.account.equity);
@@ -13,6 +14,25 @@ const sideTxt = (s) => t(s === 'short' || s === 'sell' ? 'pa.short' : 'pa.long')
 
 /* The paper account's equity: live P&L of positions is already in equity from the server */
 function eq(p) { return +p.account.equity; }
+
+/* 1.9.1: "100 338 $ ≈ 2,2 mil. Kč" – the robot's dollars also in the user's currency (live FX, else config) */
+function inMine(v, data) {
+  const ccy = D.walletCcy();
+  if (ccy === 'USD' || !(v > 0)) return '';
+  const x = D.convert(v, 'USD', ccy, data);
+  let txt;
+  try { txt = new Intl.NumberFormat(tag(), { style: 'currency', currency: ccy, notation: 'compact', maximumFractionDigits: 1 }).format(x); } catch { txt = F.money(x, ccy, 0); }
+  return `<span class="pa-mine num">≈ ${F.esc(txt)}</span>`;
+}
+
+/* the robot's exit legs (bracket order: take-profit limit + stop) belong to their position, not to "orders" */
+const isLeg = (o, pos) => !o.signal_id && pos.some((x) => x.symbol === o.symbol && ((x.side === 'long' && o.side === 'sell') || (x.side === 'short' && o.side === 'buy')));
+function legsOf(x, p, sig) {
+  const legs = (p.orders || []).filter((o) => o.symbol === x.symbol && isLeg(o, [x]));
+  const tp = legs.find((o) => o.limit != null && o.stop == null)?.limit ?? sig?.target ?? null;
+  const sl = legs.find((o) => o.stop != null)?.stop ?? sig?.stop ?? null;
+  return { tp: tp != null ? +tp : null, sl: sl != null ? +sl : null };
+}
 
 function modeBadge(p) {
   return p.mode === 'dry'
@@ -30,34 +50,40 @@ export function paperHero(ctx) {
   const pos = p.positions || [];
   return `<a class="pa-hero tone-${tone(pnl)}" href="#/robot">
     <span class="pa-glow" aria-hidden="true"></span>
-    <span class="pa-top"><span class="pa-k">${icon('shield', 'icon-sm')}${t('pa.heroK')}</span>${modeBadge(p)}</span>
-    <span class="pa-v num" data-count="${eq(p)}" data-dec="0" data-ccy="USD" data-count-key="pa-hero">${usd(eq(p), 0)}</span>
+    <span class="pa-top"><span class="pa-k">${icon('shield', 'icon-sm')}${t('pa.acc')}</span>${modeBadge(p)}</span>
+    <span class="pa-vrow"><span class="pa-v num">${usd(eq(p), 0)}</span>${inMine(eq(p), ctx.data)}</span>
     <span class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${pnl >= 0 ? '+' : ''}${usd(pnl, 0)}</b> ${t('pa.heroS', { start: usd(+a.start_equity || 100000, 0) })}</span>
-    <span class="pa-foot"><span>${t('pa.posN', { n: pos.length })}</span><span>${t('pa.ordN', { n: (p.orders || []).length })}</span><span class="pa-more">${t('pa.more')}${icon('chev-right', 'icon-xs')}</span></span>
+    <span class="pa-foot"><span>${t('pa.posN', { n: pos.length })}</span><span>${t('pa.ordN', { n: (p.orders || []).filter((o) => !isLeg(o, pos)).length })}</span><span class="pa-more">${t('pa.more')}${icon('chev-right', 'icon-xs')}</span></span>
   </a>`;
 }
 
 function posRow(x, data) {
   const sig = x.signal_id ? D.findSignal(data, x.signal_id) : null;
-  const tn = tone(+x.pnl_usd);
+  const mt = D.moneyTone(+x.pnl_usd, 'USD', +x.pnl_pct);
   const attrs = sig ? `type="button" data-action="open-signal" data-id="${F.esc(sig.id)}"` : 'type="button" disabled';
+  const w = B.whatIs(x.symbol, sig?.name || '');
+  const lg = legsOf(x, data.paper, sig);
+  const q = Math.abs(+x.qty), e = +x.avg_entry;
+  const usdTxt = mt.zero ? mt.text.replace(/[\d\s ,.]+\s*(Kč|CZK|€|EUR)?/, ' 0 $') : `${+x.pnl_usd >= 0 ? '+' : ''}${usd(+x.pnl_usd, 0)}`;
   return `<button class="pa-row" ${attrs}>
     ${monogram(x.symbol, '')}
-    <span class="pa-id"><span class="pa-sym">${F.esc(x.symbol)} <span class="side-tag ${x.side === 'short' ? 'sell' : ''}">${sideTxt(x.side)}</span></span>
-      <span class="pa-meta num">${t('pa.qty', { q: F.num(+x.qty, 0), e: F.price(+x.avg_entry), p: F.price(+x.price) })}</span>
-      <span class="pa-meta">${F.esc(B.robotOpenText(x, data, sig?.stop))}</span></span>
-    <span class="pa-r num ${tn}">${+x.pnl_usd >= 0 ? '+' : ''}${usd(+x.pnl_usd, 2)}<small>${F.spct(+x.pnl_pct, 2)}</small></span>
+    <span class="pa-id"><span class="pa-sym">${F.esc(w.name)}${w.name !== x.symbol ? ` <span class="ticker">${F.esc(x.symbol)}</span>` : ''}</span>
+      <span class="pa-meta num">${t('pa.qty2', { q: F.num(q, 0), e: F.price(e), v: usd(q * e, 0) })}</span>
+      ${lg.tp != null ? `<span class="pa-leg num up">${t(x.side === 'short' ? 'pa.legTpS' : 'pa.legTp', { v: F.price(lg.tp) })}</span>` : ''}
+      ${lg.sl != null ? `<span class="pa-leg num down">${t(x.side === 'short' ? 'pa.legSlS' : 'pa.legSl', { v: F.price(lg.sl) })}</span>` : ''}</span>
+    <span class="pa-r num ${mt.tone}">${mt.zero ? t('pa.zero') : usdTxt}<small>${mt.zero ? '' : F.spct(+x.pnl_pct, 2)}</small></span>
   </button>`;
 }
 
 function orderRow(o) {
-  const st = t(`pa.st.${o.status}`) === `pa.st.${o.status}` ? o.status : t(`pa.st.${o.status}`);
-  const lv = [o.limit != null ? t('pa.limit', { v: F.price(+o.limit) }) : '', o.stop != null ? t('pa.stop', { v: F.price(+o.stop) }) : '', o.take != null ? t('pa.take', { v: F.price(+o.take) }) : ''].filter(Boolean).join(' · ');
+  const w = B.whatIs(o.symbol, '');
+  const buy = o.side === 'buy';
   return `<div class="pa-row is-static">
     ${monogram(o.symbol, '')}
-    <span class="pa-id"><span class="pa-sym">${F.esc(o.symbol)} <span class="side-tag ${o.side === 'sell' || o.side === 'short' ? 'sell' : ''}">${sideTxt(o.side === 'sell' ? 'short' : o.side === 'buy' ? 'long' : o.side)}</span></span>
-      <span class="pa-meta num">${F.esc(lv)}</span></span>
-    <span class="pa-r"><span class="pa-st">${F.esc(st)}</span><small>${o.submitted_at ? F.dmTime(o.submitted_at) : ''}</small></span>
+    <span class="pa-id"><span class="pa-sym">${F.esc(w.name)}${w.name !== o.symbol ? ` <span class="ticker">${F.esc(o.symbol)}</span>` : ''}</span>
+      <span class="pa-meta num">${t(buy ? 'pa.ordBuy' : 'pa.ordSell', { v: F.price(+o.limit) })}</span>
+      ${o.take != null || o.stop != null ? `<span class="pa-meta num">${t('pa.ordThen', { t: o.take != null ? F.price(+o.take) : '–', s: o.stop != null ? F.price(+o.stop) : '–' })}</span>` : ''}</span>
+    <span class="pa-r"><small>${o.submitted_at ? F.dmTime(o.submitted_at) : ''}</small></span>
   </div>`;
 }
 
@@ -76,21 +102,23 @@ function closedRow(c, data) {
 /* Full view: route #/robot */
 export function render(ctx) {
   const p = ctx.data?.paper;
-  const head = `<header class="page-head"><div><a class="back" href="#/vysledky">${icon('chev-left', 'icon-xs')}${t('nav.vysledky')}</a><h1 class="page-title">${t('pa.title')}</h1><p class="page-sub">${t('pa.sub')}</p></div></header>`;
+  const head = `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('pa.title')}</h1><p class="page-sub">${t('pa.sub')}</p></div></header>`;
   if (!ok(p)) return head + `<div class="empty"><h3>${t('pa.none.t')}</h3><p>${t('pa.none.s')}</p></div>`;
   const a = p.account;
   const start = +a.start_equity || 100000;
   const pnl = +a.pnl_usd || (eq(p) - start);
   const pct = a.pnl_pct != null && Number.isFinite(+a.pnl_pct) ? +a.pnl_pct : (pnl / start) * 100;
-  const pos = p.positions || [], ord = p.orders || [], cl = p.closed || [], log = p.log || [];
+  const pos = p.positions || [], cl = p.closed || [], log = p.log || [];
+  const ord = (p.orders || []).filter((o) => !isLeg(o, pos)); // exit legs are shown under their position
   const wins = cl.filter((c) => +c.pnl_usd > 0).length;
   const spark = cl.length > 1 ? sparkline([...cl].reverse().reduce((acc, c) => { acc.push((acc[acc.length - 1] ?? start) + (+c.pnl_usd || 0)); return acc; }, [start]), { w: 110, h: 34, cls: 'hero-spark' }) : '';
   return head + `
   <p class="headline">${pos.length ? t('pa.headline', { n: pos.length }) : t('pa.headline0')}</p>
   <section class="pa-big tone-${tone(pnl)}">
     <span class="aurora" aria-hidden="true"><i></i><i></i></span>
-    <div class="pa-top"><span class="pa-k">${F.esc(p.broker || 'Alpaca Paper')}</span>${modeBadge(p)}</div>
-    <div class="hero-top"><p class="pa-v num" data-count="${eq(p)}" data-dec="0" data-ccy="USD" data-count-key="pa-big">${usd(eq(p), 0)}</p>${spark}</div>
+    <div class="pa-top"><span class="pa-k">${t('pa.acc')}</span>${modeBadge(p)}</div>
+    <div class="hero-top"><p class="pa-v num">${usd(eq(p), 0)} ${inMine(eq(p), ctx.data)}</p>${spark}</div>
+    <p class="pa-broker">${t('pa.broker')}</p>
     <p class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${pnl >= 0 ? '+' : ''}${usd(pnl, 0)}</b> ${t('pa.heroS', { start: usd(start, 0) })}</p>
     <div class="pa-stats">
       <div><p class="tile-l">${t('pa.cash')}</p><p class="num">${usd(+a.cash, 0)}</p></div>
@@ -107,7 +135,7 @@ export function render(ctx) {
   <h2 class="section-title">${t('pa.closed')}<small>${cl.length}</small></h2>
   ${cl.length ? `<div class="pa-list">${cl.slice(0, 30).map((c) => closedRow(c, ctx.data)).join('')}</div>` : `<p class="quiet">${t('pa.noClosed')}</p>`}
   <h2 class="section-title">${t('pa.log')}<small>${p.updated_at ? t('common.updated', { time: F.dmTime(p.updated_at) }) : ''}</small></h2>
-  ${log.length ? `<ol class="pa-log">${log.slice(0, 40).map((l) => `<li>${F.esc(l)}</li>`).join('')}</ol>` : `<p class="quiet">${t('pa.noLog')}</p>`}
+  ${log.length ? `<ol class="pa-log">${log.slice(0, 40).map((l) => `<li>${F.esc(B.robotLogText(l))}</li>`).join('')}</ol>` : `<p class="quiet">${t('pa.noLog')}</p>`}
   <p class="disclaimer">${icon('info')}${F.esc(t('pa.disc'))}</p>`;
 }
 

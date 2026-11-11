@@ -142,7 +142,7 @@ function lower(perf, hist, hz, showR) {
 }
 
 export function render(ctx) {
-  const head = `<header class="page-head"><div><h1 class="page-title">${t('res.title')}</h1>
+  const head = `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('res.title')}</h1>
     <p class="page-sub">${ctx.data?.performance ? t('res.since', { date: F.dmy(ctx.data.performance.equity[0].date) }) : t('common.loading')}</p></div></header>`;
   const perf = ctx.data?.performance, hist = ctx.data?.history?.signals;
   if (!perf || !hist) return head + `${skBlock(320)}<div style="height:14px"></div>${skBlock(150)}`;
@@ -151,11 +151,15 @@ export function render(ctx) {
   if (hz !== 'ALL' && !VISIBLE_HZ().includes(hz)) { hz = 'ALL'; store.set('resHz', 'ALL'); }
   const showR = D.showR(ctx.data);
   const nClosed = hist.filter((x) => VISIBLE_HZ().includes(x.horizon)).length;
-  const openNow = D.allOpen(ctx.data).filter((x) => VISIBLE_HZ().includes(x.horizon) && x.status === 'open');
+  /* 1.9.1: one count everywhere: running = open and not ended; the robot = positions on its own account */
+  const openNow = D.allOpen(ctx.data).filter((x) => VISIBLE_HZ().includes(x.horizon) && !D.isDoneSig(x, ctx.now()));
+  const robotN = (ctx.data?.paper?.positions || []).length;
+  const counts = t('res.counts', { n: openNow.length, u: F.unit('signal', openNow.length), r: robotN });
   const now = ctx.now();
   const series = rangeSeries(perf, range, ctx.data);
   const h = heroVals(series);
-  return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0', { n: openNow.length })}</p>
+  return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>
+  <p class="res-counts num">${counts}</p>
   ${paperLink(ctx)}
   <div class="results-layout">
     <section class="chart-card" aria-label="${t('res.chart')}">
@@ -177,7 +181,7 @@ export function render(ctx) {
       <p class="honest">${icon('info', 'icon-xs')} ${t('res.honest')}</p>
     </div>
   </div>
-  ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${openNow.length}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
+  ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${counts}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
   <div class="srow-list">${openNow.map((x, i) => signalRow(x, now, i)).join('')}</div>` : ''}
   <div id="res-lower">${lower(perf, hist, hz, showR)}</div>`;
 }

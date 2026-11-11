@@ -4,7 +4,7 @@
  * - Web push: shows notification from JSON payload {title, body, url, tag}
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'pulse-v1.9.0';
+const VERSION = 'pulse-v1.9.1';
 const SHELL = `${VERSION}-shell`;
 const DATA = 'pulse-data';
 
@@ -145,13 +145,20 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'pulse',
     icon: './icons/icon-192.png',
     badge: './icons/badge-96.png',
-    data: { url: data.url || './#/dnes' },
+    data: { url: data.url || './#/dnes', signal: data.signal_id || data.id || null },
+    /* 1.9.1: a new signal comes with [Zainvestovat] [Zobrazit] (actions from the payload) */
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2).map((a) => ({ action: String(a.action || ''), title: String(a.title || '') })) : [],
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || './', self.registration.scope).href;
+  const d = event.notification.data || {};
+  /* 'invest' -> the signal detail with the investment sheet already open; 'open' / tap -> the signal (or the url) */
+  let url = d.url || './';
+  if (d.signal && event.action === 'invest') url = `./#/signaly?s=${encodeURIComponent(d.signal)}&invest=1`;
+  else if (d.signal && event.action === 'open') url = `./#/signaly?s=${encodeURIComponent(d.signal)}`;
+  const target = new URL(url, self.registration.scope).href;
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {

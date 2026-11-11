@@ -304,9 +304,20 @@ export function statusLine(s, { now, big = false } = {}) {
   /* big (cards + detail): 1) price move in plain words, 2) the money result for THIS user, 3) money at target / stop */
   const um = st.um;
   const sm = (v) => (v > 0.5 ? '+' : '') + F.money(v, um.ccy, 0);
-  return `<div class="st-big tone-${st.tone} is-${st.code}">
-    <p class="st-line is-big tone-${st.tone} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b>${st.hint ? `<span>${F.esc(st.hint)}</span>` : ''}</p>
-    ${um.now != null ? `<p class="st-you"><span>${F.esc(t('st.youBig', { a: F.money(um.account, um.ccy, 0), r: F.num(um.risk, 0) }))}</span><b class="num ${um.now >= 0 ? 'up' : 'down'}">${sm(um.now)}</b></p>` : ''}
+  /* 1.9.1: colour only when it is the user's own trade; otherwise a quiet fact about the signal's price */
+  const own = !!D.cardState(s, null, now).my;
+  const tn = own || st.done ? st.tone : 'flat';
+  const txt = own || st.done || st.move == null ? st.text : Math.abs(st.move) < D.FLAT_PCT ? t('st.sigZero') : t('st.sig', { v: F.spct(st.move, 1) });
+  return `<div class="st-big tone-${tn} is-${st.code} ${own ? '' : 'is-quiet'}">
+    <p class="st-line is-big tone-${tn} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(txt)}</b>${st.hint ? `<span>${F.esc(st.hint)}</span>` : ''}</p>
+    ${(() => {
+      /* 1.9.1: real money only on the user's own trade; otherwise grey "Kdybyste koupili" */
+      const cs = D.cardState(s, null, now);
+      if (cs.my) { const mt = D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct); return `<p class="st-you"><span>${F.esc(t('st.youReal'))}</span><b class="num ${mt.tone}">${F.esc(mt.text)}</b></p>`; }
+      if (um.now == null || st.done) return '';
+      const mt = D.moneyTone(um.now, um.ccy, st.move);
+      return `<p class="st-you is-if"><span>${F.esc(t('st.ifBoughtBig', { a: F.money(um.account, um.ccy, 0), r: F.num(um.risk, 0) }))}</span><b class="num">${F.esc(mt.text)}</b></p>`;
+    })()}
     <p class="st-lv num">${t('st.levels', { t: `<b class="up">${um.atTarget != null ? sm(um.atTarget) : '–'}</b>`, s: `<b class="down">${sm(um.atStop)}</b>` })}<span class="st-chg" role="link" tabindex="0" data-action="go-calc">${t('st.change')}</span></p>
   </div>`;
 }

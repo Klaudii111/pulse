@@ -33,6 +33,9 @@ export function whatIs(sym, name = '') {
     return { name: name || (m ? m[1] : sym), phrase: t(`what.stock.${sec}`) };
   }
   if (x.k === 'etf') {
+    /* 1.9.1: a short plain name ("Spotřební zboží USA"), the ticker is shown next to it */
+    const sh = t(`etf.${sym}`);
+    if (sh !== `etf.${sym}`) return { name: sh, phrase: t('etf.phrase') };
     const p = txt.replace(/^ETF:\s*/, '').split(/ \(| – /)[0];
     return { name: sym, phrase: `${p} (ETF)` };
   }
@@ -47,58 +50,30 @@ function extInstr(sym) {
   if (!it || INSTR[sym]?.k === 'stock') return null;
   const cs = lang() === 'cs';
   const nm = (cs ? it.name_cs : it.name_en) || sym;
-  const [a, b] = nm.split(' – ');
+  let [a, b] = nm.split(' – ');
+  /* 1.9.1: "EUR/USD (euro / americký dolar)" -> name "EUR/USD", phrase "euro / americký dolar" (no 4-line names) */
+  const m = /^(.+?)\s*\((.+)\)$/.exec(a);
+  if (m) { a = m[1]; b = b || m[2]; }
   const ip = t(`ip.${sym}`);
   return { name: a, phrase: ip !== `ip.${sym}` ? ip : b || t(`cls.${it.class}`) };
 }
 
-/* ---------- user's state ---------- */
-function walletOf(s) {
-  const w = store.get('wallet', null);
-  return { pos: (w?.positions || []).find((p) => p.sigId === s.id) || null, ord: (w?.orders || []).find((o) => o.sigId === s.id) || null };
+/* ---------- user's state: ONE function in domain.js (D.cardState), these are thin wrappers ---------- */
+export const isDone = (s, now) => D.isDoneSig(s, now);
+/* legacy shape: code buy | mine | order | robot | done (buckets, auto-copy) */
+const LEGACY = { buy: 'buy', soon: 'buy', wait: 'buy', order: 'order', mine: 'mine', late: 'robot', done: 'done' };
+export function userState(s, now = D.clock(), data = null) {
+  const cs = D.cardState(s, data, now);
+  return { code: LEGACY[cs.code], cs, pos: cs.pos[0] || null, ord: cs.ord, mine: cs.mine };
 }
-export function isDone(s, now) {
-  return (s.status && s.status !== 'open') || !!s.intraday_hit || D.isTimeExit(s, now);
-}
-/* code: buy | mine | order | robot | done */
-export function userState(s, now = D.clock()) {
-  const { pos, ord } = walletOf(s);
-  const j = D.journal()[s.id];
-  const mineIn = !!pos || j?.state === 'in';
-  if (isDone(s, now)) return { code: 'done', mine: mineIn || j?.state === 'closed' };
-  if (mineIn) return { code: 'mine', pos };
-  if (ord) return { code: 'order', ord };
-  const est = D.entryState(s, now);
-  if (!est || est.code === 'late' || est.code === 'expired') return { code: 'robot' };
-  return { code: 'buy', est };
-}
-
-const CHIP_TONE = { buy: 'up', mine: 'gold', order: 'gold', robot: 'flat', done: 'flat' };
 export function stateChip(s, us) {
-  const k = us.code === 'buy' && s.action === 'SELL' ? 'buySell' : us.code === 'mine' && s.action === 'SELL' ? 'mineSell' : us.code;
-  return `<span class="u-chip tone-${CHIP_TONE[us.code]}">${t(`u.chip.${k}`)}</span>`;
+  const cs = us.cs || D.cardState(s, null);
+  return `<span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>`;
 }
-
 /* ---------- 2 CO MÁM UDĚLAT JÁ ---------- */
-export function todo(s, us, now = D.clock()) {
-  const sell = s.action === 'SELL';
-  const e = F.price(s.entry);
-  if (us.code === 'done') return { tone: 'flat', text: t(us.mine ? 'u.do.endMine' : 'u.do.end') };
-  if (us.code === 'mine') return { tone: 'gold', text: t(sell ? 'u.do.holdSell' : 'u.do.hold') };
-  if (us.code === 'order') return { tone: 'gold', text: t('u.do.order', { v: F.price(us.ord.limit) }) };
-  if (us.code === 'robot') return { tone: 'flat', text: t('u.do.late'), sub: t('u.do.lateS') };
-  /* buy: market closed -> at the next open; price beyond the entry -> wait with a limit; else now */
-  if (!Live.marketOpen(now)) {
-    const o = nextUsOpen(now);
-    const days = o ? F.daysUntil(o, now) : 1;
-    const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
-    return { tone: 'up', code: 'soon', text: t(sell ? 'u.do.soonSell' : 'u.do.soon', { day, time: o ? F.time(o) : '15:30', v: e }) };
-  }
-  const px = s.last_price;
-  const beyond = px != null && (sell ? px < s.entry : px > s.entry);
-  const until = F.time(W.nyCloseAfter(now.getTime ? now.getTime() : now));
-  if (beyond) return { tone: 'gold', code: 'wait', text: t(sell ? 'u.do.waitSell' : 'u.do.wait', { v: e, c: until }) };
-  return { tone: 'up', code: 'now', text: t(sell ? 'u.do.nowSell' : 'u.do.now', { v: e, c: until }) };
+export function todo(s, us) {
+  const cs = us.cs || D.cardState(s, null);
+  return { tone: cs.tone, code: cs.code === 'buy' ? 'now' : cs.code, text: cs.text };
 }
 
 /* ---------- 3 CO UDĚLAL ROBOT (robot's Alpaca paper account) ---------- */
@@ -111,15 +86,36 @@ export function robotLine(s, data) {
   const pos = p.positions.find(hit);
   /* broker evidence: who, when (fill time when paper.json has it), how many, at what price */
   const when = (x) => { const at = x.filled_at || x.opened_at || x.closed_at || x.submitted_at; return at ? ` ${t('u.bot.at', { d: F.dm(at), time: F.time(at) })}` : ''; };
-  const br = p.broker || 'Alpaca Paper';
-  if (pos) return `${t(pos.side === 'short' ? 'u.bot.sold' : 'u.bot.bought', { q: F.num(Math.abs(+pos.qty || 0), 0), v: F.price(+pos.avg_entry) })}${when(pos)} · ${br}`;
+  /* 1.9.1: "Robot: koupil 29 ks za 186,89" – a fact about the robot's own account, never a hint for the user */
+  if (pos) return `${t(pos.side === 'short' ? 'u.bot.sold' : 'u.bot.bought', { q: F.num(Math.abs(+pos.qty || 0), 0), v: F.price(+pos.avg_entry) })}${when(pos)}`;
   const cl = (p.closed || []).find(hit);
-  if (cl) return `${t('u.bot.closed', { v: usd(+cl.pnl_usd || 0) })}${when(cl)} · ${br}`;
+  if (cl) return `${t('u.bot.closed', { v: usd(+cl.pnl_usd || 0) })}${when(cl)}`;
   const ord = (p.orders || []).find((o) => hit(o) && (o.status === 'new' || o.status === 'accepted' || o.status === 'pending_new'));
-  if (ord) return `${t(ord.side === 'sell' ? 'u.bot.waitSell' : 'u.bot.wait', { v: F.price(+ord.limit) })} · ${br}, ${t('u.bot.placed', { time: F.time(ord.submitted_at) })}`;
-  const sk = (p.skipped || []).find(hit);
+  if (ord) return `${t(ord.side === 'sell' ? 'u.bot.waitSell' : 'u.bot.wait', { v: F.price(+ord.limit) })}, ${t('u.bot.placed', { time: F.time(ord.submitted_at) })}`;
+  const sk = (p.skipped || []).find(hit) || skippedInLog(s, p);
   if (sk) return t('u.bot.skip', { why: sk.reason_cs && lang() === 'cs' ? sk.reason_cs : sk.reason || t('u.bot.skipWhy') });
   return '';
+}
+
+/* the robot skipped a signal when its log says "XLP: přeskočeno, …" (paper.json has no skipped list yet) */
+const reEsc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export function skippedInLog(s, p) {
+  const l = (p?.log || []).find((x) => new RegExp(`^${reEsc(s.symbol)}: přeskočeno`).test(String(x)));
+  return l ? { reason: robotLogText(l).replace(/^.*? – /, '') } : null;
+}
+
+/* 1.9.1: the robot's log in plain words ("XLP vynechán – obchod by zabral víc než pětinu účtu").
+   The server writes Czech lines; known patterns are rewritten (cs + en), anything else is shown as it is. */
+export function robotLogText(line) {
+  const x = String(line || '');
+  const nm = (sym) => { const w = whatIs(sym); return w.name !== sym ? `${w.name} (${sym})` : sym; };
+  let m = /^([A-Z0-9.\-]+): přeskočeno, .*víc než (\d+) % účtu/.exec(x);
+  if (m) return t(+m[2] === 20 ? 'pa.log.skipFifth' : 'pa.log.skipBig', { n: nm(m[1]), p: m[2] });
+  m = /^([A-Z0-9.\-]+): přeskočeno,? ?(.*)$/.exec(x);
+  if (m) return t('pa.log.skip', { n: nm(m[1]), why: m[2] || '' });
+  m = /^([A-Z0-9.\-]+): zadán (nákup|prodej) ([\d\s ]+) ks, limit ([\d\s ,.]+), stop ([\d\s ,.]+), cíl ([\d\s ,.]+)$/.exec(x);
+  if (m) return t(m[2] === 'nákup' ? 'pa.log.buy' : 'pa.log.sell', { n: nm(m[1]), q: m[3].trim(), l: m[4].trim(), s: m[5].trim(), c: m[6].trim() });
+  return x;
 }
 
 /* "Otevřeno: 64 ks × 164,47 = 10 526 $ · páka 1:1 · marže 10 526 $ = 10,5 % účtu · riziko při stopu 990 $ = 1 % účtu"
@@ -181,31 +177,59 @@ export function published(s) {
   return t('u.pub', { d: F.dmy(at), time: F.time(at) });
 }
 
-/* ---------- the card (Signály: full; Dnes / Moje: compact) ---------- */
+/* ---------- the card (Signály: full; Dnes / Moje: compact) ----------
+   1.9.1: max 4 accents – name, ONE state badge, ONE sentence, ONE button. Everything else (price move, chart,
+   robot line, horizon, publish time) is quiet grey. Money: "U vás" only on the user's own trade,
+   otherwise grey "Kdybyste koupili: …". All of it comes from D.cardState (one function for the whole app). */
+export function myLine(cs) {
+  if (cs.my) {
+    const mt = D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct);
+    const pct = cs.my.pct != null && !mt.zero ? ` · ${F.spct(cs.my.pct, 1)}` : '';
+    return `<p class="bc-my tone-${mt.tone}"><span>${t('st.youReal')}</span><b class="num">${F.esc(mt.text)}${pct}</b></p>`;
+  }
+  if (cs.ifBought && cs.code !== 'done') {
+    const mt = D.moneyTone(cs.ifBought.now, cs.ifBought.ccy, cs.move);
+    return `<p class="bc-if">${F.esc(t('st.ifBought', { m: mt.text }))}</p>`;
+  }
+  return '';
+}
+export function ctaBtn(s, cs, { small = false } = {}) {
+  const sm = small ? ' is-small' : '';
+  if (cs.cta === 'invest') return `<a class="invest-btn${sm}" href="#/terminal?s=${encodeURIComponent(s.id)}">${icon('spark', 'icon-sm')}<span>${t('inv.btn')}</span><small>${t('inv.btnS')}</small></a>`;
+  if (cs.cta === 'limit') return `<a class="invest-btn is-limit${sm}" href="#/terminal?s=${encodeURIComponent(s.id)}">${icon('clock', 'icon-sm')}<span>${t('inv.btnLim', { v: F.price(s.entry) })}</span><small>${t('inv.btnLimS')}</small></a>`;
+  return '';
+}
+/* quiet line about the signal itself (not about the user): "Cena od vstupu +1,0 % · do cíle zbývá 3 %" */
+export function sigLine(s, st) {
+  if (st.done) return `${F.esc(st.text)}${st.hint ? ` · ${F.esc(st.hint)}` : ''}`;
+  if (st.move == null) return F.esc(st.text);
+  const zero = Math.abs(st.move) < D.FLAT_PCT;
+  return `${F.esc(zero ? t('st.sigZero') : t('st.sig', { v: F.spct(st.move, 1) }))}${st.hint && !zero ? ` · ${F.esc(st.hint)}` : ''}`;
+}
 export function card(s, { data, now = D.clock(), compact = false, invest = true, i = 0 } = {}) {
-  const us = userState(s, now);
+  const cs = D.cardState(s, data, now);
   const w = whatIs(s.symbol, s.name);
-  const td = todo(s, us, now);
   const bot = robotLine(s, data);
   const st = D.liveStatus(s, now);
   const tags = `<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}`;
   const mv = st.move;
-  const showInvest = invest && (us.code === 'buy');
-  return `<article class="bc tone-${td.tone} is-${us.code} ${compact ? 'is-compact' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-pnl="${mv ?? ''}">
+  return `<article class="bc tone-${cs.tone} is-${cs.code} ${compact ? 'is-compact' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-pnl="${mv ?? ''}">
     <div class="bc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(`${w.name} ${s.symbol}`)}">
       ${monogram(s.symbol, s.name)}
       <span class="bc-id b-what"><span class="bc-name">${F.esc(w.name)}${w.name !== s.symbol ? ` <span class="ticker">${F.esc(s.symbol)}</span>` : ''}</span>
         <span class="bc-phrase">${F.esc(w.phrase)}</span></span>
-      ${mv != null ? `<span class="bc-pct num sig-pnl ${mv >= 0 ? 'up' : 'down'}">${F.spct(mv, 2)}</span>` : ''}
+      ${mv != null ? `<span class="bc-pct num is-quiet">${F.spct(mv, 2)}</span>` : ''}
     </div>
-    <p class="bc-tags">${stateChip(s, us)}${tags}</p>
-    <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(published(s))}</span></p>
-    <p class="bc-todo b-todo tone-${td.tone}">${F.esc(td.text)}</p>
-    ${td.sub ? `<p class="bc-sub">${F.esc(td.sub)}</p>` : ''}
-    ${bot ? `<p class="bc-bot b-bot">${icon('shield', 'icon-xs')}<span>${F.esc(bot)}</span></p>` : ''}
-    ${miniChart(s)}
-    <p class="st-line b-how tone-${st.tone} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b>${st.um?.now != null ? `<span>${F.esc(t('st.you', { m: (st.um.now > 0.5 ? '+' : '') + F.money(st.um.now, st.um.ccy, 0) }))}</span>` : ''}</p>
-    ${showInvest ? `<a class="invest-btn" href="#/terminal?s=${encodeURIComponent(s.id)}">${icon('spark', 'icon-sm')}<span>${t('inv.btn')}</span><small>${t('inv.btnS')}</small></a>` : ''}
+    <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>${tags}</p>
+    <p class="bc-todo b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
+    ${myLine(cs)}
+    ${invest ? ctaBtn(s, cs) : ''}
+    <div class="bc-quiet">
+      <p class="st-line b-how is-quiet"><i aria-hidden="true"></i><span>${sigLine(s, st)}</span></p>
+      ${bot ? `<p class="bc-bot b-bot">${icon('shield', 'icon-xs')}<span>${F.esc(bot)}</span></p>` : ''}
+      ${miniChart(s)}
+      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(published(s))}</span></p>
+    </div>
     ${compact ? '' : `<details class="bc-more"><summary>${t('u.more')}${icon('chev-down', 'icon-xs')}</summary>
       ${track(s, { now, prices: true, status: false })}
       <p class="bc-lv num">${t('u.lv', { e: F.price(s.entry), s: F.price(s.stop), t: s.target != null ? F.price(s.target) : '–' })}</p>
@@ -213,6 +237,53 @@ export function card(s, { data, now = D.clock(), compact = false, invest = true,
       ${robotPosOf(s, data) ? `<p class="bc-lv bc-open-l">${icon('shield', 'icon-xs')} ${F.esc(robotOpenText(robotPosOf(s, data), data, s.stop))}</p>` : ''}
       <button type="button" class="link bc-open" data-action="open-signal" data-id="${F.esc(s.id)}">${t('u.detail')}${icon('chev-right', 'icon-xs')}</button>
     </details>`}
+  </article>`;
+}
+
+/* 1.9.1 compact row for Dnes ("what do I buy now" in the first screen): name + badge, one sentence, one button */
+export function row(s, { data, now = D.clock(), i = 0 } = {}) {
+  const cs = D.cardState(s, data, now);
+  const w = whatIs(s.symbol, s.name);
+  return `<article class="brow tone-${cs.tone} is-${cs.code}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}">
+    <div class="brow-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(`${w.name} ${s.symbol}`)}">
+      ${monogram(s.symbol, s.name)}
+      <span class="brow-id"><span class="brow-n"><span class="bc-name">${F.esc(w.name)}${w.name !== s.symbol ? ` <span class="ticker">${F.esc(s.symbol)}</span>` : ''}</span><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span></span>
+        <span class="brow-t tone-${cs.tone}">${F.esc(cs.text)}</span></span>
+    </div>
+    ${ctaBtn(s, cs, { small: true })}
+  </article>`;
+}
+
+/* ---------- 1.9.1 THE signal card (Dnes "Nový signál" and Signály – the same card) ----------
+   KOUPIT · Exxon Mobil / ropná firma z USA · na 2–3 dny / Vlož např. 10 000 Kč → při cíli +1 880 Kč, při stopu −940 Kč /
+   one plain answer "can I still invest?" (D.cardState: a / b / c) / [Zainvestovat] [Teď ne].
+   Already invested -> "Máš investováno · +128 Kč" instead of the buttons. No robot info here (only in the detail). */
+export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) {
+  const cs = D.cardState(s, data, now);
+  const w = whatIs(s.symbol, s.name);
+  const sell = s.action === 'SELL';
+  const ex = D.example(s);
+  const sm = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), ex.ccy, 0);
+  const hz = t(`u.hzShort.${s.horizon}`);
+  let foot = '';
+  if (cs.code === 'mine' || (cs.code === 'done' && cs.my)) {
+    const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
+    foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
+  } else if (cs.cta) {
+    const lim = cs.cta === 'limit';
+    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+  }
+  const exLine = cs.code === 'done' ? '' : `<p class="sc-ex num">${t('sc.example', { a: F.money(ex.amount, ex.ccy, 0), t: `<b class="up">${ex.atTarget != null ? sm(ex.atTarget) : '–'}</b>`, s: `<b class="down">${ex.atStop != null ? sm(ex.atStop) : '–'}</b>` })}</p>`;
+  return `<article class="sc is-${cs.code}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}">
+    <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(`${w.name} ${s.symbol}`)}">
+      ${monogram(s.symbol, s.name)}
+      <span class="sc-id"><span class="sc-k"><b class="sc-act ${sell ? 'is-sell' : ''}">${t(sell ? 'sc.sell' : 'sc.buy')}</b><span class="sc-dot">·</span><span class="sc-name">${F.esc(w.name)}</span>${w.name !== s.symbol ? `<span class="ticker">${F.esc(s.symbol)}</span>` : ''}</span>
+        <span class="sc-s">${F.esc([w.phrase, hz].filter(Boolean).join(' · '))}</span></span>
+      ${icon('chev-right', 'icon-xs sc-chev')}
+    </div>
+    ${exLine}
+    ${cs.code === 'mine' ? '' : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`}
+    ${foot}
   </article>`;
 }
 

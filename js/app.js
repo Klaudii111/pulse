@@ -44,16 +44,17 @@ D.setClock(now);
 const TABS = [
   { id: 'dnes', icon: 'home' },
   { id: 'signaly', icon: 'signals' },
+  { id: 'zainvestovano', icon: 'wallet' },
   { id: 'terminal', icon: 'chart' },
-  { id: 'vysledky', icon: 'results' },
   { id: 'vice', icon: 'more' },
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vysledky', moje: 'dnes', udalosti: 'dnes' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
+  zainvestovano: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
   signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions, mount: () => setTimeout(() => Tour.maybeHint(), 900) },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
@@ -178,7 +179,40 @@ function onRoute() {
 
 function maybeOpenDeepLink() {
   const id = route.params.get('s');
-  if (id && route.name === 'signaly' && data.signals) setTimeout(() => openDetail(ctx(), id), 80);
+  if (!id || route.name !== 'signaly' || !data.signals) return;
+  /* 1.9.1: push action "Zainvestovat" -> the detail with the investment sheet already open */
+  const inv = route.params.get('invest') === '1';
+  setTimeout(() => { openDetail(ctx(), id); if (inv) setTimeout(() => investFor(id), 450); }, 80);
+}
+
+/* ---------- 1.9.1: invest right from a signal, watch my trades on the server ---------- */
+function investFor(id, mode = null) {
+  const s = D.findSignal(data, id);
+  if (!s) { toast(t('det.notFound')); return; }
+  const cs = D.cardState(s, data, now());
+  Term.investSheet(ctx(), s, mode || (cs.cta === 'limit' ? 'limit' : 'now'));
+}
+function myTrades() {
+  const w = store.get('wallet', null);
+  /* server contract: max 50, unique ids, sl or tp may be null but not both; the list replaces, [] clears */
+  return (w?.positions || []).filter((p) => p.sl > 0 || p.tp > 0).slice(0, 50).map((p) => ({ id: String(p.id), key: p.sym, side: p.side === 'SELL' ? 'SELL' : 'BUY', entry: p.entry,
+    sl: p.sl > 0 ? p.sl : null, tp: p.tp > 0 ? p.tp : null, lev: p.lev || 1, deposit: Math.round(p.margin * 100) / 100, ccy: w.ccy, name: B.whatIs(p.sym, p.name).name }));
+}
+const syncTrades = () => { P.syncTrades(myTrades()).catch(() => {}); };
+
+/* a new buyable signal since the last visit -> one calm bottom sheet: "Nový signál: KOUPIT XOM" [Zainvestovat] [Teď ne] */
+function newSignalOffer() {
+  if (!data.signals || sheetOpen() || document.querySelector('.onb')) return;
+  const seen = store.get('seenSig', null);
+  const fresh = Home.newSignals(data, now());
+  store.set('seenSig', [...new Set(D.allOpen(data).map((x) => x.id).concat(seen || []))].slice(-400));
+  if (!Array.isArray(seen)) return; // first run: the first-run guide comes first, the signals are on Dnes
+  const s = fresh.find((x) => !seen.includes(x.id));
+  if (!s) return;
+  openSheet({ small: true, label: t('nsig.t'), html: `<div class="sheet-head"><div><p class="sheet-title">${t('nsig.t')}</p><p class="sheet-sub">${t('nsig.s')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+    <div class="sheet-body">${B.offer(s, { data, now: now(), notNow: true })}</div>`,
+    onMount(el) { el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); } });
 }
 
 /* ---------- Data ---------- */
@@ -207,6 +241,8 @@ async function loadAll() {
   rerender({ soft: true });
   maybeOpenDeepLink();
   checkAlerts();
+  syncTrades();
+  if (!route.params.get('s')) setTimeout(newSignalOffer, 1200);
 }
 
 /* paper.json (robot's Alpaca paper account) is polled with the other data */
@@ -239,6 +275,11 @@ function autoCopy() {
 }
 
 function walletCheck() {
+  const r = walletCheck0();
+  if (r) syncTrades();
+  return r;
+}
+function walletCheck0() {
   const copied = autoCopy();
   /* 1.8.0: pending limit orders first (a fill becomes a position that the stop / target check below watches) */
   const ord = W.checkOrders(data);
@@ -267,6 +308,7 @@ async function poll() {
     if (walletClosed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     if (changed) {
       checkAlerts();
+      setTimeout(newSignalOffer, 600);
       const resDue = route.name === 'vysledky' && Date.now() - (window.__pulseResAt || 0) > 20000;
     if (!sheetOpen() && (['dnes', 'signaly'].includes(route.name) || resDue)) { if (resDue) window.__pulseResAt = Date.now(); rerender({ soft: true }); }
     }
@@ -339,10 +381,23 @@ const GLOBAL = {
     walletCheck();
     rerender({ soft: true });
   },
+  auto() { GLOBAL['auto-toggle'](); },
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
   /* "?" next to a trading word: one sentence + an example */
   'term-help'(el) { termHelp(el.dataset.k); },
   rtip() { toast(t('rtip')); },
+  /* 1.9.1 signal card buttons: [Zainvestovat] / [Nastavit nákup za …] and [Teď ne] */
+  invest(el) {
+    /* from the "new signal" sheet: close it first; from the detail: the sheet opens on top of it */
+    const go = () => investFor(el.dataset.id, el.dataset.mode === 'limit' ? 'limit' : 'now');
+    if (el.closest('.sheet') && !el.closest('.sheet #cta')) { closeTopSheet(); setTimeout(go, 380); } else go();
+  },
+  'not-now'(el) {
+    D.dismiss(el.dataset.id);
+    if (el.closest('.sheet')) closeTopSheet();
+    toast(t('sc.notNowDone'));
+    rerender({ soft: true });
+  },
   /* "Změnit kapitál": the calculator holds the user's account size, currency and risk profile */
   'go-calc'() {
     const go = () => (window.__pulseGo ? window.__pulseGo('#/kalkulacka') : (location.hash = '#/kalkulacka'));
@@ -487,11 +542,12 @@ async function boot() {
     const closed = walletCheck();
     if (closed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     checkAlerts();
-    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
+    if (!sheetOpen() && ['dnes', 'signaly', 'zainvestovano'].includes(route.name)) rerender({ soft: true });
     else renderChrome();
     document.dispatchEvent(new CustomEvent('pulse:live'));
   });
   setInterval(() => renderChrome(), 30000);
+  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'signaly'].includes(route.name)) rerender({ soft: true }); });
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {

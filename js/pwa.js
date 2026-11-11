@@ -124,13 +124,31 @@ export async function subscribePush() {
     if (!r || !r.ok) { try { await sub.unsubscribe(); } catch { /* ignore */ } return { ok: false, reason: 'server' }; }
   }
   store.set('pushOn', true);
+  document.dispatchEvent(new CustomEvent('pulse:wallet')); // register my open trades for push right away
   return { ok: true, sub };
+}
+
+/* 1.9.1: tell the server which play-money trades to watch for this device (push while the app is closed).
+   Sent whenever the open trades change; a non-2xx answer keeps the local behaviour (checks while the app is open). */
+let lastTrades = null;
+export async function syncTrades(trades, force = false) {
+  if (!CONFIG.PUSH?.TRADES_URL || !CONFIG.PUSH.ENABLED) return false;
+  const sub = await pushSubscription();
+  if (!sub) return false;
+  const body = JSON.stringify({ endpoint: sub.endpoint, trades });
+  if (!force && body === lastTrades) return true;
+  try {
+    const r = await fetch(CONFIG.PUSH.TRADES_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    if (r.ok) { lastTrades = body; return true; }
+  } catch { /* offline / no endpoint yet: local checks keep working */ }
+  return false;
 }
 
 export async function unsubscribePush() {
   const sub = await pushSubscription();
   store.set('pushOn', false);
   if (!sub) return true;
+  if (CONFIG.PUSH.TRADES_URL) await fetch(CONFIG.PUSH.TRADES_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint, trades: [] }) }).catch(() => {});
   if (CONFIG.PUSH.UNSUBSCRIBE_URL) {
     await fetch(CONFIG.PUSH.UNSUBSCRIBE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {});
   }

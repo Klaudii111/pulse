@@ -10,6 +10,11 @@ import * as Live from '../live.js';
 
 export const MORE_ITEMS = [
   /* 1.9.0: how it works first (guided tour + page), and why it is not made up */
+  /* 1.9.1: the robot's results and account live here (5 tabs: Dnes · Signály · Zainvestováno · Obchodovat · Více) */
+  { group: 'more.g.robot', items: [
+    { id: 'vysledky', icon: 'results', sub: () => t('more.vysledky.s') },
+    { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
+  ] },
   { group: 'more.g.help', items: [
     { id: 'jak', icon: 'help', sub: () => t('more.jak.s') },
     { id: 'tour', action: true, icon: 'spark', sub: () => t('more.tour.s') },
@@ -17,7 +22,7 @@ export const MORE_ITEMS = [
   ] },
   { group: 'more.g.you', items: [
     { id: 'moje', icon: 'star', sub: () => { const n = D.followed().length; const w = store.get('wallet', null); const p = w?.positions?.length || 0; return p || n ? t('more.moje.s', { p, n }) : t('more.moje.s0'); } },
-    { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
+    { id: 'auto', action: true, icon: 'spark', sub: () => t(store.get('autoCopy', null)?.on ? 'auto.sOn' : 'auto.sOff') },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
     { id: 'urovne', icon: 'levels', sub: (c) => D.levelName(D.levelInfo(c.data).level) },

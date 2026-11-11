@@ -42,14 +42,14 @@ export function equityChart(box, series, opts = {}) {
       grid += `<line x1="${pad.l}" x2="${w - pad.r + 6}" y1="${y}" y2="${y}" stroke="var(--line${zero ? '-3' : ''})" ${zero ? 'stroke-dasharray="3 4"' : ''}/>`;
       grid += `<text x="${w - pad.r + 12}" y="${y}" dy="0.35em" class="ax num">${F.spct(v, step < 1 ? 1 : 0)}</text>`;
     }
-    let xl = '', lastM = -1, lastX = -100;
-    pts.forEach((p, i) => {
-      const m = +p.date.slice(5, 7);
-      if (m !== lastM) {
-        lastM = m;
-        const x = X(i);
-        if (x - lastX > 44 && x < w - pad.r - 10) { xl += `<text x="${x.toFixed(1)}" y="${h - 8}" class="ax">${F.monShort(p.date)}</text>`; lastX = x; }
-      }
+    /* 1.9.1: dates ("11. 11.") instead of month abbreviations ("lis" told a beginner nothing) – about 4 labels */
+    let xl = '';
+    const nL = Math.max(2, Math.min(4, Math.floor((w - pad.l - pad.r) / 70)));
+    const idx = [...new Set(Array.from({ length: nL }, (_, k) => Math.round((k / (nL - 1)) * (pts.length - 1))))];
+    idx.forEach((i, k) => {
+      const x = X(i);
+      const anchor = k === 0 ? 'start' : k === idx.length - 1 ? 'end' : 'middle';
+      xl += `<text x="${x.toFixed(1)}" y="${h - 8}" class="ax" text-anchor="${anchor}">${F.dm(pts[i].date)}</text>`;
     });
     const last = pts[pts.length - 1];
     box.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${F.esc(t('res.chart'))}">
@@ -199,8 +199,11 @@ export function priceChart(box, s, opts = {}) {
     };
     const lines = lvl(s.target, 'var(--up)', t('lad.target'), '4 4') + lvl(s.stop, 'var(--down)', t('lad.stop'), '4 4') + lvl(s.entry, 'var(--ink-2)', t('lad.entry'), '1 3');
     labels.push({ y: ye, c: col, txt: F.price(lastP), now: true });
+    /* 1.9.1 label collision: at least 15 px apart, kept inside the plot (top -> down, then bottom -> up) */
     labels.sort((a, b) => a.y - b.y);
-    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 13) labels[i].y = labels[i - 1].y + 13;
+    const GAP = 15, top = pad.t + 4, bot = h - pad.b - 4;
+    labels.forEach((l, i) => { l.y = Math.max(l.y, top, i ? labels[i - 1].y + GAP : top); });
+    for (let i = labels.length - 1; i >= 0; i--) labels[i].y = Math.min(labels[i].y, i === labels.length - 1 ? bot : labels[i + 1].y - GAP);
     const zone = s.entry > 0 ? `<rect x="${X(ci).toFixed(1)}" y="${Math.min(Y(s.entry), ye).toFixed(1)}" width="${Math.max(0, xe - X(ci)).toFixed(1)}" height="${Math.abs(Y(s.entry) - ye).toFixed(1)}" fill="${col}" opacity="0.13"/>` : '';
     const area = `${d}L${xe.toFixed(1)},${(h - pad.b).toFixed(1)}L${X(0).toFixed(1)},${(h - pad.b).toFixed(1)}Z`;
     const live = !!(opts.isLive && opts.isLive());

@@ -2222,3 +2222,121 @@ html.has-onb, html.has-onb body { overflow: hidden; }
 .onb-yn { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .onb-yn .chip[aria-checked="true"] { color: var(--gold-ink); background: linear-gradient(180deg, var(--gold-hi), var(--gold)); border-color: transparent; }
 @media (prefers-reduced-motion: reduce) { .auto-sw, .auto-sw i { transition: none; } }
+
+/* ==================== 1.9.1 – calm Dnes, one signal card, invest sheet (owner 11. 11.) ==================== */
+/* header: logo + short "PULSE" on phones (no "PULSE Si…") */
+@media (max-width: 520px) {
+  .topbar .brand-name { font-size: 0; max-width: none; }
+  .topbar .brand-name::after { content: 'PULSE'; font-size: 15px; letter-spacing: 0.02em; }
+}
+
+/* 1 MŮJ ÚČET */
+.d-acc { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-radius: var(--r-card); background: var(--card-grad); border: 1px solid var(--line-2); }
+.d-acc-l { min-width: 0; }
+.d-k { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.d-acc-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 4px; }
+.d-acc-v b { font-size: 26px; font-weight: 680; letter-spacing: -0.01em; }
+.d-acc-v span { font-size: 12.5px; color: var(--ink-3); }
+.d-acc-s { margin-top: 2px; font-size: 13.5px; color: var(--ink-2); }
+.d-acc-s.up { color: var(--up); } .d-acc-s.down { color: var(--down); }
+.d-trade { flex: none; }
+
+/* blocks */
+.d-block { margin-top: 26px; }
+.d-h { margin: 0 2px 10px; font-size: 12px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.d-empty { padding: 14px 16px; border-radius: 16px; background: var(--raise); border: 1px solid var(--line); font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.d-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.d-robot { display: flex; align-items: center; gap: 10px; margin-top: 26px; padding: 14px 16px; border-radius: 16px; background: var(--raise); border: 1px solid var(--line);
+  font-size: 13.5px; line-height: 1.4; color: var(--ink-2); text-decoration: none; }
+.d-robot span { flex: 1; min-width: 0; }
+.d-robot .icon { flex: none; color: var(--ink-3); }
+
+/* THE signal card (Dnes + Signály) */
+.sc-list { display: grid; gap: 12px; }
+.sc { padding: 16px; border-radius: 18px; background: var(--raise); border: 1px solid var(--line); min-width: 0; }
+.sc-head { display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
+.sc-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.sc-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 16px; line-height: 1.3; }
+.sc-act { font-size: 12.5px; font-weight: 750; letter-spacing: 0.07em; color: var(--up); }
+.sc-act.is-sell { color: var(--gold-hi); }
+.sc-dot { color: var(--ink-4); }
+.sc-name { font-weight: 640; overflow-wrap: anywhere; }
+.sc-k .ticker { font-size: 12px; color: var(--ink-3); }
+.sc-s { font-size: 13px; line-height: 1.35; color: var(--ink-3); }
+.sc-chev { flex: none; color: var(--ink-4); }
+.sc-ex { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.sc-ex b { font-weight: 650; white-space: nowrap; }
+.sc-ex .up { color: var(--up); } .sc-ex .down { color: var(--down); }
+.sc-when { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.sc-when.is-late, .sc-when.is-done { color: var(--ink-3); }
+.sc-btns { display: flex; gap: 8px; margin-top: 14px; }
+.sc-btns .sc-go { flex: 1; min-height: 44px; white-space: normal; line-height: 1.2; }
+.sc-btns .sc-no { flex: none; height: 44px; padding: 0 14px; }
+.sc-mine { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 11px 14px; border-radius: 12px; background: var(--gold-soft); border: 1px solid var(--gold-line);
+  font-size: 14px; font-weight: 600; color: var(--gold-hi); text-align: left; }
+.sc-mine b { margin-left: auto; font-weight: 650; }
+.sc-mine b.up { color: var(--up); } .sc-mine b.down { color: var(--down); } .sc-mine b.flat { color: var(--ink-2); }
+.sc.is-late, .sc.is-done { background: transparent; }
+.sc.is-late .sc-act, .sc.is-done .sc-act { color: var(--ink-3); }
+.sheet .sc { background: var(--raise-2); }
+
+/* 3 MOJE INVESTICE */
+.mi-list { display: grid; gap: 10px; }
+.mi-row { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-radius: 16px; background: var(--raise); border: 1px solid var(--line); text-decoration: none; color: inherit; min-width: 0; }
+.mi-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-align: left; }
+.mi-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.mi-n { font-size: 15px; font-weight: 640; overflow-wrap: anywhere; }
+.mi-v { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.mi-v.up { color: var(--up); } .mi-v.down { color: var(--down); }
+.mi-s { font-size: 12.5px; color: var(--ink-3); }
+.mi-spark { flex: none; color: var(--ink-3); }
+.mi-spark.up { color: var(--up); } .mi-spark.down { color: var(--down); }
+.mi-x { flex: none; }
+
+/* Signály: collapsed groups */
+.sg-group { margin-top: 18px; border-radius: 16px; border: 1px solid var(--line); background: var(--raise); }
+.sg-group > summary { display: flex; align-items: center; gap: 8px; padding: 14px 16px; cursor: pointer; list-style: none; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.sg-group > summary::-webkit-details-marker { display: none; }
+.sg-group > summary .num { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+.sg-group[open] > summary .icon { transform: rotate(180deg); }
+.sg-group > .sc-list, .sg-group > .dev-list { padding: 0 12px 12px; }
+.sg-note { padding: 0 16px 10px; font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+
+/* quiet parts of the older card / detail */
+.bc-quiet { color: var(--ink-3); }
+.st-line.is-quiet { color: var(--ink-3); font-size: 12.5px; }
+.st-line.is-quiet i { background: var(--ink-4); }
+.bc-pct.is-quiet { color: var(--ink-3); }
+.bc-quiet .bc-chart .bc-line { stroke: var(--ink-3); }
+.bc-quiet .bc-chart .bc-area { fill: var(--line); }
+.bc-my { display: flex; gap: 8px; align-items: baseline; margin-top: 8px; font-size: 14px; color: var(--ink-2); }
+.bc-my b { font-weight: 650; }
+.bc-my.tone-up b { color: var(--up); } .bc-my.tone-down b { color: var(--down); } .bc-my.tone-flat b { color: var(--ink-2); }
+.bc-if { margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
+.st-you.is-if { color: var(--ink-3); }
+.st-you.is-if b { color: var(--ink-3); font-weight: 600; }
+.invest-btn.is-limit { border-color: var(--gold-line); }
+
+/* robot page */
+.pa-vrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pa-mine { font-size: 13px; font-weight: 500; color: var(--ink-3); }
+.pa-broker { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+.pa-leg { display: block; font-size: 12px; line-height: 1.4; }
+.pa-leg.up { color: var(--ink-2); } .pa-leg.down { color: var(--ink-3); }
+.pa-row .pa-meta, .pa-row .pa-sym { overflow-wrap: anywhere; white-space: normal; }
+.res-counts { margin: -4px 0 12px; font-size: 13.5px; color: var(--ink-2); }
+
+/* invest sheet */
+.tk-adv { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.tk-adv > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 13.5px; color: var(--ink-2); }
+.tk-adv > summary::-webkit-details-marker { display: none; }
+.tk-adv[open] > summary .icon { transform: rotate(180deg); }
+
+/* detail: nothing hides under the sticky button */
+.sheet-body { padding-bottom: calc(var(--sab) + 96px); }
+.pchart-box { margin-bottom: 6px; }
+.d-h a { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: none; }
+.d-h a .icon { color: var(--ink-4); }
+.tk-adv + #tk-block, .tk-adv ~ .tk-go { margin-top: 16px; }
+.pa-sym .ticker { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-left: 4px; letter-spacing: 0.04em; }
+.st-big.is-quiet .st-line b { color: var(--ink-2); }
