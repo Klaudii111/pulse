@@ -4,7 +4,23 @@ import { t, L } from '../i18n/index.js';
 import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline } from '../ui.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
-import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock } from './signals.js';
+import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow } from './signals.js';
+import { paperHero } from './paper.js';
+import { walletCard } from './terminal.js';
+import { pushCta } from './more.js';
+import * as Live from '../live.js';
+
+/* Live market strip (ETF proxies, labelled honestly); a symbol missing in the live data is hidden */
+const STRIP = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100'], ['DIA', 'Dow'], ['GLD', 'mkt.gold']];
+function marketStrip() {
+  const items = STRIP.map(([sym, name]) => {
+    const q = Live.quote(sym);
+    if (!q || !(q.pc > 0)) return '';
+    const ch = (q.p / q.pc - 1) * 100;
+    return `<span class="mk ${ch >= 0 ? 'up' : 'down'}"><span class="mk-n">${F.esc(name.startsWith('mkt.') ? t(name) : name)} <small>(${sym})</small></span><b class="num">${F.spct(ch, 2)}</b></span>`;
+  }).filter(Boolean);
+  return items.length ? `<div class="mk-strip" aria-label="${t('mkt.aria')}">${items.join('')}</div>` : '';
+}
 
 export function miniBar(s) {
   const g = ladderGeometry(s);
@@ -99,10 +115,14 @@ export function render(ctx) {
   const sorted = [...open].sort((a, b) => urgency(a) - urgency(b));
   const CAPP = 5;
 
+  const headline = fresh.length ? t('home.headline', { n: fresh.length }) : live.length ? t('home.headlineHold', { n: live.length }) : t('home.headline0');
   return head + `
+  <p class="headline">${headline}</p>
+  ${marketStrip()}
   <div class="home-grid">
     <div class="home-main">
       ${nextLine(ctx.data, ctx.now())}
+      ${paperHero(ctx)}
       <section class="hero ${sumPct >= 0 ? 'up' : 'down'}">
         <span class="aurora" aria-hidden="true"><i></i><i></i></span>
         <div class="hero-top"><p class="hero-l">${t('home.hero')}</p>${sparkline(spark, { w: 96, h: 32, cls: 'hero-spark' })}</div>
@@ -115,23 +135,17 @@ export function render(ctx) {
         </div>
       </section>
       ${regimeLine(s.regime)}
+      ${walletCard(ctx)}
       ${fresh.length ? '' : emptyState(ctx, 'ALL')}
       ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
       ${ctx.nudge || ''}
+      ${pushCta()}
       <h2 class="section-title">${t('home.attention')}<small>${al.length ? `${al.length} ${F.unit('item', al.length)}` : ''}</small></h2>
       ${al.length ? alertList(al) : `<p class="quiet">${t('home.nothing')}</p>`}
     </div>
     <div class="home-side">
       <h2 class="section-title">${t('home.positions')}<small>${t('home.positionsS')}</small></h2>
-      ${open.length ? `<div class="pos-list" id="pos-list">${sorted.map((x, i) => {
-        const st = liveState(x);
-        const up = (x.pnl_r ?? 0) >= 0;
-        return `<button type="button" class="pos-row ${st !== 'open' ? `is-${st}` : ''} ${i >= CAPP ? 'is-extra' : ''}" style="--i:${Math.min(i, 6)}" data-action="open-signal" data-id="${F.esc(x.id)}">
-          <span class="pos-id">${monogram(x.symbol, x.name)}<span><span class="hist-sym">${F.esc(x.symbol)}</span><span class="hist-meta">${F.HZ_LABEL[x.horizon]}, ${st === 'target' ? t('home.m.target') : st === 'stop' ? t('home.m.stop') : F.countdown(x.exit_date, now)}</span></span></span>
-          ${miniBar(x)}
-          <span class="pos-v num ${up ? 'up' : 'down'}">${daySpark(x)}${F.spct(x.pnl_pct_position, 2)}${showR ? `<small>${rTip(x.pnl_r)}</small>` : ''}</span>
-        </button>`;
-      }).join('')}${open.length > CAPP ? `<button type="button" class="alert-more" data-action="pos-all" data-n="${open.length}">${t('common.showAllN', { n: open.length })}</button>` : ''}</div>` : `<p class="quiet">${t('home.noPositions')}</p>`}
+      ${open.length ? `<div class="srow-list" id="pos-list">${sorted.map((x, i) => signalRow(x, now, i, { extra: i >= CAPP })).join('')}${open.length > CAPP ? `<button type="button" class="alert-more" data-action="pos-all" data-n="${open.length}">${t('common.showAllN', { n: open.length })}</button>` : ''}</div>` : `<p class="quiet">${t('home.noPositions')}</p>`}
     </div>
   </div>
   ${disclaimer()}`;

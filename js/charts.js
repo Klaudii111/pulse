@@ -128,12 +128,23 @@ export function pricePoints(s, mode) {
     const i = raw.findIndex((p) => nyDayOf(p.t) === day);
     return i > 0 ? raw.slice(i - 1) : raw.slice(i);
   }
+  if (mode === '5d') {
+    /* the last 5 trading days, every point (5-min path where the bot/live layer has it) */
+    const days = [...new Set(raw.map((p) => nyDayOf(p.t)))].slice(-5);
+    const i = raw.findIndex((p) => nyDayOf(p.t) === days[0]);
+    return raw.slice(Math.max(0, i));
+  }
   const out = [];
   raw.forEach((p) => {
     const last = out[out.length - 1];
     if (last && nyDayOf(last.t) === nyDayOf(p.t)) out[out.length - 1] = p; else out.push(p);
   });
   return out.length >= 2 ? out : raw; // a signal from today: its intraday points are the whole story
+}
+
+/* more than one trading day in the path -> the 5D tab makes sense */
+export function hasDays(s) {
+  return new Set((s.price_path || []).map((p) => nyDayOf(p.t))).size >= 2;
 }
 
 /* 'today' has something to show only with at least 2 points of the newest trading day */
@@ -151,37 +162,62 @@ export function defaultPriceMode(s) {
   return hasToday(s) && (oneDay || pricePoints(s, 'today').length >= 4) ? 'today' : 'all';
 }
 
-/** Price path with stop / entry / target levels. opts.mode = 'today' | 'all' (getter or value). */
+/** Live price chart with entry / stop / target lines (1.6.0).
+ * opts.mode = 'today' | '5d' | 'all' (getter or value); opts.isLive() -> true only while prices are fresh
+ * (market open and data < 60 s): only then the last dot pulses. A stale chart never pretends to be live.
+ * Levels are optional (Obchodní platforma without a stop/target). */
 export function priceChart(box, s, opts = {}) {
   const modeOf = () => (typeof opts.mode === 'function' ? opts.mode() : opts.mode) || 'all';
+  const uid = `pc${Math.random().toString(36).slice(2, 7)}`;
+  let geo = null;
   const draw = () => {
+    geo = null;
     const w = box.clientWidth, h = box.clientHeight;
     const mode = modeOf();
     const path = pricePoints(s, mode);
-    if (!w || !h || path.length < 2) { box.innerHTML = ''; return; }
-    const pad = { l: 4, r: 74, t: 12, b: 22 };
+    if (!w || !h || path.length < 2) { box.innerHTML = `<p class="pchart-empty">${t('chart.empty')}</p>`; return; }
+    const pad = { l: 4, r: 78, t: 12, b: 22 };
     const ps = path.map((p) => p.p);
-    let lo = Math.min(...ps, s.stop, s.target), hi = Math.max(...ps, s.stop, s.target);
-    const span = hi - lo; lo -= span * 0.08; hi += span * 0.08;
+    const lv = [s.stop, s.target, s.entry].filter((v) => v > 0);
+    let lo = Math.min(...ps, ...lv), hi = Math.max(...ps, ...lv);
+    const span = (hi - lo) || hi * 0.01 || 1; lo -= span * 0.08; hi += span * 0.08;
     const X = (i) => pad.l + (i / (path.length - 1)) * (w - pad.l - pad.r);
     const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
-    const ci = Math.max(0, path.findIndex((p) => new Date(p.t) >= new Date(s.created_at)));
+    const ci = s.created_at ? Math.max(0, path.findIndex((p) => new Date(p.t) >= new Date(s.created_at))) : 0;
     const d = path.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(p.p).toFixed(1)}`).join('');
-    const up = (s.pnl_r ?? 0) >= 0;
-    const col = up ? 'var(--up)' : 'var(--down)';
-    const lvl = (v, c, label, dash) => `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="${c}" stroke-width="1" ${dash ? `stroke-dasharray="${dash}"` : ''} opacity="0.85"/>
-      <text x="${w - pad.r + 10}" y="${Y(v).toFixed(1)}" dy="0.35em" class="ax lvl num" fill="${c}">${label} ${F.price(v)}</text>`;
-    const first = path[0].t, lastT = path[path.length - 1].t;
     const lastP = path[path.length - 1].p;
+    const dir = s.action === 'SELL' ? -1 : 1;
+    const up = s.entry > 0 ? dir * (lastP - s.entry) >= 0 : lastP >= ps[0];
+    const col = up ? 'var(--up)' : 'var(--down)';
+    const xe = X(path.length - 1), ye = Y(lastP);
+    /* label positions: keep the right-hand labels from overlapping */
+    const labels = [];
+    const lvl = (v, c, label, dash) => {
+      if (!(v > 0)) return '';
+      labels.push({ y: Y(v), c, txt: `${label} ${F.price(v)}` });
+      return `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="${c}" stroke-width="1" ${dash ? `stroke-dasharray="${dash}"` : ''} opacity="0.85"/>`;
+    };
+    const lines = lvl(s.target, 'var(--up)', t('lad.target'), '4 4') + lvl(s.stop, 'var(--down)', t('lad.stop'), '4 4') + lvl(s.entry, 'var(--ink-2)', t('lad.entry'), '1 3');
+    labels.push({ y: ye, c: col, txt: F.price(lastP), now: true });
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 13) labels[i].y = labels[i - 1].y + 13;
+    const zone = s.entry > 0 ? `<rect x="${X(ci).toFixed(1)}" y="${Math.min(Y(s.entry), ye).toFixed(1)}" width="${Math.max(0, xe - X(ci)).toFixed(1)}" height="${Math.abs(Y(s.entry) - ye).toFixed(1)}" fill="${col}" opacity="0.13"/>` : '';
+    const area = `${d}L${xe.toFixed(1)},${(h - pad.b).toFixed(1)}L${X(0).toFixed(1)},${(h - pad.b).toFixed(1)}Z`;
+    const live = !!(opts.isLive && opts.isLive());
+    const first = path[0].t, lastT = path[path.length - 1].t;
+    const intraday = mode === 'today' || mode === '5d' || s.horizon === 'DEN';
+    geo = { path, X, Y, pad, w, intraday };
     box.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${F.esc(s.symbol)}">
-      <rect x="${X(ci)}" y="${pad.t}" width="${Math.max(0, X(path.length - 1) - X(ci))}" height="${h - pad.t - pad.b}" fill="var(--raise-2)" opacity="0.6" rx="4"/>
-      ${lvl(s.target, 'var(--up)', t('lad.target'), '4 4')}
-      ${lvl(s.stop, 'var(--down)', t('lad.stop'), '4 4')}
-      ${lvl(s.entry, 'var(--ink-2)', t('lad.entry'), '1 3')}
-      <path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${X(path.length - 1)}" cy="${Y(lastP)}" r="4.5" fill="${col}" stroke="var(--raise)" stroke-width="2"/>
-      <text x="${pad.l}" y="${h - 5}" class="ax">${mode === 'today' || s.horizon === 'DEN' ? (nyDayOf(first) === nyDayOf(lastT) ? F.time(first) : F.dmTime(first)) : F.dm(first)}</text>
-      <text x="${X(path.length - 1)}" y="${h - 5}" class="ax" text-anchor="end">${s.horizon === 'DEN' || mode === 'today' ? F.time(lastT) : F.dm(lastT)}</text>
+      <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--gold)" stop-opacity=".16"/><stop offset="1" stop-color="var(--gold)" stop-opacity="0"/></linearGradient></defs>
+      ${zone}
+      <path d="${area}" fill="url(#${uid})"/>
+      ${lines}
+      <path class="pc-line" d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+      ${live ? `<circle class="pc-ping" cx="${xe}" cy="${ye}" r="5" fill="${col}"/>` : ''}
+      <circle cx="${xe}" cy="${ye}" r="4.5" fill="${live ? col : 'var(--ink-3)'}" stroke="var(--raise)" stroke-width="2"/>
+      ${labels.map((l) => `<text x="${w - pad.r + 10}" y="${l.y.toFixed(1)}" dy="0.35em" class="ax lvl num ${l.now ? 'is-now' : ''}" fill="${l.c}">${F.esc(l.txt)}</text>`).join('')}
+      <text x="${pad.l}" y="${h - 5}" class="ax">${intraday ? (nyDayOf(first) === nyDayOf(lastT) ? F.time(first) : F.dmTime(first)) : F.dm(first)}</text>
+      <text x="${xe}" y="${h - 5}" class="ax" text-anchor="end">${intraday ? F.time(lastT) : F.dm(lastT)}</text>
     </svg>`;
   };
   let size = '';
@@ -189,5 +225,30 @@ export function priceChart(box, s, opts = {}) {
   redraw();
   const ro = new ResizeObserver(redraw);
   ro.observe(box);
-  return { destroy: () => ro.disconnect(), refresh: () => { size = ''; redraw(); } };
+  /* scrub: touch / hover shows the price and time under the finger */
+  const scrub = (ev) => {
+    if (!geo) return;
+    const r = box.getBoundingClientRect();
+    const x = ev.clientX - r.left;
+    const n = geo.path.length - 1;
+    const i = Math.max(0, Math.min(n, Math.round(((x - geo.pad.l) / (geo.w - geo.pad.l - geo.pad.r)) * n)));
+    const pt = geo.path[i];
+    let tip = box.querySelector('.pc-tip'), cr = box.querySelector('.pc-cross');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'pc-tip num'; cr = document.createElement('div'); cr.className = 'pc-cross'; box.append(cr, tip); }
+    const px = geo.X(i);
+    cr.style.left = `${px}px`;
+    tip.style.left = `${Math.max(50, Math.min(geo.w - 50, px))}px`;
+    tip.innerHTML = `<b>${F.price(pt.p)}</b>${geo.intraday ? F.dmTime(pt.t) : F.dm(pt.t)}`;
+  };
+  const leave = () => { box.querySelectorAll('.pc-tip, .pc-cross').forEach((n) => n.remove()); };
+  box.addEventListener('pointermove', scrub);
+  box.addEventListener('pointerdown', scrub);
+  box.addEventListener('pointerleave', leave);
+  box.addEventListener('pointercancel', leave);
+  const destroy = () => {
+    ro.disconnect();
+    box.removeEventListener('pointermove', scrub); box.removeEventListener('pointerdown', scrub);
+    box.removeEventListener('pointerleave', leave); box.removeEventListener('pointercancel', leave);
+  };
+  return { destroy, refresh: () => { size = ''; redraw(); } };
 }

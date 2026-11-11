@@ -3,7 +3,8 @@ import * as store from '../store.js';
 import { icon, seg, segMove, skBlock, ring, hzIcon } from '../ui.js';
 import { equityChart } from '../charts.js';
 import * as D from '../domain.js';
-import { rTip } from './signals.js';
+import { rTip, VISIBLE_HZ, signalRow } from './signals.js';
+import { paperLink } from './paper.js';
 import { t } from '../i18n/index.js';
 import * as Live from '../live.js';
 
@@ -50,7 +51,7 @@ function heroVals(series, p) {
 }
 
 const tone = (v) => (v > 0.005 ? 'up' : v < -0.005 ? 'down' : '');
-const byHz = (hist, hz) => hist.filter((x) => hz === 'ALL' || x.horizon === hz);
+const byHz = (hist, hz) => hist.filter((x) => (hz === 'ALL' ? VISIBLE_HZ().includes(x.horizon) : x.horizon === hz));
 let histAll = false;
 let histMonth = 'ALL';
 
@@ -60,6 +61,8 @@ function tiles(perf, hz, hist, showR) {
   const w = arr.filter((x) => x.result_r > 0).length;
   const wr = arr.length ? w / arr.length : 0;
   const avgPct = arr.length ? arr.reduce((a, x) => a + (x.result_pct || 0), 0) / arr.length : 0;
+  /* no closed trade yet: 0 % would read like a failure -> say plainly that results come after the first close */
+  if (!arr.length) return `<div class="res-empty">${icon('clock')}<div><p class="card-t">${t('res.none.t')}</p><p class="card-s">${t('res.none.s')}</p></div></div>`;
   return `<div class="tiles">
     <div class="tile tile-ring">${ring(wr, `<b class="num" data-count="${(wr * 100).toFixed(2)}" data-dec="0" data-signed="0" data-count-key="wr-${hz}">${F.pct(wr * 100, 0)}</b>`, { size: 76, stroke: 6, cls: 'gold' })}
       <div><p class="tile-l">${t('res.winrate')}</p><p class="tile-s num">${t('res.winS', { w, n: arr.length })}</p></div></div>
@@ -89,7 +92,7 @@ function monthly(hist, hz) {
 }
 
 function horizons(perf) {
-  const hs = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
+  const hs = VISIBLE_HZ();
   const max = Math.max(1, ...hs.map((h) => Math.abs(perf.by_horizon[h]?.return_pct || 0)));
   return `<section class="card hcard" aria-label="${t('res.hzAria')}">
     <p class="card-t">${t('res.hz')}<span class="card-tsub">${t('res.hzS')}</span></p>
@@ -106,21 +109,15 @@ function horizons(perf) {
   </section>`;
 }
 
-function histRow(s, showR) {
-  const tn = s.result_r > 0.05 ? 'up' : s.result_r < -0.05 ? 'down' : 'flat';
-  return `<button class="hist-row" type="button" data-action="open-signal" data-id="${F.esc(s.id)}">
-    <span class="hist-bar ${tn === 'flat' ? '' : tn}"></span>
-    <span><span class="hist-sym">${F.esc(s.symbol)}<span class="tag ${s.action === 'SELL' ? 'sell' : ''}">${F.SIDE[s.action]}</span></span>
-      <span class="hist-meta" style="display:block">${F.HZ_LABEL[s.horizon]}, ${F.STATUS_LABEL[s.status].toLowerCase()}, ${F.dm(s.closed_at)}</span></span>
-    <span class="hist-res"><span class="hist-r num ${tn}" style="display:block">${F.spct(s.result_pct, 2)}</span>${showR ? `<span class="hist-p num" style="display:block">${F.sr(s.result_r)}</span>` : ''}</span>
-  </button>`;
+function histRow(s) {
+  return signalRow(s, new Date());
 }
 
 function historyBlock(hist, hz, showR = true) {
   const arr = byHz(hist, hz);
   if (!arr.length) return `<div class="empty"><h3>${t('res.empty.t')}</h3><p>${t('res.empty.s')}</p></div>`;
   if (!histAll) {
-    return `<div class="hist-list">${arr.slice(0, 10).map((x) => histRow(x, showR)).join('')}
+    return `<div class="srow-list">${arr.slice(0, 10).map((x) => histRow(x, showR)).join('')}
       ${arr.length > 10 ? `<button type="button" class="alert-more" data-action="hist-all">${t('res.showHistory', { n: arr.length })}</button>` : ''}</div>`;
   }
   const months = [...new Set(arr.map((x) => x.closed_at.slice(0, 7)))];
@@ -130,7 +127,7 @@ function historyBlock(hist, hz, showR = true) {
       <button type="button" class="range-chip" data-action="hist-month" data-id="ALL" aria-pressed="${histMonth === 'ALL'}">${t('res.rangeAll')}</button>
       ${months.map((k) => `<button type="button" class="range-chip" data-action="hist-month" data-id="${k}" aria-pressed="${histMonth === k}">${F.monthName(k + '-15')}</button>`).join('')}
     </div>
-    <div class="hist-list">${list.map((x) => histRow(x, showR)).join('')}
+    <div class="srow-list">${list.map((x) => histRow(x, showR)).join('')}
       <button type="button" class="alert-more" data-action="hist-all">${t('res.collapse')}</button></div>`;
 }
 
@@ -146,11 +143,17 @@ export function render(ctx) {
   const perf = ctx.data?.performance, hist = ctx.data?.history?.signals;
   if (!perf || !hist) return head + `${skBlock(320)}<div style="height:14px"></div>${skBlock(150)}`;
   const range = store.get('range', 'ALL');
-  const hz = store.get('resHz', 'ALL');
+  let hz = store.get('resHz', 'ALL');
+  if (hz !== 'ALL' && !VISIBLE_HZ().includes(hz)) { hz = 'ALL'; store.set('resHz', 'ALL'); }
   const showR = D.showR(ctx.data);
+  const nClosed = hist.filter((x) => VISIBLE_HZ().includes(x.horizon)).length;
+  const openNow = D.allOpen(ctx.data).filter((x) => VISIBLE_HZ().includes(x.horizon) && x.status === 'open');
+  const now = ctx.now();
   const series = rangeSeries(perf, range, ctx.data);
   const h = heroVals(series);
-  return head + `<div class="results-layout">
+  return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0', { n: openNow.length })}</p>
+  ${paperLink(ctx)}
+  <div class="results-layout">
     <section class="chart-card" aria-label="${t('res.chart')}">
       <div class="chart-top">
         <div class="perf-hero glow">
@@ -165,11 +168,13 @@ export function render(ctx) {
         <tbody>${series.filter((_, i) => i % 5 === 0).map((p) => { const v = heroVals(series, p); return `<tr><td>${F.dm(p.date)}</td><td>${F.spct(v.bot)}</td><td>${F.spct(v.spy)}</td></tr>`; }).join('')}</tbody></table>
     </section>
     <div class="results-side">
-      ${seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('hz.ALL') }, ...['DEN', 'DNY', 'TYDEN', 'MESIC'].map((x) => ({ id: x, label: F.HZ_LABEL[x] }))], active: hz })}
+      ${seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('hz.ALL') }, ...VISIBLE_HZ().map((x) => ({ id: x, label: F.HZ_LABEL[x] }))], active: hz })}
       <div id="stats">${tiles(perf, hz, hist, showR)}</div>
       <p class="honest">${icon('info', 'icon-xs')} ${t('res.honest')}</p>
     </div>
   </div>
+  ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${openNow.length}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
+  <div class="srow-list">${openNow.map((x, i) => signalRow(x, now, i)).join('')}</div>` : ''}
   <div id="res-lower">${lower(perf, hist, hz, showR)}</div>`;
 }
 

@@ -1,5 +1,6 @@
 import * as F from './format.js';
 import { t } from './i18n/index.js';
+import * as D from './domain.js';
 
 export const icon = (name, cls = '') => `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
@@ -49,14 +50,16 @@ export function ladder(s, { large = false, animate = false, exitPrice = null } =
   const up = hasLive ? (s.pnl_r ?? 0) >= 0 : false;
   const riskSeg = g.buy ? `left:0;width:${e}%` : `left:${e}%;width:${100 - e}%`;
   const rewSeg = g.buy ? `left:${e}%;width:${100 - e}%` : `left:0;width:${e}%`;
-  const dist = (p) => F.spct(((p - s.entry) / s.entry) * 100, 1);
+  const dist = (p) => `(${F.spct(((p - s.entry) / s.entry) * 100, 1)})`;
   const leftIsStop = g.buy;
+  /* large (detail): "Cena cíle 235,08 (+24,5 %)" = the PRICE move, never confused with the account gain */
+  const k = (x) => t(large ? `lad.${x}P` : `lad.${x}`);
   const L = leftIsStop
-    ? { lab: t('lad.stop'), dot: 'down', p: s.stop }
-    : { lab: t('lad.target'), dot: 'up', p: s.target };
+    ? { lab: k('stop'), dot: 'down', p: s.stop }
+    : { lab: k('target'), dot: 'up', p: s.target };
   const R = leftIsStop
-    ? { lab: t('lad.target'), dot: 'up', p: s.target }
-    : { lab: t('lad.stop'), dot: 'down', p: s.stop };
+    ? { lab: k('target'), dot: 'up', p: s.target }
+    : { lab: k('stop'), dot: 'down', p: s.stop };
   let fill = '';
   if (cur != null) {
     const a = Math.min(e, cur), w = Math.abs(cur - e);
@@ -80,7 +83,7 @@ export function ladder(s, { large = false, animate = false, exitPrice = null } =
     </div>
     <div class="ladder-labels">
       <div><div class="lab"><i class="${L.dot}"></i>${L.lab}</div><div class="price num">${F.price(L.p)}${large ? `<small>${dist(L.p)}</small>` : ''}</div></div>
-      <div><div class="lab"><i class="ink"></i>${t('lad.entry')}</div><div class="price num">${F.price(s.entry)}${large ? `<small>${t(s.action === 'BUY' ? 'lad.buy' : 'lad.sell')}</small>` : ''}</div></div>
+      <div><div class="lab"><i class="ink"></i>${k('entry')}</div><div class="price num">${F.price(s.entry)}${large ? `<small>${t(s.action === 'BUY' ? 'lad.buy' : 'lad.sell')}</small>` : ''}</div></div>
       <div><div class="lab">${R.lab}<i class="${R.dot}"></i></div><div class="price num">${F.price(R.p)}${large ? `<small>${dist(R.p)}</small>` : ''}</div></div>
     </div>
   </div>`;
@@ -289,4 +292,45 @@ export function calmArt() {
     <path d="M18 50l9-6 8 4 9-9" stroke="var(--ink-3)" stroke-width="1.4" stroke-dasharray="2 3"/>
     <path d="M78 41l9 5 8-6 9 3" stroke="var(--ink-3)" stroke-width="1.4" stroke-dasharray="2 3"/>
   </svg>`;
+}
+
+/* ---------- Live status (1.6.0): one sentence + one bar, same everywhere ----------
+ * statusLine: "Vydělává +0,8 %" + "+80 Kč na 10 000 Kč v obchodu · do cíle zbývá 3,1 %"
+ * track: stop <- entry -> target bar with the price dot (closed: the exit point), labels under it. */
+export function statusLine(s, { now, big = false } = {}) {
+  const st = D.liveStatus(s, now);
+  if (!big) return `<p class="st-line tone-${st.tone} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b>${st.sub ? `<span>${F.esc(st.sub)}</span>` : ''}</p>`;
+  /* big (cards + detail): 1) price move in plain words, 2) the money result for THIS user, 3) money at target / stop */
+  const um = st.um;
+  const sm = (v) => (v > 0.5 ? '+' : '') + F.money(v, um.ccy, 0);
+  return `<div class="st-big tone-${st.tone} is-${st.code}">
+    <p class="st-line is-big tone-${st.tone} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b>${st.hint ? `<span>${F.esc(st.hint)}</span>` : ''}</p>
+    ${um.now != null ? `<p class="st-you"><span>${F.esc(t('st.youBig', { a: F.money(um.account, um.ccy, 0), r: F.num(um.risk, 0) }))}</span><b class="num ${um.now >= 0 ? 'up' : 'down'}">${sm(um.now)}</b></p>` : ''}
+    <p class="st-lv num">${t('st.levels', { t: `<b class="up">${um.atTarget != null ? sm(um.atTarget) : '–'}</b>`, s: `<b class="down">${sm(um.atStop)}</b>` })}<span class="st-chg" role="link" tabindex="0" data-action="go-calc">${t('st.change')}</span></p>
+  </div>`;
+}
+
+export function track(s, { now, prices = false, status = true } = {}) {
+  if (s.stop == null || s.target == null || !(s.entry > 0)) return status ? statusLine(s, { now }) : '';
+  const st = D.liveStatus(s, now);
+  const g = ladderGeometry(s);
+  const px = st.done ? D.exitPrice(s) : s.last_price;
+  const cur = px != null ? g.pos(px) : null;
+  const a = cur == null ? g.e : Math.min(g.e, cur), w = cur == null ? 0 : Math.abs(cur - g.e);
+  const tone = st.tone === 'flat' ? 'flat' : st.tone;
+  const lab = (k, p) => `<span>${t(k)}${prices ? ` <b class="num">${F.price(p)}</b>` : ''}</span>`;
+  const leftL = g.buy ? lab('trk.stop', s.stop) : lab('trk.target', s.target);
+  const rightL = g.buy ? lab('trk.target', s.target) : lab('trk.stop', s.stop);
+  const eL = Math.max(18, Math.min(82, g.e));
+  return `<div class="trk tone-${tone} ${g.buy ? '' : 'is-sell'}">
+    ${status ? statusLine(s, { now }) : ''}
+    <div class="trk-bar" aria-hidden="true">
+      <span class="trk-z risk" style="${g.buy ? `left:0;width:${g.e}%` : `left:${g.e}%;right:0`}"></span>
+      <span class="trk-z reward" style="${g.buy ? `left:${g.e}%;right:0` : `left:0;width:${g.e}%`}"></span>
+      <span class="trk-fill ${cur != null && cur < g.e ? 'from-r' : ''}" style="left:${a}%;width:${w}%"></span>
+      <span class="trk-e" style="left:${g.e}%"></span>
+      ${cur != null ? `<span class="trk-dot ${st.done ? 'is-done' : ''}" style="left:${cur}%"></span>` : ''}
+    </div>
+    <div class="trk-lab">${leftL}<span class="trk-le" style="left:${eL}%">${t('trk.entry')}${prices ? ` <b class="num">${F.price(s.entry)}</b>` : ''}</span>${rightL}</div>
+  </div>`;
 }

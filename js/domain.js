@@ -300,7 +300,8 @@ export function riskFor(s) {
 }
 
 /* ---------- R units: hidden for the first level ---------- */
-export const showR = (data) => levelInfo(data).idx > 0;
+/* 1.6.0: R units are hidden everywhere for beginners (owner: no abbreviations) - results are shown in % and money. */
+export const showR = () => false;
 
 /* ---------- Is the entry still valid for a latecomer? ---------- */
 export function entryState(s, now = clock()) {
@@ -326,4 +327,74 @@ export function orderLines(s) {
     t('order.stop', { price: F.price(s.stop) }),
     t('order.target', { price: F.price(s.target) }),
   ];
+}
+
+/* ---------- One status vocabulary for the whole app (1.6.0) ----------
+ * How a signal is doing right now, in plain words, with one colour (tone: up / down / gold / flat).
+ * move = price move of the trade in % (what money put into the trade did), dir-aware.
+ * Used by signal cards, the "all signals" list, Dnes positions, Results (open + closed) and the detail. */
+export const NEAR_PROGRESS = 0.6; // 60 % of the way to target / stop = "getting close"
+export function exampleStake() {
+  const ccy = calcState().ccy;
+  return { amount: 10000, ccy };
+}
+export function priceMove(s) {
+  const dir = s.action === 'SELL' ? -1 : 1;
+  const closed = s.status && s.status !== 'open';
+  if (!closed && s.pnl_pct_position != null && !s.intraday_hit) return s.pnl_pct_position;
+  const px = exitPrice(s);
+  if (px == null || !(s.entry > 0)) return s.pnl_pct_position ?? null;
+  return ((px - s.entry) / s.entry) * 100 * dir;
+}
+/* distance (in % of the current price) from the price to target / stop */
+export function distances(s, px = s.last_price) {
+  if (px == null || !(px > 0)) return { toTarget: null, toStop: null };
+  return {
+    toTarget: s.target != null ? Math.abs(s.target - px) / px * 100 : null,
+    toStop: s.stop != null ? Math.abs(px - s.stop) / px * 100 : null,
+  };
+}
+/* The money result for THIS user: calculator account size x risk profile (default 100 000 Kč, 1 %).
+   1 R = what the user loses at the stop = account x risk %. Result = R multiple x that. */
+export function userMoney(s) {
+  const c = calcState();
+  const p = CONFIG.CALC.RISK_PROFILES.find((x) => x.id === c.profile) || CONFIG.CALC.RISK_PROFILES[0];
+  const oneR = c.account * p.pct / 100;
+  const stopDist = s.entry > 0 && s.stop != null ? Math.abs(s.entry - s.stop) / s.entry * 100 : null;
+  const mv = priceMove(s);
+  const closed = s.status && s.status !== 'open';
+  let r = closed ? s.result_r : (s.intraday_hit ? null : s.pnl_r);
+  if (r == null && mv != null && stopDist) r = mv / stopDist;
+  const rr = s.rr || (s.target != null && stopDist ? Math.abs(s.target - s.entry) / s.entry * 100 / stopDist : null);
+  return { account: c.account, ccy: c.ccy, risk: p.pct, now: r == null ? null : r * oneR, atTarget: rr ? rr * oneR : null, atStop: -oneR };
+}
+const sm = (v, ccy) => (v > 0.5 ? '+' : '') + F.money(v, ccy, 0);
+
+export function liveStatus(s, now = clock()) {
+  const r = liveStatus0(s, now);
+  r.um = userMoney(s);
+  return r;
+}
+function liveStatus0(s, now) {
+  const st = s.status && s.status !== 'open' ? s.status : (s.intraday_hit || (isTimeExit(s, now) ? 'time_exit' : 'open'));
+  const mv = priceMove(s);
+  const um = userMoney(s);
+  const you = um.now != null ? t('st.you', { m: sm(um.now, um.ccy) }) : '';
+  /* text = line 1 (price move, plain words), hint = how far to target / stop; sub = compact "you + hint" for rows */
+  const mk = (o) => ({ ...o, sub: [you, o.hint].filter(Boolean).join(' · ') });
+  if (st === 'target') return mk({ code: 'target', tone: 'up', text: t('st.target'), hint: t('st.closedWin', { v: F.spct(mv, 1) }), move: mv, done: true });
+  if (st === 'stop') return mk({ code: 'stop', tone: 'down', text: t('st.stop'), hint: t('st.closedLoss', { v: F.spct(mv, 1) }), move: mv, done: true });
+  if (st === 'time_exit') return mk({ code: 'time', tone: (mv ?? 0) >= 0 ? 'up' : 'down', text: t('st.time'), hint: t('st.closedRes', { v: F.spct(mv ?? 0, 1) }), move: mv, done: true });
+  if (s.last_price == null || mv == null) return { code: 'wait', tone: 'flat', text: t('st.wait'), hint: t('st.waitS'), sub: t('st.waitS'), move: null };
+  const d = distances(s);
+  const prog = s.progress ?? 0;
+  /* way to the stop measured against the stop distance (not the target distance) */
+  const progS = s.stop != null && s.stop !== s.entry ? (s.last_price - s.entry) / (s.stop - s.entry) : 0;
+  const prox = proximity(s);
+  const moveTxt = mv >= 0 ? t('st.win', { v: F.spct(mv, 1) }) : t('st.lose', { v: F.spct(mv, 1) });
+  if ((prox && prox.side === 'stop') || progS >= NEAR_PROGRESS) return mk({ code: 'near-stop', tone: 'down', text: `${t('st.nearStop')} · ${moveTxt}`, hint: t('st.toStop', { v: F.pct(d.toStop, 1) }), move: mv });
+  if ((prox && prox.side === 'target') || prog >= NEAR_PROGRESS) return mk({ code: 'near-target', tone: 'up', text: t('st.nearTarget', { v: F.pct(d.toTarget, 1) }), hint: moveTxt, move: mv });
+  if (Math.abs(mv) < 0.05) return mk({ code: 'flat', tone: 'flat', text: t('st.flat'), hint: t('st.both', { t: F.pct(d.toTarget, 1), s: F.pct(d.toStop, 1) }), move: mv });
+  if (mv > 0) return mk({ code: 'win', tone: 'up', text: moveTxt, hint: t('st.toTarget', { v: F.pct(d.toTarget, 1) }), move: mv });
+  return mk({ code: 'lose', tone: 'down', text: moveTxt, hint: t('st.toStop', { v: F.pct(d.toStop, 1) }), move: mv });
 }

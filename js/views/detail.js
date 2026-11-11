@@ -2,8 +2,10 @@ import { CONFIG } from '../../config.js';
 import * as F from '../format.js';
 import * as D from '../domain.js';
 import { t, L, lang } from '../i18n/index.js';
-import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
-import { priceChart, defaultPriceMode, hasToday } from '../charts.js';
+import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram, statusLine } from '../ui.js';
+import * as Live from '../live.js';
+import * as W from '../wallet.js';
+import { priceChart, defaultPriceMode, hasToday, hasDays } from '../charts.js';
 import { instrumentText, glossaryFor } from '../explain.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
@@ -14,8 +16,8 @@ let liveOff = null;
 /* TradingView symbol for the live candlestick chart (free official widget). */
 const TV = { US500: 'FOREXCOM:SPXUSD', US100: 'FOREXCOM:NSXUSD', US30: 'FOREXCOM:DJI', DE40: 'XETR:DAX', UK100: 'FOREXCOM:UKXGBP',
   JP225: 'FOREXCOM:JP225', EURUSD: 'FX:EURUSD', GBPUSD: 'FX:GBPUSD', USDJPY: 'FX:USDJPY', XAUUSD: 'OANDA:XAUUSD' };
-const tvSymbol = (sym) => TV[sym] || sym.replace('-', '.');
-function mountTV(box, sym) {
+export const tvSymbol = (sym) => TV[sym] || sym.replace('-', '.');
+export function mountTV(box, sym) {
   box.hidden = false;
   box.innerHTML = '<div class="tradingview-widget-container" style="height:100%;width:100%"><div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div></div>';
   const sc = document.createElement('script');
@@ -79,6 +81,8 @@ function onLiveDetail(el, ctx, s) {
       const pr = pnl.querySelector('.pnl-r'); if (pr && D.showR(ctx.data)) pr.innerHTML = rTip(s.pnl_r);
     }
     const lad = el.querySelector('[data-vt="ladder"]'); if (lad) lad.innerHTML = ladder(s, { large: true });
+    const sl = el.querySelector('[data-status]'); if (sl) sl.innerHTML = statusLine(s, { now: ctx.now(), big: true });
+    const cta = el.querySelector('#cta'); if (cta) cta.innerHTML = ctaHtml(ctx, s);
     const cb = el.querySelector('[data-j="close"]'); if (cb && s.last_price != null) cb.textContent = t('j.closeAt', { price: F.price(s.last_price) });
     chartRef && chartRef.refresh && chartRef.refresh();
   };
@@ -125,6 +129,7 @@ export function openDetail(ctx, id, sourceEl = null) {
       ${showR ? `<div style="text-align:right"><p class="kv-l">${t('det.inR')}</p><p class="mid num">${R(s.result_r)}</p></div>` : ''}</div>`;
   }
 
+  status = `<div data-status>${statusLine(s, { now, big: true })}</div>` + status;
   const j = D.journal()[s.id];
   const html = `
     <div class="sheet-head">
@@ -136,11 +141,14 @@ export function openDetail(ctx, id, sourceEl = null) {
       ${status}
       ${est ? `<div class="entry-box is-${est.code}">${entryChip(est)}<p>${F.esc(est.note)}</p></div>` : ''}
       ${prox ? `<p class="prox-line ${prox.side === 'stop' ? 'down' : 'up'}">${icon('alert', 'icon-xs')}${t('det.prox', { v: F.pct(prox.dist, 1), side: t(`det.prox.${prox.side}`) })}</p>` : ''}
-      ${s.price_path?.length > 1 ? `<div class="pchart">${hasToday(s) ? `<div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
-          <button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chartToday')}</button>
-          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button></div>` : ''}
+      ${s.price_path?.length > 1 ? `<div class="pchart">
+        <div class="pchart-headrow"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
+          ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
+          ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
+          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
+          <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
+          <span class="live-stamp" data-stamp></span></div>
         <div class="pchart-box" id="pchart"></div>
-        <button type="button" class="btn btn-block tv-open" data-tv="${F.esc(tvSymbol(s.symbol))}">${t('det.tvOpen')}</button>
         <div class="tv-box" id="tvbox" hidden></div>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>
@@ -149,12 +157,14 @@ export function openDetail(ctx, id, sourceEl = null) {
         <ol class="howto-l num">${lines.map((l) => `<li>${F.esc(l)}</li>`).join('')}</ol>
         ${est && (est.code === 'late' || est.code === 'expired') ? `<p class="howto-warn">${t('det.howto.warn')}</p>` : ''}
       </section>` : ''}
+      ${isOpen && state === 'open' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
       <div class="kv">
-        <div class="kv-item"><p class="kv-l">${t('det.yourRisk')}</p><p class="kv-v num">${F.pct(risk.risk)}</p><p class="kv-s">${risk.profile ? t('det.byProfile', { p: F.esc(risk.profile.toLowerCase()) }) : t('det.botSuggest')}</p></div>
+        <div class="kv-item"><p class="kv-l">${t('det.yourRisk')}</p><p class="kv-v num down">${F.spct(-risk.risk)}</p><p class="kv-s">${risk.profile ? t('det.byProfile', { p: F.esc(risk.profile.toLowerCase()) }) : t('det.botSuggest')}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.yourTarget')}</p><p class="kv-v num up">${F.spct(risk.target)}</p><p class="kv-s">${t('det.targetHit')}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.rr')}</p><p class="kv-v num">${F.rr(s.rr)}</p><p class="kv-s">${t('det.rrS', { v: F.num(s.rr, 1) })}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
       </div>
+      <p class="acct-note">${icon('info', 'icon-xs')}<span>${t('det.acctNote', { r: F.pct(risk.risk, risk.risk % 1 ? 1 : 0), t: F.spct(risk.target, 1), p: s.target ? F.pct(Math.abs(s.target - s.entry) / s.entry * 100, 1) : '–' })}</span></p>
       ${levTable(s, lev)}
       ${isOpen && state === 'open' ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
@@ -179,34 +189,58 @@ export function openDetail(ctx, id, sourceEl = null) {
       <div class="journal-box" id="jbox">${journalForm(s, j)}</div>
 
       <div class="sheet-actions btn-stack">
-        ${isOpen && state === 'open' ? `<a class="btn btn-primary btn-block" href="#/kalkulacka?s=${encodeURIComponent(s.id)}" data-close-nav>${t('det.calcBtn')}</a>` : ''}
+        ${isOpen && state === 'open' ? `<a class="btn btn-secondary btn-block" href="#/kalkulacka?s=${encodeURIComponent(s.id)}" data-close-nav>${t('det.calcBtn')}</a>` : ''}
         ${isOpen && state === 'open' ? brokerButton() : ''}
+        ${isOpen && state === 'open' ? `<div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5" data-close-nav>${t('mt5.help')}</a></div>` : ''}
       </div>
     </div>`;
 
   const mount = (el) => {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
-    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode }); }, 30);
-    el.querySelector('.tv-open')?.addEventListener('click', (ev) => {
-      const b = ev.currentTarget; b.hidden = true; mountTV(el.querySelector('#tvbox'), b.dataset.tv);
-    });
+    const isLive = () => s.status === 'open' && !s.intraday_hit && Live.stamp(Date.parse(s.last_price_at || 0)).code === 'live';
+    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode, isLive }); }, 30);
+    let tvOn = false;
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
-      pmode = b.dataset.pmode;
-      el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
+      const m = b.dataset.pmode;
+      el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === m)));
+      const tvb = el.querySelector('#tvbox');
+      if (m === 'tv') {
+        box.hidden = true; tvb.hidden = false;
+        if (!tvOn) { tvOn = true; mountTV(tvb, tvSymbol(s.symbol)); }
+        return;
+      }
+      box.hidden = false; if (tvb) tvb.hidden = true;
+      pmode = m;
       chartRef && chartRef.refresh && chartRef.refresh();
     }));
+    const stampEl = el.querySelector('[data-stamp]');
+    const tickStamp = () => {
+      if (!stampEl || !el.isConnected) return;
+      if (s.status !== 'open') { stampEl.textContent = ''; return; }
+      const st = Live.stamp(Date.parse(s.last_price_at || 0));
+      stampEl.className = `live-stamp is-${st.code}`; stampEl.innerHTML = `<i aria-hidden="true"></i>${F.esc(st.text)}`;
+    };
+    tickStamp();
+    const stampTimer = setInterval(() => { if (!el.isConnected) clearInterval(stampTimer); else tickStamp(); }, 1000);
     liveOff = onLiveDetail(el, ctx, s);
-    el.querySelector('[data-close-nav]')?.addEventListener('click', (ev) => {
+    el.querySelectorAll('[data-close-nav]').forEach((a) => a.addEventListener('click', (ev) => {
       ev.preventDefault();
       const href = ev.currentTarget.getAttribute('href');
       closeTopSheet();
       setTimeout(() => { (window.__pulseGo ? window.__pulseGo(href) : (location.hash = href)); }, 380);
-    });
+    }));
     el.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-j]');
       if (b) onJournal(el, s, b.dataset.j);
       if (ev.target.closest('[data-broker]')) openBroker(ctx, s);
+      if (ev.target.closest('[data-stopnow]')) {
+        const ids = (W.get().positions || []).filter((p) => p.sigId === s.id).map((p) => p.id);
+        let tot = 0; ids.forEach((id) => { const r = W.close(ctx.data, id); if (r) tot += r.pnl; });
+        toast(t('st.stopNowDone', { m: (tot > 0.5 ? '+' : '') + F.money(tot, W.get().ccy, 0) }), { timeout: 6000 });
+        const c = el.querySelector('#cta'); if (c) { c.innerHTML = ctaHtml(ctx, s); c.classList.add('pop'); }
+        const jb = el.querySelector('#jbox'); if (jb) jb.innerHTML = journalForm(s, D.journal()[s.id]);
+      }
       if (ev.target.closest('[data-copy-order]')) {
         copyText(`${s.symbol} ${F.SIDE[s.action]}\n${lines.join('\n')}`).then((ok) => toast(ok ? t('det.howto.copied') : t('common.copyFailed')));
       }
@@ -234,6 +268,20 @@ export function openDetail(ctx, id, sourceEl = null) {
     return;
   }
   openSheet(opts);
+}
+
+/* Sticky action bar: my fictional position on this signal -> "Ukončit teď"; otherwise invest + how to stop at a broker */
+function ctaHtml(ctx, s) {
+  const mine = (W.get().positions || []).filter((p) => p.sigId === s.id);
+  const um = D.userMoney(s);
+  const sm = (v, c) => (v > 0.5 ? '+' : '') + F.money(v, c, 0);
+  if (mine.length) {
+    const sum = W.summary(ctx.data).rows.filter((p) => p.sigId === s.id).reduce((a, p) => a + p.pnl, 0);
+    return `<button type="button" class="btn btn-block btn-stopnow ${sum >= 0 ? 'up' : 'down'}" data-stopnow>${icon('close', 'icon-sm')}${t('st.stopNow')}<b class="num">${sm(sum, W.get().ccy)}</b></button>
+      <p class="inv-note">${t('st.stopNowMine')}</p>`;
+  }
+  return `<a class="btn btn-primary btn-block btn-invest" href="#/terminal?s=${encodeURIComponent(s.id)}" data-close-nav>${icon('spark', 'icon-sm')}${t('inv.btn')}</a>
+    <p class="inv-note">${um.now != null ? t('st.stopNowS', { m: sm(um.now, um.ccy) }) : t('inv.fict')}</p>`;
 }
 
 function journalForm(s, j) {
@@ -289,11 +337,13 @@ function onJournal(el, s, what) {
   box.innerHTML = journalForm(s, D.journal()[s.id]);
 }
 
+const brokerMode = () => (CONFIG.BROKER_MODE === 'live' ? 'live' : 'demo');
+const brokerList = () => CONFIG.BROKERS.filter((b) => (brokerMode() === 'live' ? b.live_url : b.demo_url));
 function brokerButton() {
   if (!CONFIG.BROKER_HANDOFF_ENABLED) {
     return `<button class="btn btn-secondary btn-block btn-two-line" type="button" disabled aria-disabled="true"><span class="btn-line">${icon('external', 'icon-sm')}${t('broker.btn')}</span><span class="btn-note">${t('broker.soon')}</span></button>`;
   }
-  return `<button class="btn btn-secondary btn-block" type="button" data-broker>${t('broker.btnOn')}</button>`;
+  return `<button class="btn btn-secondary btn-block btn-two-line" type="button" data-broker><span class="btn-line">${icon('external', 'icon-sm')}${t(`broker.btn.${brokerMode()}`)}</span><span class="btn-note">${t(`broker.note.${brokerMode()}`)}</span></button>`;
 }
 
 function openBroker(ctx, s) {
@@ -313,22 +363,24 @@ function openBroker(ctx, s) {
   let pick = null;
   openSheet({
     small: true, label: t('broker.title'),
-    html: `<div class="sheet-head"><div><p class="sheet-title">${t('broker.title')}</p><p class="sheet-sub">${t('broker.sub')}</p></div>
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(`broker.title.${brokerMode()}`)}</p><p class="sheet-sub">${t('broker.sub')}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
       <div class="sheet-body">
-        <div class="broker-list">${CONFIG.BROKERS.map((b) => `<button type="button" class="broker" data-b="${b.id}" aria-pressed="false"><span>${F.esc(b.name)}<small>${t(b.instrument_url ? 'broker.deep' : 'broker.copyOpen')}</small></span>${icon('chev-right', 'icon-sm')}</button>`).join('')}</div>
+        ${brokerMode() === 'demo' ? `<p class="callout-demo">${icon('shield', 'icon-sm')}<span>${t('broker.demoBox')}</span></p>` : `<p class="callout-demo is-live">${icon('alert', 'icon-sm')}<span>${t('broker.liveBox')}</span></p>`}
+        <div class="broker-list">${brokerList().map((b) => `<button type="button" class="broker" data-b="${b.id}" aria-pressed="false"><span>${F.esc(b.name)}${brokerMode() === 'demo' ? ' (demo)' : ''}<small>${t(b.id === 'mt5' ? 'broker.mt5' : `broker.copyOpen.${brokerMode()}`)}</small></span>${icon('chev-right', 'icon-sm')}</button>`).join('')}</div>
         <pre class="order-summary num">${F.esc(summary)}</pre>
         <div class="btn-stack" style="margin-top:16px">
           <button class="btn btn-primary btn-block" type="button" data-go disabled>${t('broker.pick')}</button>
           <button class="btn btn-ghost" type="button" data-copy>${icon('copy', 'icon-sm')}${t('broker.copyOnly')}</button>
         </div>
         <p class="jnote" style="margin-top:12px">${t('broker.safe')}</p>
+        <p class="jnote" style="margin-top:8px">${F.esc(t('disclaimer'))}</p>
       </div>`,
     onMount(el) {
       el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
       const go = el.querySelector('[data-go]');
       el.querySelectorAll('[data-b]').forEach((b) => b.addEventListener('click', () => {
-        pick = CONFIG.BROKERS.find((x) => x.id === b.dataset.b);
+        pick = brokerList().find((x) => x.id === b.dataset.b);
         el.querySelectorAll('[data-b]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
         go.disabled = false; go.textContent = t('broker.go', { name: pick.name });
       }));
@@ -340,7 +392,7 @@ function openBroker(ctx, s) {
         if (!pick) return;
         const ok = await copyText(summary);
         toast(ok ? t('broker.opening', { name: pick.name }) : t('broker.openingNo', { name: pick.name }));
-        const url = pick.instrument_url ? pick.instrument_url.replace('{symbol}', encodeURIComponent(s.symbol)).replace('{side}', s.action.toLowerCase()) : pick.open_url;
+        const url = brokerMode() === 'live' ? pick.live_url : pick.demo_url;
         window.open(url, '_blank', 'noopener');
       });
     },

@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.5.0',
+  APP_VERSION: '1.6.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -16,12 +16,21 @@ export const CONFIG = {
     /* On a GitHub Pages copy (fork) read live data straight from the bot's branch, so the copy never goes stale. */
     const remote = typeof location !== 'undefined' && location.hostname.endsWith('github.io') && !location.hostname.startsWith('omylatomasz-bit');
     const b = remote ? 'https://raw.githubusercontent.com/omylatomasz-bit/ballistic/pulse-data/data/' : './data/';
-    return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json' };
+    /* paper.json (robot's Alpaca paper account) and quotes.json (live prices every 15 s) exist only on our server;
+       on a GitHub Pages copy they are not requested (paper: null -> section hidden, quotes -> Cloudflare worker). */
+    return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json',
+      paper: remote ? null : './data/paper.json', quotes: remote ? null : './data/quotes.json' };
   })(),
+  /* Public address of the main app (install page QR code, push on GitHub Pages copies points users here) */
+  APP_URL: 'https://pulse.178-105-154-81.sslip.io/',
   /*
    * Live prices: the app polls our Cloudflare Worker (PROXY_URL), which holds the data-provider key server-side.
    */
-  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', POLL_SEC: 10, RENDER_MS: 1500 },
+  /* Primary: ./data/quotes.json written by our server every 15 s (same origin, no rate limit).
+     Fallback: the Worker, only when quotes.json is missing or older than QUOTES_STALE_SEC. */
+  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', POLL_SEC: 10, QUOTES_POLL_SEC: 15, QUOTES_STALE_SEC: 120, FRESH_SEC: 60, RENDER_MS: 1500 },
+  /* Intraday scan of the server (Prague time, Mon-Fri): every 20 min at :05/:25/:45 while the US market is open */
+  SCAN: { MINUTES: [5, 25, 45] },
 
   /* Horizons hidden in the app until their strategy passes the out-of-sample test (1-day: no edge yet) */
   HIDDEN_HORIZONS: ['DEN'],
@@ -77,10 +86,13 @@ export const CONFIG = {
    * Web push. Replace with your real VAPID public key (base64url) and
    * set SUBSCRIBE_URL to the endpoint that stores subscriptions (TODO server).
    */
+  /* Push lives on our server only. On a GitHub Pages copy (hostname *.github.io) the relative endpoints do not exist,
+     so push is switched off there and the app points the user to APP_URL instead (no cross-origin subscribe, no CORS). */
   PUSH: {
-    VAPID_PUBLIC_KEY: 'REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY',
-    SUBSCRIBE_URL: '', // e.g. '/api/push/subscribe' (POST JSON PushSubscription)
-    UNSUBSCRIBE_URL: '', // e.g. '/api/push/unsubscribe'
+    VAPID_PUBLIC_KEY: 'BD0oeaaYjhr7mhGIt8u2gExJKV7lX2XKlKeZ8LG_I-HHxS2WZyTjw-jWlzoy8ePWTV0zqU4sBpRy_mGbKYPTInQ',
+    SUBSCRIBE_URL: '/api/push/subscribe', // POST JSON {subscription, lang}
+    UNSUBSCRIBE_URL: '/api/push/unsubscribe', // POST JSON {endpoint}
+    ENABLED: typeof location === 'undefined' || !location.hostname.endsWith('github.io'),
   },
 
   /* Calculator */
@@ -100,21 +112,28 @@ export const CONFIG = {
   },
 
   /*
-   * "Otevřít obchod" – hand-off to the user's own broker.
-   * The app never places orders, never asks for credentials or API keys.
-   * It either opens the broker (optionally on the instrument page via
-   * `instrument_url` template with {symbol}) or copies an order summary
-   * for the user to enter and confirm in the broker themselves.
-   * Keep disabled until legal review is done.
+   * Broker hand-off ("Vyzkoušet u brokera").
+   * The app never places orders, never asks for credentials or API keys and uses NO affiliate links.
+   * It copies an order summary (entry / stop / target) and opens the broker's page; the user enters and confirms the
+   * order there. BROKER_MODE switches the whole flow:
+   *   'demo' (now) – button "Vyzkoušet u brokera na DEMO účtu", opens each broker's demo / practice page (demo_url)
+   *   'live'       – button "Otevřít obchod u brokera", opens the real platform (live_url) + stronger risk wording.
+   *                  Switch to 'live' only after the legal review (CFD risk warnings, no investment advice).
+   * Brokers without a demo_url are hidden in demo mode, without a live_url hidden in live mode.
+   * URLs are public entry pages (no tracking parameters); deep links per instrument are not verified yet.
    */
-  BROKER_HANDOFF_ENABLED: false,
+  BROKER_HANDOFF_ENABLED: true,
+  BROKER_MODE: 'demo',
   BROKERS: [
-    // instrument_url: null = no verified deep link yet → copy summary + open_url
-    { id: 'xtb', name: 'XTB', open_url: 'https://xstation5.xtb.com/', instrument_url: null },
-    { id: 't212', name: 'Trading 212', open_url: 'https://app.trading212.com/', instrument_url: null },
-    { id: 'ibkr', name: 'Interactive Brokers', open_url: 'https://portal.interactivebrokers.com/', instrument_url: null },
-    { id: 'alpaca', name: 'Alpaca', open_url: 'https://app.alpaca.markets/', instrument_url: null },
+    { id: 'mt5', name: 'MetaTrader 5', demo_url: 'https://www.metatrader5.com/en/download', live_url: 'https://www.metatrader5.com/en/download' },
+    { id: 'xtb', name: 'XTB', demo_url: 'https://www.xtb.com/', live_url: 'https://xstation5.xtb.com/' },
+    { id: 't212', name: 'Trading 212', demo_url: 'https://www.trading212.com/', live_url: 'https://app.trading212.com/' },
+    { id: 'ibkr', name: 'Interactive Brokers', demo_url: 'https://www.interactivebrokers.com/', live_url: 'https://portal.interactivebrokers.com/' },
+    { id: 'alpaca', name: 'Alpaca', demo_url: 'https://app.alpaca.markets/signup', live_url: 'https://app.alpaca.markets/' },
   ],
+  /* MetaTrader 5: official MetaQuotes download (the terminal offers a free demo account on first start).
+     The PULSE Expert Advisor (draws / executes PULSE signals on an MT5 DEMO account) is "coming soon": set EA_URL when ready. */
+  MT5: { DOWNLOAD_URL: 'https://www.metatrader5.com/en/download', EA_URL: '' },
 
   /* All user-facing texts (incl. the legal disclaimer) live in js/i18n/<lang>.js.
      Language: auto-detected from the browser (cs/sk -> cs, otherwise en), switchable in Nastavení. */

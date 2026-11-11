@@ -4,7 +4,9 @@ import * as D from '../domain.js';
 import * as store from '../store.js';
 import * as Live from '../live.js';
 import { t, L } from '../i18n/index.js';
-import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt } from '../ui.js';
+import { pricePoints } from '../charts.js';
+import { sparkline } from '../ui.js';
+import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
 
 const seen = new Set(); // ladders animate only the first time a card appears
 
@@ -25,22 +27,60 @@ function upcoming(data, now, n) {
   return out;
 }
 
-export function nextLine(data, now) {
-  const d = D.nextRun(data, now);
+/* Next intraday scan slot (Prague minutes :05/:25/:45) after `now`, while the US market is open; null otherwise */
+export function nextScan(now) {
+  if (!Live.marketOpen(now)) return null;
+  const mins = (CONFIG.SCAN?.MINUTES || [5, 25, 45]);
+  const d = new Date(now); d.setSeconds(0, 0);
+  for (let k = 1; k <= 61; k++) {
+    const x = new Date(d.getTime() + k * 60000);
+    if (mins.includes(x.getMinutes())) return Live.marketOpen(x) ? x : null;
+  }
+  return null;
+}
+
+const dayWord = (d, now) => { const n = F.daysUntil(d, now); return n === 0 ? t('fmt.today') : n === 1 ? t('fmt.tomorrow') : F.weekday(d); };
+const inWords = (d, now) => {
   const mins = Math.max(0, Math.round((d - now) / 60000));
   const h = Math.floor(mins / 60), m = mins % 60;
-  const inTxt = h > 0 ? t('next.in', { h, m }) : t('next.inMin', { m });
-  const days = F.daysUntil(d, now);
-  const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(d);
+  return h > 0 ? t('next.in', { h, m }) : t('next.inMin', { m });
+};
+
+/* Truthful "when do new signals come" card:
+   market open  -> the robot is watching now, new signals any time, next check in X min (:05/:25/:45);
+   market closed -> whichever comes first: the official 22:45 run, or the next session start (scans every 20 min). */
+export function nextLine(data, now) {
+  const scan = nextScan(now);
+  const official = D.nextRun(data, now);
+  if (scan || Live.marketOpen(now)) {
+    /* market open: next scan slot, or (last ~15 min of the session) the last check is done */
+    const mins = scan ? Math.max(1, Math.round((scan - now) / 60000)) : 0;
+    const plan = scan ? [scan] : [];
+    for (let k = 0; k < 2 && plan.length; k++) { const x = nextScan(new Date(plan[plan.length - 1].getTime() + 30000)); if (!x) break; plan.push(x); }
+    return `<section class="next-card is-live" aria-label="${F.esc(t('next.open.k'))}">
+      <div class="next-ico"><span class="radar" aria-hidden="true"><i></i><i></i></span>${icon('signals')}</div>
+      <div class="next-body">
+        <p class="next-k"><span class="live-dot" aria-hidden="true"></span>${F.esc(t('next.open.k'))}</p>
+        <p class="next-when">${F.esc(t('next.open.when'))}</p>
+        <p class="next-s">${F.esc(t('next.open.s', { time: F.time(official) }))}</p>
+      </div>
+      <div class="next-in num">${F.esc(scan ? t('next.open.in', { m: mins }) : t('next.open.last'))}</div>
+      <ol class="next-plan">${plan.map((x, i) => `<li class="${i === 0 ? 'is-next' : ''}"><span>${F.esc(t('next.scan'))}</span><b class="num">${F.esc(F.time(x))}</b></li>`).join('')}<li><span>${F.esc(t('next.official'))}</span><b class="num">${F.esc(F.time(official))}</b></li></ol>
+    </section>`;
+  }
+  const open = nextUsOpen(now);
+  const firstScan = open ? new Date(open.getTime() + 15 * 60000) : null;
+  const sessionFirst = open && open < official;
+  const target = sessionFirst ? open : official;
   return `<section class="next-card" aria-label="${F.esc(t('next.title'))}">
     <div class="next-ico">${icon('clock')}</div>
     <div class="next-body">
-      <p class="next-k">${F.esc(t('next.title'))}</p>
-      <p class="next-when"><span class="next-day">${F.esc(day)}</span> <span class="num next-time">${F.esc(F.time(d))}</span></p>
-      <p class="next-s">${F.esc(t('next.sub'))}</p>
+      <p class="next-k">${F.esc(t(sessionFirst ? 'next.session.k' : 'next.title'))}</p>
+      <p class="next-when"><span class="next-day">${F.esc(dayWord(target, now))}</span> <span class="num next-time">${F.esc(F.time(target))}</span></p>
+      <p class="next-s">${F.esc(sessionFirst ? t('next.session.s', { scan: firstScan ? F.time(firstScan) : '', time: F.time(official) }) : t('next.sub'))}</p>
     </div>
-    <div class="next-in num">${F.esc(inTxt)}</div>
-    <ol class="next-plan">${upcoming(data, now, 5).map((x, i) => `<li class="${i === 0 ? 'is-next' : ''}"><span>${F.esc(x.day)}</span><b class="num">${F.esc(x.time)}</b></li>`).join('')}</ol>
+    <div class="next-in num">${F.esc(inWords(target, now))}</div>
+    <ol class="next-plan">${upcoming(data, now, 5).map((x, i) => `<li class="${i === 0 && !sessionFirst ? 'is-next' : ''}"><span>${F.esc(x.day)}</span><b class="num">${F.esc(x.time)}</b></li>`).join('')}</ol>
   </section>`;
 }
 
@@ -101,8 +141,9 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
       </div>
       ${right}
     </div>
+    ${statusLine(s, { now, big: true })}
     ${ladder(s, { animate: fresh })}
-    <p class="sig-line num"><span>${t('sig.risk')} <b>${F.pct(risk.risk, risk.risk % 1 ? 1 : 0)}</b></span><span>${t('sig.target')} <b>${F.spct(risk.target)}</b></span><span>${exitPhrase(s, now)}</span></p>
+    <p class="sig-line num"><span>${t('sig.risk')} <b class="down">${F.spct(-risk.risk, risk.risk % 1 ? 1 : 0)}</b></span><span>${t('sig.target')} <b class="up">${F.spct(risk.target)}</b></span><span>${exitPhrase(s, now)}</span></p>
   </button>`;
 }
 
@@ -190,8 +231,9 @@ export function render(ctx) {
   const fresh = all.filter((x) => D.isNew(x, data) && x.status === 'open' && !x.intraday_hit);
   const events = data.calendar?.events || [];
   let i = 0;
-  const freshCards = fresh.map((x) => `<div class="sig-wrap">${buyBanner(x, now)}${signalCard(x, { data, events, now, i: i++, showHz: true })}</div>`).join('');
+  const freshCards = fresh.map((x) => `<div class="sig-wrap">${buyBanner(x, now)}${signalCard(x, { data, events, now, i: i++, showHz: true })}${investBtn(x)}</div>`).join('');
   return head + `
+    <p class="headline">${fresh.length ? t('sig.headline', { n: fresh.length }) : t('sig.headline0')}</p>
     <div class="signals-top">${nextLine(ctx.data, now)}${regimeLine(s.regime)}</div>
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
     <section aria-labelledby="sec-today">
@@ -230,25 +272,36 @@ function devList(ctx, f) {
     + (closed.length ? `<h3 class="sub-title">${t('sig.dev.closed')}<small>${closed.length}</small></h3>${rows(closed)}` : '');
 }
 
-/* Compact live row: where the price is between stop and target, P&L, status */
-function devRow(s, now, i) {
-  let state = liveState(s);
-  if (state === 'open' && D.isTimeExit(s, now)) state = 'time_exit';
-  const pnl = state === 'open' || s.status === 'open' ? s.pnl_pct_position : (s.result_pct ?? s.pnl_pct_position);
-  const up = (pnl ?? 0) >= 0;
-  const lo = Math.min(s.stop, s.target ?? s.entry), hi = Math.max(s.stop, s.target ?? s.entry);
-  const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / ((hi - lo) || 1)) * 100));
-  const cur = s.last_price ?? D.exitPrice(s) ?? s.entry;
+/* Fictional trade in the Obchodní platforma, prefilled from the signal */
+export function investBtn(s) {
+  if (s.status !== 'open' || s.intraday_hit) return '';
+  return `<a class="invest-btn" href="#/terminal?s=${encodeURIComponent(s.id)}">${icon('spark', 'icon-sm')}<span>${t('inv.btn')}</span><small>${t('inv.btnS')}</small></a>`;
+}
+
+/* One row for any signal (open or closed): ticker, live % and the status bar with a plain sentence.
+   Used in Signály, Dnes and Výsledky - tapping it always opens the same signal detail. */
+export function signalRow(s, now, i = 0, { extra = false } = {}) {
+  const st = D.liveStatus(s, now);
   const mine = D.journal()[s.id];
-  const status = state === 'open' ? t('sig.dev.running') : t(RES[state] || 'sig.dev.closed');
-  return `<button class="dev-row is-${state}" style="--i:${Math.min(i, 10)}" type="button" data-action="open-signal" data-id="${F.esc(s.id)}" data-live-id="${F.esc(s.id)}" data-pnl="${pnl ?? ''}">
-    ${monogram(s.symbol, s.name)}
-    <div class="dev-id"><p class="dev-t"><span class="ticker">${F.esc(s.symbol)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 1) })}</span>` : ''}</p>
-      <p class="dev-s num">${t('sig.dev.since', { date: F.dm(s.created_at) })}</p></div>
-    <div class="dev-bar" aria-hidden="true"><i class="dev-entry" style="left:${pos(s.entry)}%"></i><i class="dev-now ${up ? 'up' : 'down'}" style="left:${pos(cur)}%"></i></div>
-    <div class="dev-r"><p class="sig-pnl num ${up ? 'up' : 'down'}">${pnl != null ? F.spct(pnl, 2) : '–'}</p><p class="dev-st is-${state}">${F.esc(status)}</p></div>
+  const mv = st.move;
+  return `<button class="srow tone-${st.tone} is-${st.code} ${extra ? 'is-extra' : ''}" style="--i:${Math.min(i, 10)}" type="button" data-action="open-signal" data-id="${F.esc(s.id)}" data-live-id="${F.esc(s.id)}" data-pnl="${mv ?? ''}">
+    <span class="srow-top">
+      ${monogram(s.symbol, s.name)}
+      <span class="srow-id"><span class="srow-t"><span class="ticker">${F.esc(s.symbol)}</span><span class="side-tag ${s.action === 'SELL' ? 'sell' : ''}">${F.SIDE[s.action]}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}${mine?.state === 'in' ? `<span class="my-tag">${t('sig.mine.in')}</span>` : mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 1) })}</span>` : ''}</span>
+        <span class="srow-n">${F.esc(s.name || '')}</span></span>
+      <span class="srow-r">${daySpark(s, st)}<span class="srow-v sig-pnl num">${mv != null ? F.spct(mv, 2) : '–'}</span></span>
+    </span>
+    ${track(s, { now })}
   </button>`;
 }
+
+function daySpark(s, st) {
+  if (st.done) return '';
+  const pp = pricePoints(s, 'today');
+  return pp.length >= 4 ? `<span class="pos-spark">${sparkline(pp.map((p) => p.p), { w: 56, h: 18 })}</span>` : '';
+}
+
+function devRow(s, now, i) { return signalRow(s, now, i); }
 
 export function emptyState(ctx, hz) {
   return `<section class="calm" aria-live="polite">

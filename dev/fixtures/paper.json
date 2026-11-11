@@ -1,0 +1,23 @@
+{
+  "updated_at": "2026-11-11T15:40:00+00:00",
+  "mode": "dry",
+  "broker": "Alpaca Paper",
+  "account": { "equity": 100240.55, "cash": 61210.4, "start_equity": 100000, "pnl_usd": 240.55, "pnl_pct": 0.24, "buying_power": 122420.8 },
+  "positions": [
+    { "symbol": "WDAY", "side": "long", "qty": 43, "avg_entry": 188.89, "price": 190.3, "pnl_usd": 60.63, "pnl_pct": 0.75, "signal_id": "DNY-2026-11-10-WDAY-10" },
+    { "symbol": "XLE", "side": "long", "qty": 210, "avg_entry": 91.2, "price": 92.32, "pnl_usd": 235.2, "pnl_pct": 1.23, "signal_id": null },
+    { "symbol": "MRNA", "side": "long", "qty": 160, "avg_entry": 26.1, "price": 25.73, "pnl_usd": -59.2, "pnl_pct": -1.41, "signal_id": null }
+  ],
+  "orders": [
+    { "symbol": "XOM", "side": "buy", "status": "dry", "limit": 117.4, "stop": 109.85, "take": 132.5, "submitted_at": "2026-11-11T14:31:00+00:00", "signal_id": null }
+  ],
+  "closed": [
+    { "symbol": "AAPL", "side": "long", "qty": 20, "entry": 268.1, "exit": 274.9, "pnl_usd": 136.0, "pnl_pct": 2.54, "closed_at": "2026-11-10T20:59:00+00:00", "signal_id": null }
+  ],
+  "log": [
+    "15:40 Zkušební běh: příkaz na XOM (limit 117,40) připraven, nezadán.",
+    "15:31 Otevřel jsem WDAY 43 ks za 188,89 podle signálu 2–3 DNY.",
+    "10. 11. 21:59 AAPL zavřeno v cíli: +136 $.",
+    "10. 11. 15:30 Start papírového účtu: 100 000 $."
+  ]
+}

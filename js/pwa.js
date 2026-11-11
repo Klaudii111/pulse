@@ -88,6 +88,7 @@ export async function initSW() {
 
 /* ---------- Push ---------- */
 export function pushSupport() {
+  if (!CONFIG.PUSH.ENABLED) return { ok: false, reason: 'elsewhere' };
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     if (isIOS() && !isStandalone()) return { ok: false, reason: 'ios-install' };
     return { ok: false, reason: 'unsupported' };
@@ -118,14 +119,17 @@ export async function subscribePush() {
   const reg = swReg || (await navigator.serviceWorker.ready);
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(CONFIG.PUSH.VAPID_PUBLIC_KEY) });
   if (CONFIG.PUSH.SUBSCRIBE_URL) {
-    // TODO(server): store subscription, send pushes from the bot.
-    await fetch(CONFIG.PUSH.SUBSCRIBE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, lang: lang() }) }).catch(() => {});
+    /* the server must confirm, otherwise we do not pretend push is on */
+    const r = await fetch(CONFIG.PUSH.SUBSCRIBE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, lang: lang() }) }).catch(() => null);
+    if (!r || !r.ok) { try { await sub.unsubscribe(); } catch { /* ignore */ } return { ok: false, reason: 'server' }; }
   }
+  store.set('pushOn', true);
   return { ok: true, sub };
 }
 
 export async function unsubscribePush() {
   const sub = await pushSubscription();
+  store.set('pushOn', false);
   if (!sub) return true;
   if (CONFIG.PUSH.UNSUBSCRIBE_URL) {
     await fetch(CONFIG.PUSH.UNSUBSCRIBE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {});
@@ -153,3 +157,15 @@ export async function notify(title, body, { tag, url = './#/dnes' } = {}) {
     await reg.showNotification(title, { body, tag, icon: './icons/icon-192.png', badge: './icons/badge-96.png', data: { url } });
   } catch { /* ignore */ }
 }
+
+/* Should the "Zapnout upozornění" call-to-action show? (not when already on, denied, or dismissed lately) */
+export function pushCtaState() {
+  const sup = pushSupport();
+  if (store.get('pushOn', false) && 'Notification' in window && Notification.permission === 'granted') return null;
+  if (Date.now() - store.get('pushCtaDismissedAt', 0) < 7 * 86400000) return null;
+  if (sup.ok) return 'ok';
+  if (sup.reason === 'ios-install') return 'ios';
+  if (sup.reason === 'elsewhere') return 'elsewhere';
+  return null;
+}
+export const dismissPushCta = () => store.set('pushCtaDismissedAt', Date.now());

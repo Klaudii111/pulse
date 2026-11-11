@@ -10,24 +10,43 @@ import * as Live from '../live.js';
 
 export const MORE_ITEMS = [
   { group: 'more.g.you', items: [
+    { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
     { id: 'urovne', icon: 'levels', sub: (c) => D.levelName(D.levelInfo(c.data).level) },
     { id: 'liga', icon: 'trophy', sub: (c) => L(c.data?.league?.season?.name) || t('more.liga.s') },
   ] },
   { group: 'more.g.tools', items: [
+    { id: 'kalkulacka', icon: 'calc', sub: () => t('more.kalkulacka.s') },
     { id: 'kalendar', icon: 'calendar', sub: () => t('more.kalendar.s') },
     { id: 'simulator', icon: 'sim', sub: () => t('more.simulator.s') },
+    { id: 'mt5', icon: 'external', sub: () => t('more.mt5.s') },
   ] },
   { group: 'more.g.app', items: [
+    { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
     { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
     { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
     { id: 'info', icon: 'info', sub: () => t('more.info.s') },
   ] },
 ];
 
+/* "Zapnout upozornění" call-to-action (Dnes after the install banner, and Více) */
+export function pushCta() {
+  const st = P.pushCtaState();
+  if (!st) return '';
+  const btn = st === 'ok' ? `<button class="btn btn-primary btn-small" type="button" data-action="push-cta">${t('pcta.btn')}</button>`
+    : st === 'ios' ? `<a class="btn btn-secondary btn-small" href="#/stahnout">${t('pcta.iosBtn')}</a>`
+    : `<a class="btn btn-secondary btn-small" href="${CONFIG.APP_URL}">${t('pcta.elseBtn')}</a>`;
+  return `<div class="pcta" role="region" aria-label="${t('pcta.t')}">
+    <span class="pcta-ic">${icon('alert')}</span>
+    <div><p class="nudge-t">${t('pcta.t')}</p><p class="nudge-s">${t(`pcta.s.${st}`)}</p></div>
+    <div class="nudge-actions">${btn}<button class="icon-btn" type="button" data-action="dismiss-pcta" aria-label="${t('nudge.later')}">${icon('close', 'icon-sm')}</button></div>
+  </div>`;
+}
+
 export function renderMore(ctx) {
   return `<header class="page-head"><div><h1 class="page-title">${t('more.title')}</h1><p class="page-sub">${t('more.sub')}</p></div></header>
+  ${pushCta()}
   ${MORE_ITEMS.map((g) => `<h2 class="group-l">${t(g.group)}</h2><nav class="tile-grid" aria-label="${t(g.group)}">${g.items.map((it, i) => `<a class="gtile" style="--i:${i}" href="#/${it.id}">
     <span class="gtile-ic">${icon(it.icon)}</span>
     <span class="gtile-t">${t(`more.${it.id}`)}</span>
@@ -72,7 +91,7 @@ export function renderSettings(ctx) {
   const prox = D.proximityPct();
   const inst = P.installState();
   const sup = P.pushSupport();
-  const pushMsg = { 'no-key': 'push.nokey', 'ios-install': 'push.ios', unsupported: 'push.unsupported', denied: 'push.denied' }[sup.reason] || 'push.ok';
+  const pushMsg = { elsewhere: 'push.elsewhere', 'no-key': 'push.nokey', 'ios-install': 'push.ios', unsupported: 'push.unsupported', denied: 'push.denied' }[sup.reason] || 'push.ok';
   const instMsg = inst === 'installed' ? 'set.installed' : inst === 'ios' ? 'set.installIos' : inst === 'prompt' ? 'set.installPrompt' : 'set.installOther';
   return `<header class="page-head"><div><h1 class="page-title">${t('set.title')}</h1></div></header>
   <div class="info-layout"><div>
@@ -142,7 +161,7 @@ export const actions = {
     if (on) {
       const r = await P.subscribePush().catch(() => ({ ok: false }));
       el.setAttribute('aria-checked', String(!!r.ok));
-      toast(t(r.ok ? 'push.on' : 'push.fail'));
+      toast(t(r.ok ? 'push.on' : r.reason === 'server' ? 'push.server' : 'push.fail'));
     } else {
       await P.unsubscribePush();
       el.setAttribute('aria-checked', 'false');

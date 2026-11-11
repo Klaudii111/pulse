@@ -3,7 +3,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, closeAllSheets, sheetOpen, toast } from './ui.js';
+import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast } from './ui.js';
 import { sha256Hex } from './sha256.js';
 import * as Home from './views/home.js';
 import * as Signals from './views/signals.js';
@@ -12,13 +12,17 @@ import * as Results from './views/results.js';
 import * as More from './views/more.js';
 import * as X from './views/extra.js';
 import { openDetail } from './views/detail.js';
+import * as Term from './views/terminal.js';
+import * as Paper from './views/paper.js';
+import * as Pages from './views/pages.js';
+import * as W from './wallet.js';
 import { t, lang } from './i18n/index.js';
 import * as M from './motion.js';
 import * as Live from './live.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
-const data = { signals: null, history: null, performance: null, calendar: null, league: null };
+const data = { signals: null, history: null, performance: null, calendar: null, league: null, paper: null };
 let route = { name: 'dnes', params: new URLSearchParams(), sub: null };
 let currentView = null;
 
@@ -31,17 +35,23 @@ D.setClock(now);
 const TABS = [
   { id: 'dnes', icon: 'home' },
   { id: 'signaly', icon: 'signals' },
-  { id: 'kalkulacka', icon: 'calc' },
+  { id: 'terminal', icon: 'chart' },
   { id: 'vysledky', icon: 'results' },
   { id: 'vice', icon: 'more' },
 ];
-const SECONDARY = new Set(['vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info']);
+const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5']);
+/* screens that belong under another tab */
+const PARENT = { robot: 'vysledky' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
   signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
+  terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
+  robot: { title: 'title.robot', render: Paper.render },
+  stahnout: { title: 'title.stahnout', render: Pages.renderInstall },
+  mt5: { title: 'title.mt5', render: Pages.renderMt5 },
   vice: { title: 'nav.vice', render: More.renderMore },
   info: { title: 'title.info', render: More.renderInfo },
   nastaveni: { title: 'title.nastaveni', render: More.renderSettings, mount: More.mountSettings, actions: More.actions },
@@ -73,10 +83,11 @@ function ctx(extra = {}) {
 
 /* ---------- Rendering ---------- */
 function renderNav() {
-  const active = SECONDARY.has(route.name) ? 'vice' : route.name;
+  const active = PARENT[route.name] || (SECONDARY.has(route.name) ? 'vice' : route.name);
   const tabbar = document.getElementById('tabbar');
   const prevActive = tabbar.querySelector('[aria-current="page"]')?.getAttribute('href');
-  tabbar.innerHTML = TABS.map((x) => `<a class="tab" href="#/${x.id}" ${x.id === active ? 'aria-current="page"' : ''}>${icon(x.icon)}<span>${t(`nav.${x.id}`)}</span></a>`).join('');
+  /* tab bar uses the short label where one exists ("Platforma"), the sidebar the full one ("Obchodní platforma") */
+  tabbar.innerHTML = TABS.map((x) => `<a class="tab" href="#/${x.id}" ${x.id === active ? 'aria-current="page"' : ''}>${icon(x.icon)}<span>${t(x.id === 'terminal' ? 'nav.terminalShort' : `nav.${x.id}`)}</span></a>`).join('');
   if (prevActive && prevActive !== `#/${active}`) tabbar.querySelector('[aria-current="page"]')?.classList.add('pop');
   tabbar.setAttribute('aria-label', t('nav.main'));
   const side = document.getElementById('side-nav');
@@ -85,11 +96,12 @@ function renderNav() {
 
 function renderChrome() {
   const mode = data.signals?.mode;
-  const badge = mode === 'paper' ? `<span class="demo-badge">${t('badge.paper')}</span>`
+  const badge = mode === 'paper' ? `<span class="demo-badge" title="${F.esc(t('badge.paper'))}"><span class="db-long">${t('badge.paper')}</span><span class="db-short">${t('badge.paperShort')}</span></span>`
     : mode === 'live' ? `<span class="demo-badge is-live">${t('badge.live')}</span>` : '';
   document.querySelectorAll('[data-slot="badge"]').forEach((el) => { el.innerHTML = badge; });
   const ls = Live.status();
-  const liveHtml = ls === 'off' ? '' : `<span class="live-badge is-${ls}"><i aria-hidden="true"></i>${t(`live.${ls}`)}</span>`;
+  const lt = Live.dataTime();
+  const liveHtml = ls === 'off' ? '' : `<span class="live-badge is-${ls}" title="${F.esc(lt ? Live.stamp(lt).text : '')}"><i aria-hidden="true"></i>${t(`live.${ls}`, { time: lt ? F.time(new Date(lt)) : '' })}</span>`;
   document.querySelectorAll('[data-slot="live"]').forEach((el) => { el.innerHTML = liveHtml; });
   const meta = document.getElementById('side-meta');
   if (meta) meta.textContent = data.signals ? t('chrome.data', { time: F.dmTime(data.signals.generated_at) }) : '';
@@ -153,8 +165,8 @@ async function fetchJSON(url) {
 
 async function loadAll() {
   state.loading = true;
-  const keys = ['signals', 'history', 'performance', 'calendar', 'league'];
-  const results = await Promise.allSettled(keys.map((k) => fetchJSON(CONFIG.DATA[k])));
+  const keys = ['signals', 'history', 'performance', 'calendar', 'league', 'paper'];
+  const results = await Promise.allSettled(keys.map((k) => (CONFIG.DATA[k] ? fetchJSON(CONFIG.DATA[k]) : Promise.reject(new Error('off')))));
   let cached = false;
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') { data[keys[i]] = r.value.json; cached = cached || (keys[i] === 'signals' && r.value.cached); }
@@ -163,11 +175,32 @@ async function loadAll() {
   state.fromCache = cached || (!navigator.onLine && !!data.signals);
   state.loading = false;
   state.lastFetch = Date.now();
+  if (results[5].status === 'rejected') data.paper = null; // missing paper.json -> the section hides
   D.migratePreviewJournal(data);
   Live.onData();
+  walletCheck();
   rerender({ soft: true });
   maybeOpenDeepLink();
   checkAlerts();
+}
+
+/* paper.json (robot's Alpaca paper account) is polled with the other data */
+async function pollPaper() {
+  if (!CONFIG.DATA.paper) return false;
+  try {
+    const { json } = await fetchJSON(CONFIG.DATA.paper);
+    const changed = !data.paper || json.updated_at !== data.paper.updated_at;
+    data.paper = json;
+    return changed;
+  } catch { const had = !!data.paper; data.paper = null; return had; }
+}
+
+/* fictional positions of the Obchodní platforma: auto close on stop-loss / take-profit / signal close */
+function walletCheck() {
+  const done = W.check(data);
+  if (store.get('wallet', null)?.positions?.length) W.summary(data); // takes today's starting point as early as possible
+  done.forEach((r) => toast(t(`term.auto.${['tp', 'sl', 'out'].includes(r.why) ? r.why : 'sig'}`, { sym: r.sym, v: (r.pnl > 0 ? '+' : '') + F.money(r.pnl, W.get().ccy, 0) }), { timeout: 6000 }));
+  return done.length > 0;
 }
 
 async function poll() {
@@ -177,9 +210,13 @@ async function poll() {
     state.lastFetch = Date.now();
     const changed = !data.signals || json.generated_at !== data.signals.generated_at;
     data.signals = json;
+    const paperChanged = await pollPaper();
+    if (paperChanged && !sheetOpen() && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) rerender({ soft: true });
     state.fromCache = cached;
     D.migratePreviewJournal(data);
     Live.onData();
+    const walletClosed = walletCheck();
+    if (walletClosed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     if (changed) {
       checkAlerts();
       const resDue = route.name === 'vysledky' && Date.now() - (window.__pulseResAt || 0) > 20000;
@@ -242,9 +279,20 @@ function applyTheme() {
 const GLOBAL = {
   'open-signal'(el) { openDetail(ctx(), el.dataset.id, el.classList.contains('sig') ? el : null); },
   rtip() { toast(t('rtip')); },
+  /* "Změnit kapitál": the calculator holds the user's account size, currency and risk profile */
+  'go-calc'() {
+    const go = () => (window.__pulseGo ? window.__pulseGo('#/kalkulacka') : (location.hash = '#/kalkulacka'));
+    if (sheetOpen()) { closeTopSheet(); setTimeout(go, 380); } else go();
+  },
   reload() { loadAll(); },
   install() { More.doInstall(); },
   'dismiss-nudge'() { P.dismissNudge(); document.querySelectorAll('.nudge').forEach((n) => n.remove()); },
+  async 'push-cta'() {
+    const r = await P.subscribePush().catch(() => ({ ok: false }));
+    toast(t(r.ok ? 'push.on' : r.reason === 'server' ? 'push.server' : r.reason === 'denied' ? 'push.denied' : 'push.fail'));
+    if (r.ok) document.querySelectorAll('.pcta').forEach((n) => n.remove());
+  },
+  'dismiss-pcta'() { P.dismissPushCta(); document.querySelectorAll('.pcta').forEach((n) => n.remove()); },
 };
 
 document.addEventListener('click', (ev) => {
@@ -336,8 +384,12 @@ async function boot() {
     ev.preventDefault(); window.__pulseGo(href);
   });
   window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute(); });
+  Live.setExtraSymbols(W.watched);
   Live.initLive(() => data);
+  Live.onStatus(() => renderChrome());
   Live.onLive(() => {
+    const closed = walletCheck();
+    if (closed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     checkAlerts();
     if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
     else renderChrome();

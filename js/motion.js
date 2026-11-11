@@ -17,7 +17,8 @@ export function countUps(root) {
     const key = el.dataset.countKey || el.id || el.dataset.count;
     const to = parseFloat(el.dataset.count);
     const dec = +(el.dataset.dec ?? 1);
-    const fmt = (v) => (el.dataset.signed === '0' ? F.pct(v, dec) : F.spct(v, dec));
+    const ccy = el.dataset.ccy;
+    const fmt = ccy ? (v) => F.money(v, ccy, dec) : (v) => (el.dataset.signed === '0' ? F.pct(v, dec) : F.spct(v, dec));
     if (reduced() || counted.has(key) || !Number.isFinite(to)) { el.textContent = fmt(to); return; }
     counted.add(key);
     animateNumber(el, 0, to, fmt, 900);
@@ -131,6 +132,16 @@ export function entrances(root, first) {
     const neg = b.parentElement.classList.contains('mbar-neg');
     b.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 700, delay: 200 + i * 70, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards', composite: 'replace' });
     b.style.transformOrigin = neg ? 'top' : 'bottom';
+  });
+  /* 1.6.0: sparklines draw in, status bars fill from the entry */
+  root.querySelectorAll('.spark polyline').forEach((pl, i) => {
+    let len = 0; try { len = pl.getTotalLength(); } catch { /* not rendered */ }
+    if (!len) return;
+    pl.style.strokeDasharray = `${len} ${len}`;
+    pl.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 1000, delay: 120 + Math.min(i, 8) * 40, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+  });
+  root.querySelectorAll('.trk-fill').forEach((b, i) => {
+    b.animate([{ opacity: 0, transform: 'scaleX(0)' }, { opacity: 1, transform: 'scaleX(1)' }], { duration: 800, delay: 150 + Math.min(i, 10) * 40, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
   });
   root.querySelectorAll('.hbar i').forEach((b, i) => {
     b.style.transformOrigin = b.classList.contains('down') ? 'right' : 'left';
