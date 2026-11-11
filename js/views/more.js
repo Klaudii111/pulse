@@ -14,6 +14,8 @@ export const MORE_ITEMS = [
   { group: 'more.g.robot', items: [
     { id: 'vysledky', icon: 'results', sub: () => t('more.vysledky.s') },
     { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
+    /* 1.11.0: the watchdog – which strategies work in practice too */
+    { id: 'uceni', icon: 'levels', sub: () => t('more.uceni.s') },
   ] },
   { group: 'more.g.help', items: [
     { id: 'jak', icon: 'help', sub: () => t('more.jak.s') },

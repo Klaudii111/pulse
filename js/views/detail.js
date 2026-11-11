@@ -175,8 +175,9 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
       <p class="d-ctitle">${B.sigTitle(s)}<small>${t(`c.type.${s.horizon}`)}</small></p>
       ${B.facts(s, D.sigPhase(s, now), now)}
-      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const n = D.offerNums(s, ctx.data, { now }); return `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${B.moneyLines(n)}</div>`; })() : ''}
+      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const n = D.offerNums(s, ctx.data, { now }); return `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${B.moneyLines(n)}${B.strength(s, ctx.data, now)}</div>`; })() : ''}
       <p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
+      ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
       ${cs.my ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
       <div class="bc-quiet">

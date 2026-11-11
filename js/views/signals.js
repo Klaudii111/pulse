@@ -8,6 +8,8 @@ import { pricePoints } from '../charts.js';
 import { sparkline } from '../ui.js';
 import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
 import * as B from '../brief.js';
+import * as H from '../health.js';
+import { offLine } from './learn.js';
 
 const seen = new Set(); // ladders animate only the first time a card appears
 
@@ -237,6 +239,8 @@ function openIn(data, hz) {
 }
 function phaseList(data, hz, ph, now) {
   if (ph === 'closed') return D.closedSignals(data, now).filter((x) => hz === 'ALL' || x.horizon === hz);
+  /* 1.11.0: Otevřené = what the app offers -> a strategy switched off by the watchdog is not offered (my own trades stay) */
+  if (ph === 'open') return openIn(data, hz).filter((x) => D.sigPhase(x, now) === 'open' && (H.offerable(x, data) || ['mine', 'order'].includes(D.cardState(x, data, now).code)));
   return openIn(data, hz).filter((x) => D.sigPhase(x, now) === ph);
 }
 
@@ -247,15 +251,19 @@ function sigBody(ctx) {
   if (hz !== 'ALL' && hidden(hz)) return `<section class="calm u-empty">${calmArt()}<div><h3 class="calm-t">${t('u.den.t')}</h3><p class="calm-s">${t('u.den.s')}</p></div></section>`;
   if (hz !== 'ALL' && !D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
   const list = phaseList(data, hz, ph, now);
+  /* 1.11.0: my own trades first, then the best signals (strength from reward:risk -> fresher -> strategy ok before sleduj) */
   if (ph === 'open') {
-    const rank = { mine: 0, order: 1, buy: 2, soon: 2, wait: 3 };
-    list.sort((a, b) => ((rank[D.cardState(a, data, now).code] ?? 4) - (rank[D.cardState(b, data, now).code] ?? 4)) || String(b.created_at).localeCompare(String(a.created_at)));
+    const rank = { mine: 0, order: 1 };
+    const r = new Map(list.map((x) => [x.id, rank[D.cardState(x, data, now).code] ?? 2]));
+    const pos = new Map(H.sortByQuality(list.slice(), data, now).map((x, i) => [x.id, i]));
+    list.sort((a, b) => (r.get(a.id) - r.get(b.id)) || (pos.get(a.id) - pos.get(b.id)));
   } else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const off = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
   if (!list.length) {
-    if (ph === 'open') return `<p class="empty-line">${t('sg.today0')} ${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
+    if (ph === 'open') return off || `<p class="empty-line">${t('sg.today0')} ${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `<div class="sc-list">${list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`;
+  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {

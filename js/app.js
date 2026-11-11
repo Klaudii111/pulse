@@ -28,10 +28,11 @@ import * as Mkt from './market.js';
 import * as B from './brief.js';
 import * as Tour from './tour.js';
 import * as Help from './views/help.js';
+import * as Learn from './views/learn.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
-const data = { signals: null, history: null, performance: null, calendar: null, league: null, paper: null };
+const data = { signals: null, history: null, performance: null, calendar: null, league: null, paper: null, health: null };
 let route = { name: 'dnes', params: new URLSearchParams(), sub: null };
 let currentView = null;
 
@@ -50,7 +51,7 @@ const TABS = [
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'vice' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'vice', uceni: 'vice' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
@@ -67,6 +68,7 @@ const VIEWS = {
   mt5: { title: 'title.mt5', render: Pages.renderMt5 },
   jak: { title: 'jak.title', render: Help.renderHow },
   duvera: { title: 'trust.title', render: Help.renderTrust },
+  uceni: { title: 'le.title', render: Learn.render },
   vice: { title: 'nav.vice', render: More.renderMore },
   info: { title: 'title.info', render: More.renderInfo },
   nastaveni: { title: 'title.nastaveni', render: More.renderSettings, mount: More.mountSettings, actions: More.actions },
@@ -225,7 +227,7 @@ async function fetchJSON(url) {
 
 async function loadAll() {
   state.loading = true;
-  const keys = ['signals', 'history', 'performance', 'calendar', 'league', 'paper'];
+  const keys = ['signals', 'history', 'performance', 'calendar', 'league', 'paper', 'health'];
   const [results] = await Promise.all([Promise.allSettled(keys.map((k) => (CONFIG.DATA[k] ? fetchJSON(CONFIG.DATA[k]) : Promise.reject(new Error('off'))))), Mkt.ready() ? null : Mkt.load()]);
   let cached = false;
   results.forEach((r, i) => {
@@ -236,6 +238,7 @@ async function loadAll() {
   state.loading = false;
   state.lastFetch = Date.now();
   if (results[5].status === 'rejected') data.paper = null; // missing paper.json -> the section hides
+  if (results[6].status === 'rejected') data.health = null; // missing health.json -> no watchdog, behaviour as 1.10
   D.migratePreviewJournal(data);
   Live.onData();
   walletCheck();
@@ -255,6 +258,14 @@ async function pollPaper() {
     data.paper = json;
     return changed;
   } catch { const had = !!data.paper; data.paper = null; return had; }
+}
+
+/* 1.11.0: health.json (the robot's watchdog, written hourly) is refreshed with signals.json */
+async function pollHealth() {
+  if (!CONFIG.DATA.health) return false;
+  const before = data.health?.updated_at || null;
+  try { data.health = (await fetchJSON(CONFIG.DATA.health)).json; } catch { data.health = null; }
+  return (data.health?.updated_at || null) !== before;
 }
 
 /* fictional positions of the Obchodní platforma: auto close on stop-loss / take-profit / signal close */
@@ -300,7 +311,9 @@ async function poll() {
     const changed = !data.signals || json.generated_at !== data.signals.generated_at;
     data.signals = json;
     const paperChanged = await pollPaper();
+    const healthChanged = await pollHealth();
     if (paperChanged && !sheetOpen() && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) rerender({ soft: true });
+    else if (healthChanged && !sheetOpen() && ['dnes', 'signaly', 'uceni'].includes(route.name) && !changed) rerender({ soft: true });
     state.fromCache = cached;
     D.migratePreviewJournal(data);
     Live.onData();

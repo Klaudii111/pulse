@@ -20,6 +20,8 @@ const TOUR = [
   { route: 'terminal', sel: '#big-acc', k: 'tour.n6' },
   { route: 'terminal', sel: '[data-seg-name="tview"][data-id="watch"]', k: 'tour.n7' },
   { route: 'terminal', sel: '.topbar [data-slot="bell"] .bell, .side-top [data-slot="bell"] .bell', k: 'tour.s7' },
+  /* 1.11.0: how do you know the signals work -> the robot's learning line on Dnes (skipped without health.json) */
+  { route: 'dnes', sel: '.d-learn', k: 'tour.learn' },
 ];
 const HINT = [
   { route: 'signaly', sel: '.sc.is-tile .sc-head', k: 'tour.n2' },

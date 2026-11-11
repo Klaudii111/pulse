@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.10.1',
+  APP_VERSION: '1.11.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -21,7 +21,9 @@ export const CONFIG = {
     return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json',
       paper: remote ? null : './data/paper.json', quotes: remote ? null : './data/quotes.json',
       /* 1.9.0: what the Obchodní platforma can trade (indices, currencies, commodities, crypto, shares, ETFs) */
-      instruments: remote ? null : './data/instruments.json' };
+      instruments: remote ? null : './data/instruments.json',
+      /* 1.11.0: the robot's watchdog (Jak se robot učí); missing -> the app behaves as before */
+      health: remote ? null : './data/health.json' };
   })(),
   /* Public address of the main app (install page QR code, push on GitHub Pages copies points users here) */
   APP_URL: 'https://pulse.178-105-154-81.sslip.io/',

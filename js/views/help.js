@@ -17,7 +17,9 @@ export function renderHow() {
   const steps = [1, 2, 3, 4].map((n) => `<li class="how-step is-big"><span class="how-n num">${n}</span><div><p class="how-t">${t(`jak.n${n}.t`)}</p><p class="how-s">${t(`jak.n${n}.s`)}</p></div></li>`).join('');
   const col = [['up', 'jak.c.up'], ['down', 'jak.c.down'], ['gold', 'jak.c.gold'], ['flat', 'jak.c.flat']]
     .map(([c, k]) => `<li class="how-col"><i class="dot-${c}" aria-hidden="true"></i><span>${t(k)}</span></li>`).join('');
-  const faq = [4, 5, 6, 1, 3].map((n) => `<details class="faq"><summary>${t(`jak.q${n}`)}</summary><p>${t(`jak.a${n}`)}</p></details>`).join('');
+  /* 1.11.0: "Jak víte, že signály fungují?" first, with a link to #/uceni */
+  const faq = `<details class="faq"><summary>${t('jak.q7')}</summary><p>${t('jak.a7')} <a class="link" href="#/uceni">${t('le.title')}</a>.</p></details>`
+    + [4, 5, 6, 1, 3].map((n) => `<details class="faq"><summary>${t(`jak.q${n}`)}</summary><p>${t(`jak.a${n}`)}</p></details>`).join('');
   return `<header class="page-head"><div>${back()}<h1 class="page-title">${t('jak.title')}</h1><p class="page-sub">${t('jak.sub')}</p></div></header>
   <ol class="how-flow">${steps}</ol>
   <div class="btn-stack how-btns"><button type="button" class="btn btn-primary btn-block" data-action="tour">${icon('help', 'icon-sm')}${t('jak.tour')}</button>

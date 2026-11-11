@@ -13,6 +13,7 @@ import { icon, monogram, track } from './ui.js';
 import { nextUsOpen } from './views/signals.js';
 import { pricePoints } from './charts.js';
 import * as W from './wallet.js';
+import * as H from './health.js';
 
 /* ---------- 1 CO TO JE ---------- */
 const SECTOR = [
@@ -327,6 +328,19 @@ export function closedLines(s, now = D.clock()) {
     <div><p class="sc-rl">${t('c.closedAt')}</p><p class="sc-rv num">${at ? F.dm(at) : '–'}</p></div>
   </div>`;
 }
+/* 1.11.0 "Síla signálu" 1–3 dots from reward:risk of entering now (H.rrNow) – only on signals you can still enter */
+export function strength(s, data, now = D.clock()) {
+  const n = H.dots(H.rrNow(s, data, now));
+  if (!n) return '';
+  return `<p class="sc-str"><span>${t('str.l')}${qh('SILA')}</span><span class="str-dots" role="img" aria-label="${F.esc(t('str.aria', { n }))}">${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span></p>`;
+}
+/* 1.11.0: the watchdog's word on this signal's strategy (sleduj = neutral note, vypnuto = no new entries) */
+export function healthNote(s, data) {
+  const st = H.status(data, s.horizon);
+  if (st !== 'sleduj' && st !== 'vypnuto') return '';
+  return `<a class="le-note is-${st === 'vypnuto' ? 'off' : 'watch'}" href="#/uceni">${icon('shield', 'icon-xs')}<span>${t(st === 'vypnuto' ? 'le.det.off' : 'le.det.watch')}</span>${icon('chev-right', 'icon-xs')}</a>`;
+}
+
 export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) {
   const cs = D.cardState(s, data, now);
   const ph = D.sigPhase(s, now);
@@ -344,7 +358,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) 
   if (ph === 'closed') money = closedLines(s, now);
   else if (ph === 'open' && !['mine', 'order'].includes(cs.code)) {
     const n = D.offerNums(s, data, { now });
-    money = `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${moneyLines(n)}</div>`;
+    money = `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${moneyLines(n)}${strength(s, data, now)}</div>`;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);
     if (mv != null) money = `<p class="sc-mv"><span>${t('c.move')}</span><b class="num">${F.spct(mv, 1)}</b></p>`;

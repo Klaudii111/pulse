@@ -2489,3 +2489,57 @@ html.has-onb, html.has-onb body { overflow: hidden; }
 .acc-more > summary { display: inline-flex; align-items: center; gap: 4px; list-style: none; cursor: pointer; font-size: 13px; color: var(--ink-3); padding: 2px 0 8px; }
 .acc-more > summary::-webkit-details-marker { display: none; }
 .acc-more[open] > summary .icon-xs { transform: rotate(180deg); }
+
+/* ---------- 1.11.0 Jak se robot učí (#/uceni), hlídač strategií, síla signálu ---------- */
+.le-hero { margin: 4px 2px 14px; font-size: 21px; line-height: 1.38; font-weight: 560; font-stretch: 104%; letter-spacing: -0.01em; color: var(--ink); text-wrap: pretty; }
+.le-sum { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 16px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.le-sum .icon { flex: none; margin-top: 2px; color: var(--gold); }
+.le-list { display: grid; gap: 12px; }
+.le-card { padding: 16px; border-radius: 18px; background: var(--raise); border: 1px solid var(--line); min-width: 0; }
+.le-card.is-grey { opacity: 0.72; }
+.le-head { display: flex; align-items: center; gap: 12px; }
+.le-id { min-width: 0; flex: 1; }
+.le-name { font-size: 16.5px; font-weight: 650; line-height: 1.3; }
+.le-st { margin-top: 2px; font-size: 12.5px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.le-st.is-ok { color: var(--up); } .le-st.is-watch { color: var(--gold); } .le-st.is-off { color: var(--down); } .le-st.is-grey { color: var(--ink-3); }
+.le-light { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--raise-2); border: 1px solid var(--line-2); }
+.le-light i { width: 14px; height: 14px; border-radius: 50%; background: var(--neutral); }
+.le-light.is-ok i { background: var(--up); box-shadow: 0 0 12px rgba(82, 197, 139, 0.55); }
+.le-light.is-watch i { background: var(--gold); box-shadow: 0 0 12px rgba(217, 183, 121, 0.5); }
+.le-light.is-off i { background: var(--down); box-shadow: 0 0 12px rgba(234, 106, 96, 0.5); }
+.le-light.is-grey i { background: var(--ink-4); }
+.le-light.is-sm { width: 22px; height: 22px; background: transparent; border: 0; }
+.le-light.is-sm i { width: 9px; height: 9px; }
+.le-why { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.le-cmp { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-tile); background: var(--raise-2); border: 1px solid var(--line); display: grid; gap: 6px; }
+.le-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--ink-3); }
+.le-row b { font-size: 14.5px; font-weight: 650; color: var(--ink); text-align: right; }
+.le-bar { display: grid; grid-template-columns: 1fr; gap: 4px; margin-bottom: 4px; }
+.le-bar-l { font-size: 11.5px; color: var(--ink-3); }
+.le-track { display: block; height: 6px; border-radius: 3px; background: var(--raise-4); overflow: hidden; }
+.le-track i { display: block; height: 100%; border-radius: 3px; background: var(--gold); }
+.le-bar.is-prac .le-track i { background: var(--up); }
+.le-bar.is-count .le-track i { background: var(--ink-3); }
+.le-open, .le-paper { margin-top: 8px; font-size: 12.5px; color: var(--ink-3); line-height: 1.4; }
+.le-checked { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--ink-3); }
+.le-month { margin-top: 16px; }
+.le-month-t { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; }
+.le-month-t .icon { color: var(--gold); }
+.le-month-s { margin-top: 6px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+.le-gl { display: grid; gap: 12px; }
+.le-gl-r dt { font-size: 14px; font-weight: 650; }
+.le-gl-r dd { margin: 2px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+.le-offline, .le-note { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 11px 14px; border-radius: var(--r-tile); background: var(--raise); border: 1px solid var(--line-2);
+  font-size: 13.5px; line-height: 1.4; color: var(--ink-2); text-decoration: none; }
+.le-offline span, .le-note span { flex: 1; min-width: 0; }
+.le-offline .icon:first-child, .le-note .icon:first-child { color: var(--gold); flex: none; }
+.le-offline .icon:last-child, .le-note .icon:last-child { color: var(--ink-4); flex: none; }
+.le-note { margin: 10px 0 0; }
+.le-res { margin-bottom: 4px; }
+.d-robot + .d-learn { margin-top: 10px; }
+.sc-str { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.sc-str .qm { vertical-align: -3px; }
+.str-dots { display: inline-flex; gap: 5px; }
+.str-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--raise-4); border: 1px solid var(--line-2); }
+.str-dots i.on { background: var(--gold); border-color: var(--gold); }
+.d-robot .le-light, .hs-row .le-light { flex: none; }

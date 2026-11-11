@@ -14,6 +14,8 @@ import { paperHero } from './paper.js';
 import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
 import * as Live from '../live.js';
+import * as H from '../health.js';
+import { offLine, linkLine } from './learn.js';
 
 /* 1.9.0: live market strip with the main markets (instruments.json keys, plain names); tap = trade it on the platform.
    Before the server knows the keys, the old ETF proxies are shown (labelled honestly). */
@@ -119,12 +121,13 @@ export function autoSwitch() {
 }
 
 
-/* 2 NOVÝ SIGNÁL: newest buyable signals (a / b / soon), not dismissed with "Teď ne", max 3 */
+/* 2 NOVÝ SIGNÁL: buyable signals (a / b / soon), not dismissed with "Teď ne", max 3.
+   1.11.0: strategies switched off by the robot's watchdog are not offered; best first (H.sortByQuality). */
 export function newSignals(data, now) {
   const nn = new Set(D.dismissed());
-  return D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon) && !(CONFIG.HIDDEN_HORIZONS || []).includes(x.horizon) && !nn.has(x.id))
-    .filter((x) => ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code))
-    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const list = D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon) && !(CONFIG.HIDDEN_HORIZONS || []).includes(x.horizon) && !nn.has(x.id) && H.offerable(x, data))
+    .filter((x) => ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
+  return H.sortByQuality(list, data, now);
 }
 
 /* real prices only: the signal's price path (bot 5-min points + live ticks) and the ticks seen in this session,
@@ -246,10 +249,12 @@ export function render(ctx) {
   ${accountCard(ctx)}
   ${B.statsRow(ctx.data, now)}
   <section class="d-block" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${icon('chev-right', 'icon-xs')}</a></h2>
+    ${offLine(ctx.data)}
     ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.offer(x, { data: ctx.data, now, notNow: true, i })).join('')}</div>${more}` : `<p class="d-empty">${t('d.new0')}</p>`}
   </section>
   <section class="d-block" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   ${robotLine1(ctx)}
+  ${linkLine(ctx.data, now)}
   ${D.headStats(ctx.data, now).n ? `<section class="d-block" aria-labelledby="d-fresh"><h2 class="d-h" id="d-fresh"><a href="#/vysledky">${t('fr.title')}${icon('chev-right', 'icon-xs')}</a></h2>${B.freshTable(ctx.data, { n: 3, now, more: true })}</section>` : ''}
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

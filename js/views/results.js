@@ -7,6 +7,7 @@ import { rTip, VISIBLE_HZ, signalRow } from './signals.js';
 import * as B from '../brief.js';
 import { verifyUrl } from './detail.js';
 import { paperLink } from './paper.js';
+import { linkLine } from './learn.js';
 import { t } from '../i18n/index.js';
 import * as Live from '../live.js';
 
@@ -162,6 +163,7 @@ export function render(ctx) {
   ${B.statsBig(ctx.data, now)}
   <p class="res-counts num">${counts}</p>
   ${paperLink(ctx)}
+  ${linkLine(ctx.data, now, 'hs-row le-res')}
   <div class="results-layout">
     <section class="chart-card" aria-label="${t('res.chart')}">
       <div class="chart-top">
