@@ -12,13 +12,12 @@ export const CONFIG = {
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
-  DATA: {
-    signals: './data/signals.json',
-    history: './data/history.json',
-    performance: './data/performance.json',
-    calendar: './data/calendar.json',
-    league: './data/league.json',
-  },
+  DATA: (() => {
+    /* On a GitHub Pages copy (fork) read live data straight from the bot's branch, so the copy never goes stale. */
+    const remote = typeof location !== 'undefined' && location.hostname.endsWith('github.io') && !location.hostname.startsWith('omylatomasz-bit');
+    const b = remote ? 'https://raw.githubusercontent.com/omylatomasz-bit/ballistic/pulse-data/data/' : './data/';
+    return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json' };
+  })(),
   /* Poll signals.json every N minutes while the app is visible */
   POLL_MIN: 5,
   /* Bot publishes new signals at this time (CET) on trading days, used when signals.json has no next_run_at */
