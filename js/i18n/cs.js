@@ -57,6 +57,7 @@ export default {
   'buy.now': 'Burza je otevřená: koupit teď, limit {price}',
   'buy.preview': 'Nový signál během obchodování: koupit teď, limit {price}',
   'sig.preview': 'PŘES DEN', 'sig.preview.t': 'Signál našel robot během obchodování (data se zpožděním do 15 min). Večer ve 22:45 ho potvrdí, nebo zruší.',
+  'det.what': 'Co to je', 'det.gloss': 'Co znamenají slova a zkratky',
   'det.chartMode': 'Rozsah grafu', 'det.chartToday': 'Dnes', 'det.chartAll': 'Od vstupu',
   'j.closeEarly': 'Zavřít předčasně',
   'j.closeEarly.s': 'Stačí vám aktuální zisk? Zapíšeme váš výstup. Robot dál drží svůj plán až do cíle, stopu nebo konce.',

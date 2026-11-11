@@ -1407,3 +1407,6 @@ html.is-hidden .aurora i, html.is-hidden .regime-dot::after { animation-play-sta
 .pchart-modes { padding: 0; margin: 0 0 6px; }
 .pos-spark { display: block; margin: 0 0 2px auto; width: 56px; height: 18px; opacity: .9; }
 .pos-spark .spark { display: block; }
+.gloss { margin: 14px 0 4px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.gloss summary { cursor: pointer; font-weight: 600; color: var(--gold); }
+.gloss ul { margin: 10px 0 2px; padding-left: 18px; display: grid; gap: 8px; color: var(--ink-2); font-size: 14px; line-height: 1.45; }

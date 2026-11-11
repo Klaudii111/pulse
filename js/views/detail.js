@@ -4,6 +4,7 @@ import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
 import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
 import { priceChart, defaultPriceMode, hasToday } from '../charts.js';
+import { instrumentText, glossaryFor } from '../explain.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 
@@ -114,14 +115,18 @@ export function openDetail(ctx, id, sourceEl = null) {
       </div>` : `<div class="timeline"><div class="timeline-row"><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div></div></div>`}
       ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
 
+      ${instrumentText(s.symbol) ? `<h3 class="sheet-label">${t('det.what')}</h3><p class="why">${F.esc(instrumentText(s.symbol))}</p>` : ''}
       <h3 class="sheet-label">${t('det.why')}</h3>
-      ${ex?.summary ? `<p class="why">${F.esc(L(ex.summary))}</p>` : ''}
+      ${ex?.summary ? `<p class="why">${F.esc(L(ex.summary))}</p>` : (ex && (ex.cs || ex.en) ? `<p class="why">${F.esc(L(ex))}</p>` : '')}
       ${ex?.strategies?.length ? `<p class="why-l">${t('det.strategies')}</p><div class="chips" style="margin-top:8px">${ex.strategies.map((x) => `<span class="chip chip-gold">${F.esc(L(x))}</span>`).join('')}</div>` : ''}
       <ul class="reasons">${(s.reasons || []).map((r) => `<li>${icon('check')}${F.esc(L(r))}</li>`).join('')}</ul>
       ${ex?.expect || ex?.invalidation ? `<div class="why-grid">
         ${ex.expect ? `<div><p class="why-l">${t('det.expect')}</p><p>${F.esc(L(ex.expect))}</p></div>` : ''}
         ${ex.invalidation ? `<div><p class="why-l">${t('det.invalid')}</p><p>${F.esc(L(ex.invalidation))}</p></div>` : ''}
       </div>` : ''}
+
+      <details class="gloss"><summary>${t('det.gloss')}</summary><ul>${glossaryFor(s, [L(ex?.summary || ''), ...(s.reasons || []).map((r) => L(r)), L(ex?.expect || ''), L(ex?.invalidation || ''), typeof ex === 'object' && !ex?.summary ? L(ex) : ''])
+        .map((g) => `<li>${F.esc(g)}</li>`).join('')}</ul></details>
 
       <h3 class="sheet-label">${t('det.journal')}</h3>
       <div class="journal-box" id="jbox">${journalForm(s, j)}</div>

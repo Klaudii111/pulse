@@ -53,6 +53,7 @@ export default {
   'buy.now': 'Market is open: buy now, limit {price}',
   'buy.preview': 'New signal during the session: buy now, limit {price}',
   'sig.preview': 'INTRADAY', 'sig.preview.t': 'Found by the robot during the session (data up to 15 min delayed). Confirmed or cancelled at 22:45 CET.',
+  'det.what': 'What it is', 'det.gloss': 'What the words and abbreviations mean',
   'det.chartMode': 'Chart range', 'det.chartToday': 'Today', 'det.chartAll': 'Since entry',
   'j.closeEarly': 'Close early',
   'j.closeEarly.s': 'Happy with the current profit? We record your exit. The robot keeps its own plan until target, stop or time.',
