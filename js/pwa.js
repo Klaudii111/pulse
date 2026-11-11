@@ -61,22 +61,23 @@ export async function initSW() {
   if (!('serviceWorker' in navigator)) return null;
   try {
     swReg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
-    const offerUpdate = (worker) => {
-      toast(t('update.available'), {
-        timeout: 15000,
-        action: { label: t('update.btn'), fn: () => worker.postMessage({ type: 'SKIP_WAITING' }) },
-      });
-    };
-    if (swReg.waiting && navigator.serviceWorker.controller) offerUpdate(swReg.waiting);
+    // Zero-touch updates: a new version activates by itself and the app reloads (no button for the user).
+    const applyUpdate = (worker) => { try { worker.postMessage({ type: 'SKIP_WAITING' }); } catch { /* ignore */ } };
+    if (swReg.waiting && navigator.serviceWorker.controller) applyUpdate(swReg.waiting);
     swReg.addEventListener('updatefound', () => {
       const nw = swReg.installing;
       nw && nw.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(nw);
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) applyUpdate(nw);
       });
     });
+    const check = () => { try { swReg.update(); } catch { /* offline */ } };
+    setInterval(check, 30 * 60000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloaded) return; reloaded = true; location.reload();
+      if (reloaded) return; reloaded = true;
+      try { sessionStorage.setItem('pulse.updated', '1'); } catch { /* ignore */ }
+      location.reload();
     });
     return swReg;
   } catch (e) {

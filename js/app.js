@@ -316,6 +316,7 @@ async function boot() {
   rerender();
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
   P.initSW();
+  try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).

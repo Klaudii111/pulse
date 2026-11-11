@@ -38,6 +38,7 @@ export default {
   'badge.paper': 'DEMO – papírové obchodování',
   'badge.live': 'Ostrý provoz',
   'chrome.data': 'Data {time}',
+  'update.done': 'Aplikace se aktualizovala na novou verzi.',
   'live.proxy.on': 'Zapnuto pro všechny. Ceny se obnovují každých pár sekund, když je otevřená burza v USA (15:30–22:00).',
   'sig.dev.running': 'Běží',
   'sig.dev.since': 'od {date}',

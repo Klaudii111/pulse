@@ -34,6 +34,7 @@ export default {
   'badge.paper': 'DEMO – paper trading',
   'badge.live': 'Live trading',
   'chrome.data': 'Data {time}',
+  'update.done': 'The app updated itself to the new version.',
   'live.proxy.on': 'On for everyone. Prices refresh every few seconds while the US market is open (9:30–16:00 New York).',
   'sig.dev.running': 'Running',
   'sig.dev.since': 'since {date}',
