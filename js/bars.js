@@ -7,7 +7,6 @@ import { CONFIG } from '../config.js';
 import * as F from './format.js';
 import * as Live from './live.js';
 import * as store from './store.js';
-import * as M from './market.js';
 import { t } from './i18n/index.js';
 
 export const TFS = [
@@ -29,8 +28,6 @@ export async function fetchBars(key, tfId) {
   const T = TFS.find((x) => x.id === tfId) || TFS[0];
   const k = `${key}|${T.tf}|${T.range}`;
   const c = cache.get(k);
-  /* the server only has history for the keys of instruments.json (not every single stock or sector ETF) */
-  if (M.ready() && !M.get(key)) return null;
   if (c && Date.now() - c.at < (c.data ? TTL_OK : TTL_FAIL)) return c.data;
   if (dead && Date.now() - dead < TTL_FAIL) return null;
   let data = null;

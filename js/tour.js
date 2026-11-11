@@ -9,20 +9,22 @@ import * as F from './format.js';
 let env = { go: (h) => { location.hash = h; }, route: () => '' };
 export const init = (e) => { env = { ...env, ...e }; };
 
+/* 1.10.1: retargeted to the 1.10 screens (Můj účet card, signal tile, Zainvestovat, tabs, Sledované grafy, bell) */
+const TAB = (id) => `#tabbar a[href="#/${id}"], #side-nav a[href="#/${id}"]`;
 const TOUR = [
-  { route: 'dnes', sel: '.bal-pill', k: 'tour.s1' },
-  { route: 'dnes', sel: '#auto-copy', k: 'tour.sAuto' },
-  { route: 'dnes', sel: '#faq3', k: 'tour.sWhen' },
-  { route: 'dnes', sel: '#bx-buy', k: 'tour.s2' },
-  { route: 'signaly', sel: '.bc', k: 'tour.s3', badges: true },
-  { route: 'terminal', sel: '#t-btns', k: 'tour.s5' },
-  { route: 'dnes', sel: '#bx-mine', k: 'tour.s6' },
-  { route: 'dnes', sel: '.topbar [data-slot="bell"] .bell, .side-top [data-slot="bell"] .bell', k: 'tour.s7' },
+  { route: 'dnes', sel: '#acc-card', k: 'tour.n1' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-head', k: 'tour.n2' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-money', k: 'tour.n3' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-go', k: 'tour.n4' },
+  { route: 'signaly', sel: TAB('zainvestovano'), k: 'tour.n5' },
+  { route: 'terminal', sel: '#big-acc', k: 'tour.n6' },
+  { route: 'terminal', sel: '[data-seg-name="tview"][data-id="watch"]', k: 'tour.n7' },
+  { route: 'terminal', sel: '.topbar [data-slot="bell"] .bell, .side-top [data-slot="bell"] .bell', k: 'tour.s7' },
 ];
 const HINT = [
-  { route: 'signaly', sel: '.bc .b-what', k: 'hint.s1' },
-  { route: 'signaly', sel: '.bc .b-todo', k: 'hint.s2' },
-  { route: 'signaly', sel: '.bc .b-bot, .bc .b-how', k: 'hint.s3' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-head', k: 'tour.n2' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-why', k: 'hint.n2' },
+  { route: 'signaly', sel: '.sc.is-tile .sc-money', k: 'tour.n3' },
 ];
 
 let root = null, steps = [], i = 0, onEnd = null;
@@ -132,7 +134,7 @@ export function start() {
 /* one-time hint on Signály (called after Signály rendered) */
 export function maybeHint() {
   if (root || store.get('hint3', 0) || document.querySelector('.onb')) return;
-  if (!find('.bc .b-todo')) return;
+  if (!find('.sc.is-tile .sc-money')) return;
   store.set('hint3', 1);
   open(HINT, null);
 }

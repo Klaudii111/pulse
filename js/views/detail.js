@@ -82,7 +82,7 @@ function levTable(s, lev, data = null) {
     const loss = Math.min(100, (lossM / dep) * 100);
     const upL = gainM != null ? (gainM / dep) * 100 : null;
     const over = legal && L > legal;
-    return `<tr class="${over ? 'is-over' : ''}"><td class="num">1:${L}</td>
+    return `<tr class="${over ? 'is-over' : ''}" ${L === 1 ? `data-levnums="${F.esc(JSON.stringify({ a: dep, l: n.maxLoss != null ? Math.round(n.maxLoss) : 0, p: Math.round(gainM ?? 0) }))}"` : ''}><td class="num">1:${L}</td>
       <td class="num up">${gainM == null ? '–' : `+${F.money(gainM, ccy, 0)}<small>${F.spct(upL, 1)}</small>`}</td>
       <td class="num down">−${F.money(lossM, ccy, 0)}<small>${loss >= 100 ? t('lev.all') : F.spct(-loss, 1)}</small></td>
       <td>${over ? t('lev.overLegal') : ''}</td></tr>`;
@@ -192,7 +192,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
           ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
           ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
           <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
-          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="false">${t('bars.mode')}</button>
+          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="false" hidden>${t('bars.mode')}</button>
           <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
           <span class="live-stamp" data-stamp></span></div>
         ${legend}
@@ -224,12 +224,16 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       </section>` : ''}
       ${isOpen && state === 'open' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
       <div class="kv">
-        <div class="kv-item"><p class="kv-l">${t('det.yourRisk')}</p><p class="kv-v num down">${F.spct(-risk.risk)}</p><p class="kv-s">${risk.profile ? t('det.byProfile', { p: F.esc(risk.profile.toLowerCase()) }) : t('det.botSuggest')}</p></div>
-        <div class="kv-item"><p class="kv-l">${t('det.yourTarget')}</p><p class="kv-v num up">${F.spct(risk.target)}</p><p class="kv-s">${t('det.targetHit')}</p></div>
+        ${(() => { /* 1.10.1: the same per-deposit numbers as the card and the investment sheet (D.offerNums) */
+          const n = D.offerNums(s, ctx.data, { now });
+          const sg = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), n.ccy, 0);
+          return `<div class="kv-item" data-kvnums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="kv-l">${t('c.maxLoss')}${B.qh('MAXLOSS')}</p><p class="kv-v num down">${n.maxLoss != null ? sg(n.maxLoss) : '–'}</p><p class="kv-s">${t('c.profitS', { a: F.money(n.amount, n.ccy, 0) })}</p></div>
+        <div class="kv-item"><p class="kv-l">${t('c.pot')}${B.qh('POT')}</p><p class="kv-v num up">${n.potential != null ? sg(n.potential) : '–'}</p><p class="kv-s">${n.potentialPct != null ? `${F.spct(n.potentialPct, 1)} · ` : ''}${t('det.targetHit')}</p></div>`;
+        })()}
         <div class="kv-item"><p class="kv-l">${t('det.rr')}</p><p class="kv-v num">${F.rr(s.rr)}</p><p class="kv-s">${t('det.rrS', { v: F.num(s.rr, 1) })}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
       </div>
-      <p class="acct-note">${icon('info', 'icon-xs')}<span>${t('det.acctNote', { r: F.pct(risk.risk, risk.risk % 1 ? 1 : 0), t: F.spct(risk.target, 1), p: s.target ? F.pct(Math.abs(s.target - s.entry) / s.entry * 100, 1) : '–' })}</span></p>
+      <p class="acct-note">${icon('info', 'icon-xs')}<span>${t('c.potNote')}</span></p>
       ${levTable(s, lev, ctx.data)}
       ${isOpen && state === 'open' ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
@@ -270,6 +274,8 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     if (focus === 'why') setTimeout(() => { const c = el.querySelector('#det-why'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     if (focus === 'chart') setTimeout(() => { const c = el.querySelector('.pchart'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     let tvOn = false;
+    /* 1.10.1: "Graf trhu" appears only when /api/bars has history for this symbol (200); 400 / 503 -> stays hidden */
+    Bars.fetchBars(s.symbol, '1D').then((d) => { const c = el.querySelector('[data-pmode="bars"]'); if (c && d && el.isConnected) c.hidden = false; });
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
       const m = b.dataset.pmode;
       el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === m)));
@@ -284,7 +290,6 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
           dbx.hidden = true; box.hidden = false; pmode = defaultPriceMode(s);
           el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
           chartRef && chartRef.refresh && chartRef.refresh();
-          toast(t('bars.noHist'));
         } });
         else barsRef.refresh();
         return;

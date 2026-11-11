@@ -17,9 +17,6 @@ export default {
 
   /* Signály: Otevřené · Běžící · Uzavřené + délka jako filtr */
   'sg.tabs': 'Stav signálů', 'sg.ph.open': 'Otevřené', 'sg.ph.running': 'Běžící', 'sg.ph.closed': 'Uzavřené',
-  'sg.phS.open': 'Do těchto signálů ještě můžeš vstoupit.',
-  'sg.phS.running': 'Signály, které běží – na vstup je už pozdě. Sleduj, jak dopadnou.',
-  'sg.phS.closed': 'Hotové signály s výsledkem, i ztrátové. Částky platí pro vklad {a} bez páky.',
   'sg.hz': 'Délka signálu', 'sg.hzAll': 'Vše',
   'sg.empty.running': 'Teď neběží žádný signál, na který by bylo pozdě.',
   'sg.empty.closed': 'Zatím žádný uzavřený signál – první výsledky uvidíš po uzavření signálu.',
@@ -100,4 +97,18 @@ export default {
   'bars.noHist': 'Pro tento trh zatím nemáme historii cen – ukazujeme graf signálu.',
   'more.jak.s': 'Celé ve čtyřech krocích',
   'acc.more': 'Podrobnosti účtu (zůstatek, marže, výsledek)',
+  'res.openNow': 'Signály, které ještě běží',
+  'res.openNowS': 'Všechny neuzavřené: Otevřené (můžeš vstoupit) i Běžící (na vstup pozdě). Jak se jim daří teď.',
+  'res.none.s': 'První výsledky se tu objeví po uzavření prvního signálu (cíl, stop nebo konec délky). Signály, které ještě běží, najdeš níže.',
+  'sg.phS.open': 'Otevřené = do signálu ještě můžeš vstoupit.',
+  'sg.phS.running': 'Běžící = na vstup je už pozdě, ale signál ještě běží. Sleduj, jak dopadne.',
+  'sg.phS.closed': 'Uzavřené = hotové signály s výsledkem, i ztrátové. Částky platí pro vklad {a} bez páky.',
+  'tour.n1.t': 'Můj účet (fiktivní peníze)', 'tour.n1.s': 'Tady vidíš, kolik máš fiktivních peněz. Nic neplatíš a nic doopravdy nevybíráš.',
+  'tour.n2.t': 'Signál = jedna nabídka', 'tour.n2.s': 'Název, směr, typ a délka. Klepni kamkoli na kartu a otevře se detail s celým zdůvodněním.',
+  'tour.n3.t': 'Předem spočítaná čísla', 'tour.n3.s': 'Maximální možná ztráta a odhadovaný potenciál pro vklad z příkladu. Stejná čísla uvidíš i v detailu a při investici.',
+  'tour.n4.t': 'Zainvestovat', 'tour.n4.s': 'Tlačítko Zainvestovat (při zavřené burze Nastavit nákup) otevře investici fiktivními penězi, předvyplněnou podle signálu. Částku zvolíš od 100 Kč.',
+  'tour.n5.t': 'Zainvestováno', 'tour.n5.s': 'Tady najdeš svoje obchody, čekající nákupy a historii – zisk i ztrátu v korunách.',
+  'tour.n6.t': 'Kde jsou tvoje peníze', 'tour.n6.s': 'Volné = můžeš investovat, Ve hře = peníze v obchodech a čekajících nákupech.',
+  'tour.n7.t': 'Sledované grafy', 'tour.n7.s': 'Až 4 živé grafy najednou, každý se obnovuje každou sekundu. Hvězdičkou přidáš další trh.',
+  'hint.n2.t': 'Proč tenhle signál', 'hint.n2.s': 'Dva až tři důvody obyčejnými slovy. Celé zdůvodnění je v detailu.',
 };
