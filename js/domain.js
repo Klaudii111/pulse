@@ -506,7 +506,9 @@ export function example(s, amount = null, lev = 1) {
   const ccy = walletCcy();
   const a = amount ?? EXAMPLE_DEP[ccy] ?? 10000;
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
-  const o = outcome({ side, entry: s.entry, amount: a, lev, sl: s.stop, tp: s.target });
+  /* same base price as the investment sheet (buy now = live price), so card and sheet show identical numbers */
+  const px = Live.quote(s.symbol)?.p || s.last_price || s.entry;
+  const o = outcome({ side, entry: px, amount: a, lev, sl: s.stop, tp: s.target });
   return { amount: a, ccy, atTarget: o.atTarget, atStop: o.atStop };
 }
 /* signals the user tapped "Teď ne" on (hidden from Dnes, still in Signály) */
