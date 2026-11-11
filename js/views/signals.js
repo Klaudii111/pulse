@@ -2,6 +2,7 @@ import { CONFIG } from '../../config.js';
 import * as F from '../format.js';
 import * as D from '../domain.js';
 import * as store from '../store.js';
+import * as Live from '../live.js';
 import { t, L } from '../i18n/index.js';
 import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt } from '../ui.js';
 
@@ -77,7 +78,8 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
   const ev = D.eventsFor(s, events);
 
   let sub = '';
-  const hzTag = showHz ? `<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>` : '';
+  const hzTag = (showHz ? `<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>` : '')
+    + (s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : '');
   const mine = D.journal()[s.id];
   const myTag = mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 2) })}</span>`
     : mine?.state === 'in' ? `<span class="my-tag">${t('sig.mine.in')}</span>` : '';
@@ -153,6 +155,8 @@ export function nextUsOpen(from) {
 export function buyWhen(s, now) {
   const est = D.entryState(s, now);
   if (!est || est.code === 'late' || est.code === 'expired') return null;
+  /* Intraday preview signal: found while the market is open -> buy now at the limit, while the session runs. */
+  if (s.preview && Live.marketOpen(now)) return { code: 'now', text: t('buy.preview', { price: F.price(s.entry) }) };
   const open = nextUsOpen(s.created_at);
   if (!open) return null;
   const closeAt = new Date(open.getTime() + 390 * 60000);

@@ -3,7 +3,7 @@ import * as F from '../format.js';
 import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
 import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
-import { priceChart } from '../charts.js';
+import { priceChart, defaultPriceMode } from '../charts.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 
@@ -44,6 +44,7 @@ function onLiveDetail(el, ctx, s) {
 export function openDetail(ctx, id, sourceEl = null) {
   const s = D.findSignal(ctx.data, id);
   if (!s) { toast(t('det.notFound')); return; }
+  let pmode = defaultPriceMode(s);
   const now = ctx.now();
   const isOpen = s.status === 'open';
   let state = liveState(s);
@@ -82,7 +83,7 @@ export function openDetail(ctx, id, sourceEl = null) {
   const j = D.journal()[s.id];
   const html = `
     <div class="sheet-head">
-      <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}</div>
+      <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}</div>
         <p class="sheet-sub">${F.esc(s.name)}, ${F.CLASS_LABEL[s.asset_class] || ''}, ${F.HZ_LABEL[s.horizon]}</p></div></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button>
     </div>
@@ -90,7 +91,10 @@ export function openDetail(ctx, id, sourceEl = null) {
       ${status}
       ${est ? `<div class="entry-box is-${est.code}">${entryChip(est)}<p>${F.esc(est.note)}</p></div>` : ''}
       ${prox ? `<p class="prox-line ${prox.side === 'stop' ? 'down' : 'up'}">${icon('alert', 'icon-xs')}${t('det.prox', { v: F.pct(prox.dist, 1), side: t(`det.prox.${prox.side}`) })}</p>` : ''}
-      ${s.price_path?.length > 1 ? `<div class="pchart"><div class="pchart-box" id="pchart"></div>
+      ${s.price_path?.length > 1 ? `<div class="pchart"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
+          <button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chartToday')}</button>
+          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button></div>
+        <div class="pchart-box" id="pchart"></div>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>
       ${isOpen && state === 'open' ? `<section class="howto" aria-label="${t('det.howto.aria')}">
@@ -131,7 +135,12 @@ export function openDetail(ctx, id, sourceEl = null) {
   const mount = (el) => {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
-    if (box) setTimeout(() => { chartRef = priceChart(box, s); }, 30);
+    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode }); }, 30);
+    el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
+      pmode = b.dataset.pmode;
+      el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
+      chartRef && chartRef.refresh && chartRef.refresh();
+    }));
     liveOff = onLiveDetail(el, ctx, s);
     el.querySelector('[data-close-nav]')?.addEventListener('click', (ev) => {
       ev.preventDefault();

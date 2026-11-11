@@ -32,7 +32,7 @@ async function pollProxy() {
         Object.entries(j.q || {}).forEach(([sym, q]) => {
           if (!q || !(q.p > 0) || !q.t) return;
           const cur = prices.get(sym);
-          if (!cur || q.t > cur.t || q.p !== cur.p) { prices.set(sym, { p: q.p, t: Math.max(q.t, cur?.t || 0) }); any = true; }
+          if (!cur || q.t > cur.t || q.p !== cur.p) { prices.set(sym, { p: q.p, t: Math.max(q.t, cur?.t || 0), pc: q.pc }); any = true; }
         });
         if (marketOpen()) lastTickAt = Date.now();
         if (any) mark();
@@ -67,7 +67,9 @@ function openSignals(data) {
   return out;
 }
 
-const symbols = () => [...new Set(openSignals(getData()).map((s) => s.symbol))].slice(0, 50);
+/* SPY rides along: the Results chart draws today's live point of the S&P 500 next to the robot. */
+const symbols = () => [...new Set(openSignals(getData()).map((s) => s.symbol).concat('SPY'))].slice(0, 50);
+export const quote = (sym) => prices.get(sym) || null;
 const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 /* Apply known live prices to the current data object. Returns true when anything changed. */
@@ -90,10 +92,11 @@ export function apply(data = getData()) {
       const pr = (q.p - s.entry) / (s.target - s.entry);
       s.progress = Math.round(Math.max(-1, Math.min(1, pr)) * 1000) / 1000;
     }
+    /* Live points build the intraday line: a new point every 5 minutes, the newest one follows the price. */
     const path = s.price_path || (s.price_path = []);
     const last = path[path.length - 1];
-    if (last && nyDay(Date.parse(last.t)) === nyDay(q.t) && (last.live || path.length > 2)) { last.p = q.p; last.t = iso; }
-    else path.push({ t: iso, p: q.p, live: true });
+    if (last && last.live && nyDay(Date.parse(last.t)) === nyDay(q.t) && q.t - Date.parse(last.t0 || last.t) < 300000) { last.p = q.p; last.t = iso; }
+    else if (!last || Date.parse(last.t) < q.t) { path.push({ t: iso, t0: iso, p: q.p, live: true }); if (path.length > 600) path.splice(0, path.length - 600); }
     if (s.created_at && Date.parse(s.created_at) < q.t) {
       const hitStop = dir > 0 ? q.p <= s.stop : q.p >= s.stop;
       const hitTarget = s.target != null && (dir > 0 ? q.p >= s.target : q.p <= s.target);

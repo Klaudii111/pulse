@@ -116,11 +116,38 @@ export function equityChart(box, series, opts = {}) {
   return { destroy: () => ro.disconnect(), last: () => series[series.length - 1] };
 }
 
-/** Price path with stop / entry / target levels. */
-export function priceChart(box, s) {
+const nyDayOf = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+/* Price points for a chart mode: 'today' = the newest trading day (5-min points, opened by the previous close),
+   'all' = one point per day (close of each day, the newest day's latest price). */
+export function pricePoints(s, mode) {
+  const raw = s.price_path || [];
+  if (!raw.length) return [];
+  if (mode === 'today') {
+    const day = nyDayOf(raw[raw.length - 1].t);
+    const i = raw.findIndex((p) => nyDayOf(p.t) === day);
+    return i > 0 ? raw.slice(i - 1) : raw.slice(i);
+  }
+  const out = [];
+  raw.forEach((p) => {
+    const last = out[out.length - 1];
+    if (last && nyDayOf(last.t) === nyDayOf(p.t)) out[out.length - 1] = p; else out.push(p);
+  });
+  return out;
+}
+
+/* Default chart mode: 'today' once the newest day has at least 3 intraday points. */
+export function defaultPriceMode(s) {
+  return pricePoints(s, 'today').length >= 4 ? 'today' : 'all';
+}
+
+/** Price path with stop / entry / target levels. opts.mode = 'today' | 'all' (getter or value). */
+export function priceChart(box, s, opts = {}) {
+  const modeOf = () => (typeof opts.mode === 'function' ? opts.mode() : opts.mode) || 'all';
   const draw = () => {
     const w = box.clientWidth, h = box.clientHeight;
-    const path = s.price_path || [];
+    const mode = modeOf();
+    const path = pricePoints(s, mode);
     if (!w || !h || path.length < 2) { box.innerHTML = ''; return; }
     const pad = { l: 4, r: 74, t: 12, b: 22 };
     const ps = path.map((p) => p.p);
@@ -143,8 +170,8 @@ export function priceChart(box, s) {
       ${lvl(s.entry, 'var(--ink-2)', t('lad.entry'), '1 3')}
       <path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="${X(path.length - 1)}" cy="${Y(lastP)}" r="4.5" fill="${col}" stroke="var(--raise)" stroke-width="2"/>
-      <text x="${pad.l}" y="${h - 5}" class="ax">${s.horizon === 'DEN' ? F.time(first) : F.dm(first)}</text>
-      <text x="${X(path.length - 1)}" y="${h - 5}" class="ax" text-anchor="end">${s.horizon === 'DEN' ? F.time(lastT) : F.dm(lastT)}</text>
+      <text x="${pad.l}" y="${h - 5}" class="ax">${s.horizon === 'DEN' || mode === 'today' ? F.time(first) : F.dm(first)}</text>
+      <text x="${X(path.length - 1)}" y="${h - 5}" class="ax" text-anchor="end">${s.horizon === 'DEN' || mode === 'today' ? F.time(lastT) : F.dm(lastT)}</text>
     </svg>`;
   };
   let size = '';

@@ -180,7 +180,8 @@ async function poll() {
     Live.onData();
     if (changed) {
       checkAlerts();
-      if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
+      const resDue = route.name === 'vysledky' && Date.now() - (window.__pulseResAt || 0) > 20000;
+    if (!sheetOpen() && (['dnes', 'signaly'].includes(route.name) || resDue)) { if (resDue) window.__pulseResAt = Date.now(); rerender({ soft: true }); }
     }
   } catch { /* offline – keep showing what we have */ }
 }

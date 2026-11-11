@@ -5,13 +5,36 @@ import { equityChart } from '../charts.js';
 import * as D from '../domain.js';
 import { rTip } from './signals.js';
 import { t } from '../i18n/index.js';
+import * as Live from '../live.js';
 
 let chart = null;
 const RANGES = [{ id: '1M', days: 31, label: '1M' }, { id: '3M', days: 92, label: '3M' }, { id: 'ALL', days: 9999, label: null }];
 
-function rangeSeries(perf, id) {
+const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+/* Today's live point (the bot publishes equity once a day after the close): the robot = last equity moved by
+   today's change of the open positions (in % of the account), S&P 500 = last value moved by SPY today. */
+function withLive(eq, data) {
+  const last = eq[eq.length - 1];
+  const today = nyDay(Date.now());
+  if (!last || today <= last.date) return eq;
+  let delta = 0, any = false;
+  D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon)).forEach((s) => {
+    if (!s.last_price_at || nyDay(Date.parse(s.last_price_at)) !== today || !(s.entry > s.stop)) return;
+    const prev = [...(s.price_path || [])].reverse().find((p) => nyDay(Date.parse(p.t)) < today);
+    const base = prev ? prev.p : s.entry;
+    delta += ((s.last_price - base) / (s.entry - s.stop)) * (s.risk_pct_account || 0);
+    any = true;
+  });
+  const q = Live.quote('SPY');
+  const spyOk = q && q.pc > 0 && nyDay(q.t) === today;
+  if (!any && !spyOk) return eq;
+  return eq.concat({ date: today, bot: last.bot * (1 + delta / 100), spy: spyOk ? last.spy * (q.p / q.pc) : last.spy, live: true });
+}
+
+function rangeSeries(perf, id, data) {
   const r = RANGES.find((x) => x.id === id) || RANGES[2];
-  const eq = perf.equity;
+  const eq = data ? withLive(perf.equity, data) : perf.equity;
   const end = F.toDate(eq[eq.length - 1].date);
   const from = new Date(end - r.days * 86400000);
   const out = eq.filter((p) => F.toDate(p.date) >= from);
@@ -123,7 +146,7 @@ export function render(ctx) {
   const range = store.get('range', 'ALL');
   const hz = store.get('resHz', 'ALL');
   const showR = D.showR(ctx.data);
-  const series = rangeSeries(perf, range);
+  const series = rangeSeries(perf, range, ctx.data);
   const h = heroVals(series);
   return head + `<div class="results-layout">
     <section class="chart-card" aria-label="${t('res.chart')}">
@@ -152,7 +175,7 @@ export function mount(el, ctx) {
   const perf = ctx.data?.performance;
   if (!perf) return;
   chart && chart.destroy();
-  const series = rangeSeries(perf, store.get('range', 'ALL'));
+  const series = rangeSeries(perf, store.get('range', 'ALL'), ctx.data);
   const box = el.querySelector('#eq-chart');
   const first = !ctx.softRender;
   chart = equityChart(box, series, {
