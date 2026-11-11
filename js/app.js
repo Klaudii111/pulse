@@ -19,6 +19,10 @@ import * as W from './wallet.js';
 import { t, lang } from './i18n/index.js';
 import * as M from './motion.js';
 import * as Live from './live.js';
+import * as Feed from './feed.js';
+import * as Events from './views/events.js';
+import * as Moje from './views/moje.js';
+import * as Onb from './onboarding.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -41,7 +45,7 @@ const TABS = [
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vysledky' };
+const PARENT = { robot: 'vysledky', moje: 'dnes', udalosti: 'dnes' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
@@ -50,6 +54,8 @@ const VIEWS = {
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
   terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
   robot: { title: 'title.robot', render: Paper.render },
+  moje: { title: 'moje.title', render: Moje.render },
+  udalosti: { title: 'ev.title', render: Events.render, mount: Events.mount, enter: Events.beforeRender },
   stahnout: { title: 'title.stahnout', render: Pages.renderInstall },
   mt5: { title: 'title.mt5', render: Pages.renderMt5 },
   vice: { title: 'nav.vice', render: More.renderMore },
@@ -76,7 +82,7 @@ function ctx(extra = {}) {
   return {
     data, state, route, params: route.params, now,
     nudge: nudgeHtml(),
-    rerender, applyTheme, onLangChange, afterRender,
+    rerender, applyTheme, onLangChange, afterRender, renderChrome,
     ...extra,
   };
 }
@@ -103,6 +109,11 @@ function renderChrome() {
   const lt = Live.dataTime();
   const liveHtml = ls === 'off' ? '' : `<span class="live-badge is-${ls}" title="${F.esc(lt ? Live.stamp(lt).text : '')}"><i aria-hidden="true"></i>${t(`live.${ls}`, { time: lt ? F.time(new Date(lt)) : '' })}</span>`;
   document.querySelectorAll('[data-slot="live"]').forEach((el) => { el.innerHTML = liveHtml; });
+  /* "Co se děje": derive new events from the data on this device, bell with the unread count */
+  Feed.update(data);
+  const n = Feed.unread();
+  const bell = `<a class="bell ${n ? 'has-new' : ''}" href="#/udalosti" aria-label="${F.esc(t('ev.bell', { n }))}" ${route.name === 'udalosti' ? 'aria-current="page"' : ''}>${icon('bell')}${n ? `<span class="bell-n num">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
+  document.querySelectorAll('[data-slot="bell"]').forEach((el) => { if (el.innerHTML !== bell) el.innerHTML = bell; });
   const meta = document.getElementById('side-meta');
   if (meta) meta.textContent = data.signals ? t('chrome.data', { time: F.dmTime(data.signals.generated_at) }) : '';
 }
@@ -144,6 +155,7 @@ function onLangChange() {
 function onRoute() {
   const prev = route.name;
   route = parseRoute();
+  if (route.name !== prev) VIEWS[route.name].enter?.();
   closeAllSheets();
   M.withTransition(() => { renderNav(); rerender(); });
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
@@ -216,6 +228,7 @@ async function poll() {
     D.migratePreviewJournal(data);
     Live.onData();
     const walletClosed = walletCheck();
+    renderChrome();
     if (walletClosed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     if (changed) {
       checkAlerts();
@@ -293,7 +306,23 @@ const GLOBAL = {
     if (r.ok) document.querySelectorAll('.pcta').forEach((n) => n.remove());
   },
   'dismiss-pcta'() { P.dismissPushCta(); document.querySelectorAll('.pcta').forEach((n) => n.remove()); },
+  /* re-open the first-run guide (Více) */
+  onboarding() { Onb.open(() => rerender({ soft: true })); },
+  /* "Sledovat" star on signal cards (Moje) */
+  follow(el) {
+    const on = D.toggleFollow(el.dataset.id);
+    document.querySelectorAll(`[data-action="follow"][data-id="${CSS.escape(el.dataset.id)}"]`).forEach((b) => { b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', t(on ? 'fol.off' : 'fol.on')); });
+    toast(t(on ? 'fol.added' : 'fol.removed', { sym: F.esc(el.dataset.sym || '') }), on ? { action: { label: t('fol.see'), fn: () => window.__pulseGo('#/moje') } } : {});
+  },
 };
+
+/* a span with role="button" inside a card (star) reacts to Enter / Space like a button */
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const el = ev.target.closest && ev.target.closest('span[role="button"][data-action]');
+  if (!el) return;
+  ev.preventDefault(); ev.stopPropagation(); el.click();
+});
 
 document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-action]');
@@ -364,12 +393,15 @@ async function boot() {
   P.initInstall();
   P.onInstallChange(() => { if (['dnes', 'signaly', 'nastaveni'].includes(route.name)) rerender({ soft: true }); });
   route = parseRoute();
+  VIEWS[route.name].enter?.();
   renderNav();
   rerender();
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
   P.initSW();
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
+  /* first-run guide: only after the access gate, only once */
+  Onb.maybeShow(() => rerender({ soft: true }));
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).
   window.__pulseGo = (href) => {

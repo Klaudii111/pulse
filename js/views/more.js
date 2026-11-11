@@ -10,6 +10,7 @@ import * as Live from '../live.js';
 
 export const MORE_ITEMS = [
   { group: 'more.g.you', items: [
+    { id: 'moje', icon: 'star', sub: () => { const n = D.followed().length; const w = store.get('wallet', null); const p = w?.positions?.length || 0; return p || n ? t('more.moje.s', { p, n }) : t('more.moje.s0'); } },
     { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
@@ -25,6 +26,7 @@ export const MORE_ITEMS = [
   { group: 'more.g.app', items: [
     { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
     { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
+    { id: 'onboarding', action: true, icon: 'spark', sub: () => t('more.onboarding.s') },
     { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
     { id: 'info', icon: 'info', sub: () => t('more.info.s') },
   ] },
@@ -47,11 +49,11 @@ export function pushCta() {
 export function renderMore(ctx) {
   return `<header class="page-head"><div><h1 class="page-title">${t('more.title')}</h1><p class="page-sub">${t('more.sub')}</p></div></header>
   ${pushCta()}
-  ${MORE_ITEMS.map((g) => `<h2 class="group-l">${t(g.group)}</h2><nav class="tile-grid" aria-label="${t(g.group)}">${g.items.map((it, i) => `<a class="gtile" style="--i:${i}" href="#/${it.id}">
+  ${MORE_ITEMS.map((g) => `<h2 class="group-l">${t(g.group)}</h2><nav class="tile-grid" aria-label="${t(g.group)}">${g.items.map((it, i) => `<${it.action ? `button type="button" data-action="${it.id}"` : `a href="#/${it.id}"`} class="gtile" style="--i:${i}">
     <span class="gtile-ic">${icon(it.icon)}</span>
     <span class="gtile-t">${t(`more.${it.id}`)}</span>
     <span class="gtile-s">${F.esc(it.sub(ctx))}</span>
-  </a>`).join('')}</nav>`).join('')}`;
+  </${it.action ? 'button' : 'a'}>`).join('')}</nav>`).join('')}`;
 }
 
 /* ---------- Info ---------- */

@@ -398,3 +398,20 @@ function liveStatus0(s, now) {
   if (mv > 0) return mk({ code: 'win', tone: 'up', text: moveTxt, hint: t('st.toTarget', { v: F.pct(d.toTarget, 1) }), move: mv });
   return mk({ code: 'lose', tone: 'down', text: moveTxt, hint: t('st.toStop', { v: F.pct(d.toStop, 1) }), move: mv });
 }
+
+/* ---------- Signals I follow ("Sledovat", 1.7.0) – ids stored on this device ---------- */
+export const followed = () => { const f = store.get('follow', []); return Array.isArray(f) ? f : []; };
+export const isFollowed = (id) => followed().includes(id);
+export function toggleFollow(id) {
+  const f = followed();
+  const on = !f.includes(id);
+  store.set('follow', on ? [id, ...f].slice(0, 200) : f.filter((x) => x !== id));
+  return on;
+}
+
+/* Convert money between the app currencies with the FX of the data (units per 1 USD) */
+export function convert(v, from, to, data) {
+  if (from === to || v == null) return v;
+  const fx = fxRates(data);
+  return (v / (fx[from] || 1)) * (fx[to] || 1);
+}

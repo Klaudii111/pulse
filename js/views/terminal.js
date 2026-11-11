@@ -84,7 +84,7 @@ function posList(sm, data) {
 }
 
 /* Same plain-language vocabulary as signals */
-function posStatus(p) {
+export function posStatus(p) {
   const near = (lvl) => lvl && Math.abs(p.px - lvl) / p.px * 100;
   const toS = near(p.sl), toT = near(p.tp);
   const prog = p.tp ? (p.px - p.entry) / (p.tp - p.entry) : 0;

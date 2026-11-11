@@ -60,20 +60,21 @@
       <symbol id="i-plus-square" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M12 8.5v7M8.5 12h7"/></symbol>
       <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8z"/></symbol>
       <symbol id="i-feather" viewBox="0 0 24 24"><path d="M19 5c-6 0-11 4-12 12l-2 2.5M7 17c5 0 9.5-3 12-12M10 14h5"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
       <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></symbol>
     </defs>
   </svg>
 
   <div class="app" id="app">
     <aside class="sidebar" aria-label="Hlavní navigace">
-      <a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/icon.svg" alt="" width="32" height="32"><span class="brand-name" data-slot="appname">PULSE Signals</span></a>
+      <div class="side-top"><a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/icon.svg" alt="" width="32" height="32"><span class="brand-name" data-slot="appname">PULSE Signals</span></a><div data-slot="bell"></div></div>
       <nav class="side-nav" id="side-nav"></nav>
       <div class="side-foot"><div data-slot="live"></div><div data-slot="badge"></div><p class="side-meta" id="side-meta"></p></div>
     </aside>
 
     <header class="topbar">
       <a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/icon.svg" alt="" width="28" height="28"><span class="brand-name" data-slot="appname">PULSE Signals</span></a>
-      <div class="topbar-r"><div data-slot="live"></div><div data-slot="badge"></div></div>
+      <div class="topbar-r"><div data-slot="live"></div><div data-slot="badge"></div><div data-slot="bell"></div></div>
     </header>
 
     <main class="view" id="view" tabindex="-1"></main>

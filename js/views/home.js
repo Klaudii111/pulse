@@ -6,7 +6,7 @@ import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
 import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow } from './signals.js';
 import { paperHero } from './paper.js';
-import { walletCard } from './terminal.js';
+import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
 import * as Live from '../live.js';
 
@@ -135,7 +135,7 @@ export function render(ctx) {
         </div>
       </section>
       ${regimeLine(s.regime)}
-      ${walletCard(ctx)}
+      ${mojeCard(ctx)}
       ${fresh.length ? '' : emptyState(ctx, 'ALL')}
       ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
       ${ctx.nudge || ''}

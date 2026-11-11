@@ -136,7 +136,7 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
     <div class="sig-head">
       ${monogram(s.symbol, s.name)}
       <div class="sig-id">
-        <div class="sig-tl"><span class="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${flag}</div>
+        <div class="sig-tl"><span class="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${flag}${followStar(s)}</div>
         <p class="sig-sub">${hzTag}${sub}${myTag}</p>
       </div>
       ${right}
@@ -145,6 +145,12 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
     ${ladder(s, { animate: fresh })}
     <p class="sig-line num"><span>${t('sig.risk')} <b class="down">${F.spct(-risk.risk, risk.risk % 1 ? 1 : 0)}</b></span><span>${t('sig.target')} <b class="up">${F.spct(risk.target)}</b></span><span>${exitPhrase(s, now)}</span></p>
   </button>`;
+}
+
+/* "Sledovat" star (Moje). A span with role=button: the card itself is a button. */
+export function followStar(s) {
+  const on = D.isFollowed(s.id);
+  return `<span class="fav" role="button" tabindex="0" data-action="follow" data-id="${F.esc(s.id)}" data-sym="${F.esc(s.symbol)}" aria-pressed="${on}" aria-label="${t(on ? 'fol.off' : 'fol.on')}" title="${t('fol.t')}">${icon('star', 'icon-sm')}</span>`;
 }
 
 export function rTip(v) {

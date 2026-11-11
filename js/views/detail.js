@@ -9,6 +9,7 @@ import { priceChart, defaultPriceMode, hasToday, hasDays } from '../charts.js';
 import { instrumentText, glossaryFor } from '../explain.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
+import { shareSignal } from '../share.js';
 
 let chartRef = null;
 let liveOff = null;
@@ -135,7 +136,11 @@ export function openDetail(ctx, id, sourceEl = null) {
     <div class="sheet-head">
       <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}</div>
         <p class="sheet-sub">${F.esc(s.name)}, ${F.CLASS_LABEL[s.asset_class] || ''}, ${F.HZ_LABEL[s.horizon]}</p></div></div>
-      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button>
+      <div class="sheet-head-r">
+        <button class="icon-btn fav-btn" type="button" data-action="follow" data-id="${F.esc(s.id)}" data-sym="${F.esc(s.symbol)}" aria-pressed="${D.isFollowed(s.id)}" aria-label="${t(D.isFollowed(s.id) ? 'fol.off' : 'fol.on')}" title="${t('fol.t')}">${icon('star', 'icon-sm')}</button>
+        <button class="icon-btn" type="button" data-share aria-label="${t('share.btn')}" title="${t('share.btn')}">${icon('share', 'icon-sm')}</button>
+        <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button>
+      </div>
     </div>
     <div class="sheet-body">
       ${status}
@@ -189,6 +194,7 @@ export function openDetail(ctx, id, sourceEl = null) {
       <div class="journal-box" id="jbox">${journalForm(s, j)}</div>
 
       <div class="sheet-actions btn-stack">
+        <button class="btn btn-secondary btn-block" type="button" data-share>${icon('share', 'icon-sm')}${t('share.btn')}</button>
         ${isOpen && state === 'open' ? `<a class="btn btn-secondary btn-block" href="#/kalkulacka?s=${encodeURIComponent(s.id)}" data-close-nav>${t('det.calcBtn')}</a>` : ''}
         ${isOpen && state === 'open' ? brokerButton() : ''}
         ${isOpen && state === 'open' ? `<div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5" data-close-nav>${t('mt5.help')}</a></div>` : ''}
@@ -234,6 +240,15 @@ export function openDetail(ctx, id, sourceEl = null) {
       const b = ev.target.closest('[data-j]');
       if (b) onJournal(el, s, b.dataset.j);
       if (ev.target.closest('[data-broker]')) openBroker(ctx, s);
+      const sh = ev.target.closest('[data-share]');
+      if (sh && !sh.disabled) {
+        sh.disabled = true;
+        shareSignal(s).then((r) => {
+          sh.disabled = false;
+          if (r === 'downloaded') toast(t('share.saved'));
+          else if (r === 'failed') toast(t('share.failed'));
+        });
+      }
       if (ev.target.closest('[data-stopnow]')) {
         const ids = (W.get().positions || []).filter((p) => p.sigId === s.id).map((p) => p.id);
         let tot = 0; ids.forEach((id) => { const r = W.close(ctx.data, id); if (r) tot += r.pnl; });
