@@ -107,6 +107,22 @@ export function setJournal(id, entry) {
   }, {});
 }
 
+/* An intraday preview signal (id number >= 900000) is replaced by the official signal of the same horizon,
+   day and symbol after the 22:45 run: move the user's journal entry to it so "I am in" is not lost. */
+export function migratePreviewJournal(data) {
+  const j = journal();
+  const ids = new Set(allOpen(data).map((s) => s.id).concat((data?.history?.signals || []).map((s) => s.id)));
+  const all = allOpen(data).concat(data?.history?.signals || []);
+  let moved = 0;
+  Object.keys(j).forEach((id) => {
+    const m = /^(.+)-(\d+)$/.exec(id);
+    if (!m || +m[2] < 900000 || ids.has(id)) return;
+    const twin = all.find((s) => s.id.startsWith(m[1] + '-') && +s.id.split('-').pop() < 900000);
+    if (twin && !j[twin.id]) { setJournal(twin.id, j[id]); setJournal(id, null); moved++; }
+  });
+  return moved;
+}
+
 /* Exit price implied by bot result (history has result_r but no exit price) */
 export function exitPrice(s) {
   if (s.status === 'target') return s.target;

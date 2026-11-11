@@ -163,6 +163,7 @@ async function loadAll() {
   state.fromCache = cached || (!navigator.onLine && !!data.signals);
   state.loading = false;
   state.lastFetch = Date.now();
+  D.migratePreviewJournal(data);
   Live.onData();
   rerender({ soft: true });
   maybeOpenDeepLink();
@@ -177,6 +178,7 @@ async function poll() {
     const changed = !data.signals || json.generated_at !== data.signals.generated_at;
     data.signals = json;
     state.fromCache = cached;
+    D.migratePreviewJournal(data);
     Live.onData();
     if (changed) {
       checkAlerts();
