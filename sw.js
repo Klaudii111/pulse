@@ -4,7 +4,7 @@
  * - Web push: shows notification from JSON payload {title, body, url, tag}
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'pulse-v1.8.0';
+const VERSION = 'pulse-v1.9.0';
 const SHELL = `${VERSION}-shell`;
 const DATA = 'pulse-data';
 
@@ -47,6 +47,12 @@ const SHELL_FILES = [
   './js/i18n/index.js',
   './js/i18n/cs.js',
   './js/i18n/en.js',
+  './js/i18n/cs19.js',
+  './js/i18n/en19.js',
+  './js/brief.js',
+  './js/market.js',
+  './js/tour.js',
+  './js/views/help.js',
   './fonts/archivo-latin.woff2',
   './fonts/archivo-latin-ext.woff2',
   './icons/icon.svg',
@@ -80,6 +86,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  /* 1.9.0: live price stream (Server-Sent Events) and other API calls never go through the cache */
+  if (url.pathname.includes('/api/') || (req.headers.get('accept') || '').includes('text/event-stream')) return;
 
   // Data: network-first
   if (url.pathname.includes('/data/') && url.pathname.endsWith('.json')) {

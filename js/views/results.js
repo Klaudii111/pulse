@@ -4,6 +4,8 @@ import { icon, seg, segMove, skBlock, ring, hzIcon } from '../ui.js';
 import { equityChart } from '../charts.js';
 import * as D from '../domain.js';
 import { rTip, VISIBLE_HZ, signalRow } from './signals.js';
+import * as B from '../brief.js';
+import { verifyUrl } from './detail.js';
 import { paperLink } from './paper.js';
 import { t } from '../i18n/index.js';
 import * as Live from '../live.js';
@@ -109,8 +111,9 @@ function horizons(perf) {
   </section>`;
 }
 
+/* 1.9.0: every closed trade (losses too) with its own small chart and a link to check the price independently */
 function histRow(s) {
-  return signalRow(s, new Date());
+  return `<div class="hist-card">${signalRow(s, new Date())}${B.miniChart(s)}<a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a></div>`;
 }
 
 function historyBlock(hist, hz, showR = true) {
@@ -134,6 +137,7 @@ function historyBlock(hist, hz, showR = true) {
 function lower(perf, hist, hz, showR) {
   return `<div class="res-lower">${monthly(hist, hz)}${horizons(perf)}</div>
   <h2 class="section-title">${t(histAll ? 'res.all' : 'res.last')}<small id="hist-count">${t('res.closed', { n: byHz(hist, hz).length })}</small></h2>
+  <p class="res-src">${icon('shield', 'icon-xs')}<span>${t('res.src')} <a class="link" href="#/duvera">${t('trust.title')}</a></span></p>
   <div class="hist" id="hist">${historyBlock(hist, hz, showR)}</div>`;
 }
 

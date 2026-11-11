@@ -27,9 +27,17 @@ let dataAt = 0;               // ms: how old the newest price data is (server up
 let serverOpen = null;        // market_open flag from quotes.json (null = unknown)
 let quotesMissingUntil = 0;   // quotes.json answered 404: try it again only after this time
 
-const toMs = (t) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t) || 0);
+/* times come as seconds, ms or ISO – Alpaca writes nanoseconds ("…:35.123456789Z"), trimmed to ms before parsing */
+const toMs = (t) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(String(t || '').replace(/(\.\d{3})\d+/, '$1')) || 0);
 
 const hist = new Map();          // symbol -> [{t: iso, p}] collected while the app is open (Terminál chart)
+const metaMap = new Map();      // symbol -> { src, delayed, open, at } (quotes.json 1.9.0 / stream)
+export const meta = (sym) => metaMap.get(sym) || null;
+function takeMeta(sym, q) {
+  if (!q || (q.src == null && q.delayed == null && q.open == null)) return;
+  const m = metaMap.get(sym) || {};
+  metaMap.set(sym, { src: q.src ?? m.src, delayed: q.delayed ?? m.delayed, open: typeof q.open === 'boolean' ? q.open : m.open, at: typeof q.open === 'boolean' ? Date.now() : m.at });
+}
 function take(sym, p, ts, pc) {
   if (!(p > 0) || !ts) return false;
   const cur = prices.get(sym);
@@ -45,9 +53,9 @@ function take(sym, p, ts, pc) {
 export const history = (sym) => hist.get(sym) || [];
 
 /* Honest freshness text for a price time (ms): "živě · před 12 s", "Data z 15:32 (zpožděno)", "Burza zavřená · poslední cena 22:00" */
-export function stamp(ts, now = Date.now()) {
+export function stamp(ts, now = Date.now(), open = null) {
   if (!ts) return { code: 'none', text: t('stamp.none') };
-  if (!marketOpen(new Date(now))) return { code: 'closed', text: t('stamp.closed', { time: F.time(new Date(ts)) }) };
+  if (!(open ?? marketOpen(new Date(now)))) return { code: 'closed', text: t('stamp.closed', { time: F.time(new Date(ts)) }) };
   const age = Math.max(0, Math.round((now - ts) / 1000));
   if (age < (L.FRESH_SEC || 60)) return { code: 'live', text: t('stamp.live', { s: age }) };
   return { code: 'stale', text: t('stamp.stale', { time: F.time(new Date(ts)) }) };
@@ -64,8 +72,8 @@ async function pollServer() {
     if (!at || Date.now() - at > (L.QUOTES_STALE_SEC || 120) * 1000) { serverOpen = null; if (source !== 'worker') dataAt = Math.max(dataAt, at); return false; }
     if (typeof j.market_open === 'boolean') serverOpen = j.market_open;
     let any = false;
-    Object.entries(j.q || {}).forEach(([sym, q]) => { if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close)) any = true; });
-    source = 'server'; dataAt = at;
+    Object.entries(j.q || {}).forEach(([sym, q]) => { takeMeta(sym, q); if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close)) any = true; });
+    source = 'server'; dataAt = Math.max(at, streamAt);
     if (any) mark();
     return true;
   } catch { return false; }
@@ -101,14 +109,15 @@ async function pollProxy() {
   }
   lastTickAt = dataAt;
   statusFns.forEach((fn) => { try { fn(); } catch { /* ignore */ } }); // refresh the live badge only
-  const sec = marketOpen() ? (ok ? (L.QUOTES_POLL_SEC || 15) : (L.POLL_SEC || 10)) : 120;
+  /* 1.9.0: quotes.json is written around the clock (currencies, crypto) -> keep polling it every 15 s also at night */
+  const sec = ok ? (L.QUOTES_POLL_SEC || 15) : marketOpen() ? (L.POLL_SEC || 10) : 120;
   pollTimer = setTimeout(pollProxy, sec * 1000);
 }
 const statusFns = new Set();
 export const onStatus = (fn) => { statusFns.add(fn); return () => statusFns.delete(fn); };
 export const onLive = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 export const lastTick = () => lastTickAt;
-export const dataTime = () => dataAt;
+export const dataTime = () => Math.max(dataAt, streamAt ? Math.min(streamAt, Date.now()) : 0);
 export const liveSource = () => source;
 
 /* US regular session in New York time (Mon-Fri 9:30-16:00). Holidays are not modelled;
@@ -142,7 +151,7 @@ function openSignals(data) {
 let extraFn = () => [];
 /* Extra symbols someone wants prices for (Obchodní platforma: chosen symbol + open fictional positions) */
 export const setExtraSymbols = (fn) => { extraFn = fn; };
-const symbols = () => [...new Set(openSignals(getData()).map((s) => s.symbol).concat('SPY', extraFn()))].slice(0, 50);
+const symbols = () => [...new Set(extraFn().concat(openSignals(getData()).map((s) => s.symbol), 'SPY'))].slice(0, 60);
 export const quote = (sym) => prices.get(sym) || null;
 const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
@@ -194,13 +203,51 @@ function mark() {
   }, L.RENDER_MS || 1500);
 }
 
+/* ---------- 1.9.0: real-time stream (Server-Sent Events, GET /api/stream?keys=…) ----------
+   ~1 update per second per symbol while it runs; quotes.json polling keeps running underneath (flags, previous close)
+   and is the fallback when the stream fails (reconnect with backoff) or on a GitHub Pages copy (no stream there). */
+let es = null, esKey = '', esFails = 0, esTimer = null, streamAt = 0;
+const streamUrl = () => (CONFIG.LIVE?.STREAM_URL && !location.hostname.endsWith('github.io') ? CONFIG.LIVE.STREAM_URL : '');
+export const streaming = () => !!es && Date.now() - streamAt < 30000;
+function closeStream() { if (es) { try { es.close(); } catch { /* ignore */ } } es = null; esKey = ''; }
+export function syncStream() {
+  if (!streamUrl() || typeof EventSource === 'undefined' || document.visibilityState !== 'visible') { closeStream(); return; }
+  const keys = symbols().slice(0, 80).join(',');
+  if (!keys) { closeStream(); return; }
+  if (es && keys === esKey) return;
+  closeStream();
+  clearTimeout(esTimer);
+  esKey = keys;
+  let got = false;
+  try { es = new EventSource(`${streamUrl()}?keys=${encodeURIComponent(keys)}`); } catch { es = null; return; }
+  es.onmessage = (ev) => {
+    let d; try { d = JSON.parse(ev.data); } catch { return; }
+    if (!d || !d.k) return;
+    got = true; esFails = 0; streamAt = Date.now();
+    takeMeta(d.k, d);
+    if (take(d.k, +d.p, toMs(d.t) || Date.now())) { dataAt = Math.max(dataAt, toMs(d.t) || Date.now()); mark(); }
+  };
+  es.onerror = () => {
+    /* the browser retries by itself; when it keeps failing, give up for a while (backoff) and live on quotes.json */
+    if (got) return;
+    esFails++;
+    if (esFails >= 3) {
+      closeStream();
+      const wait = Math.min(300000, 15000 * 2 ** Math.min(4, esFails - 3));
+      esTimer = setTimeout(syncStream, wait);
+    }
+  };
+}
+
 function stop() {
   clearTimeout(pollTimer); pollTimer = null; polledKey = '';
+  closeStream();
 }
 
 function start() {
   if (!enabled() || document.visibilityState !== 'visible') return;
   pollProxy();
+  syncStream();
 }
 
 /* Call once at boot. `dataGetter` returns the app's live data object. */
@@ -215,4 +262,5 @@ export function onData() {
   if (!enabled()) return;
   apply();
   if (symbols().join(',') !== polledKey) pollProxy();
+  syncStream();
 }

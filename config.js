@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.8.0',
+  APP_VERSION: '1.9.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -19,7 +19,9 @@ export const CONFIG = {
     /* paper.json (robot's Alpaca paper account) and quotes.json (live prices every 15 s) exist only on our server;
        on a GitHub Pages copy they are not requested (paper: null -> section hidden, quotes -> Cloudflare worker). */
     return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json',
-      paper: remote ? null : './data/paper.json', quotes: remote ? null : './data/quotes.json' };
+      paper: remote ? null : './data/paper.json', quotes: remote ? null : './data/quotes.json',
+      /* 1.9.0: what the Obchodní platforma can trade (indices, currencies, commodities, crypto, shares, ETFs) */
+      instruments: remote ? null : './data/instruments.json' };
   })(),
   /* Public address of the main app (install page QR code, push on GitHub Pages copies points users here) */
   APP_URL: 'https://pulse.178-105-154-81.sslip.io/',
@@ -28,7 +30,8 @@ export const CONFIG = {
    */
   /* Primary: ./data/quotes.json written by our server every 15 s (same origin, no rate limit).
      Fallback: the Worker, only when quotes.json is missing or older than QUOTES_STALE_SEC. */
-  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', POLL_SEC: 10, QUOTES_POLL_SEC: 15, QUOTES_STALE_SEC: 120, FRESH_SEC: 60, RENDER_MS: 1500 },
+  /* STREAM_URL (1.9.0): real-time prices from our server (Server-Sent Events); not used on GitHub Pages copies */
+  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', STREAM_URL: '/api/stream', POLL_SEC: 10, QUOTES_POLL_SEC: 15, QUOTES_STALE_SEC: 120, FRESH_SEC: 60, RENDER_MS: 1500 },
   /* Intraday scan of the server (Prague time, Mon-Fri): every 20 min at :05/:25/:45 while the US market is open */
   SCAN: { MINUTES: [5, 25, 45] },
 
@@ -103,10 +106,15 @@ export const CONFIG = {
       { id: 'aggressive', pct: 3 },
     ],
     LEVERAGE_MIN: 1,
+    /* fallback max leverage when an instrument has no max_leverage (instruments.json) */
     LEVERAGE_MAX: 5,
+    /* EU retail caps (ESMA) by instrument class, used when instruments.json does not say */
+    LEVERAGE_CAPS: { fx_major: 30, fx: 20, index: 20, gold: 20, commodity: 10, stock: 5, etf: 5, crypto: 2 },
+    /* fictional money the user can load on the demo account (account currency CZK; EUR / USD get /25 and /22) */
+    TOPUP: { CZK: [10000, 50000, 100000, 500000], EUR: [500, 2000, 4000, 20000], USD: [500, 2000, 4500, 20000] },
     /* Indicative FX used only to convert account currency to the instrument's
        USD/EUR price for a share count. Update as needed. Units per 1 USD. */
-    FX_PER_USD: { USD: 1, EUR: 0.864, CZK: 21.0 },
+    FX_PER_USD: { USD: 1, EUR: 0.864, CZK: 21.0, GBP: 0.76, JPY: 155, CHF: 0.82, AUD: 1.48 },
     /* Quote currency per symbol (default USD) */
     QUOTE_CCY: { DE40: 'EUR' },
   },

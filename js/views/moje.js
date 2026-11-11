@@ -7,6 +7,7 @@ import * as store from '../store.js';
 import { t } from '../i18n/index.js';
 import { icon, monogram } from '../ui.js';
 import { signalRow } from './signals.js';
+import * as B from '../brief.js';
 import { posStatus, orderRow } from './terminal.js';
 import { describe } from './events.js';
 import * as Feed from '../feed.js';
@@ -52,6 +53,7 @@ function platRow(p, ccy) {
   const inner = `${monogram(p.sym, p.name)}
     <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(p.sym)}</span><span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span>${p.lev > 1 ? `<span class="hz-tag">${t('term.levTag', { v: p.lev })}</span>` : ''}</span>
       <span class="tp-m num">${t('term.posMeta', { a: F.money(p.margin, ccy, 0), e: F.price(p.entry), p: F.price(p.px) })}</span>
+      <span class="tp-m tp-open">${F.esc(B.myOpenText(p, ccy))}</span>
       <span class="st-line tone-${st.tone}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b></span></span>
     <span class="tp-v num ${tone(p.pnl)}">${sm(p.pnl, ccy)}<small>${F.spct(p.pnlPct, 2)}</small></span>`;
   return `<div class="tp-row is-static tone-${tone(p.pnl)}">${attrs ? `<button class="tp-main" ${attrs}>${inner}</button>` : `<a class="tp-main" href="#/terminal">${inner}</a>`}</div>`;
@@ -77,7 +79,7 @@ export function render(ctx) {
     ? `<div class="tp-list">${m.rows.map((p) => platRow(p, m.wccy)).join('')}</div>`
     : `<p class="quiet">${t('moje.plat.none')}</p>`;
   const fol = m.sigs.length
-    ? `<div class="srow-list">${m.sigs.map((x, i) => signalRow(x.s, now, i)).join('')}</div>`
+    ? `<div class="bc-list">${B.byHorizon(m.sigs.map((x) => x.s), (x, i) => B.card(x, { data: ctx.data, now, compact: true, i }))}</div>`
     : `<div class="moje-hint">${icon('star')}<p>${t('moje.fol.none')}</p><a class="btn btn-secondary btn-small" href="#/signaly">${t('moje.fol.go')}</a></div>`;
   /* 1.8.0: my limit orders - waiting ones, then what happened to them lately (same texts as "Co se děje") */
   const pend = m.smw ? m.smw.w.orders : [];

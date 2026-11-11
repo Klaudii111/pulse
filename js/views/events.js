@@ -25,6 +25,8 @@ export function describe(e) {
     case 'my-open': return { ic: 'spark', tn: 'gold', title: t('ev.myOpen', { sym, side: side(e.side) }), sub: t('ev.myOpen.s', { a: F.money(e.v, e.ccy, 0) }), go: { href: '#/terminal' } };
     case 'my-close': return { ic: 'spark', tn: tone(e.v), title: t('ev.myClose', { sym }), sub: t(`term.why.${['tp', 'sl', 'out', 'signal', 'manual'].includes(e.why) ? e.why : 'manual'}`), val: Number.isFinite(e.v) ? sm(e.v, e.ccy) : '', go: { href: '#/terminal' } };
     /* 1.8.0: my limit orders */
+    case 'ord-auto': return { ic: 'spark', tn: 'up', title: t('ev.auto', { sym, side: side(e.side), v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t(e.reopen ? 'ev.auto.reopen' : 'ev.auto.s'), go: { href: '#/terminal' } };
+    case 'ord-autoLim': return { ic: 'clock', tn: 'gold', title: t('ev.autoLim', { sym, v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t('ev.auto.s'), go: { href: '#/terminal' } };
     case 'ord-placed': return { ic: 'clock', tn: 'gold', title: t('ev.ordPlaced', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t('ev.ordPlaced.s', { side: side(e.side), a: F.money(e.v, e.ccy, 0) }), go: { href: '#/terminal' } };
     case 'ord-filled': return { ic: 'check', tn: 'up', title: t('ev.ordFilled', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t(e.reopen ? 'ev.ordFilled.reopen' : 'ev.ordFilled.s', { side: side(e.side).charAt(0).toUpperCase() + side(e.side).slice(1) }), go: { href: '#/terminal' } };
     case 'ord-cancelled': return { ic: 'close', tn: 'gold', title: t('ev.ordCancelled', { sym, v: F.price(e.lim) }), sub: t('ev.ordCancelled.s'), go: { href: '#/terminal' } };

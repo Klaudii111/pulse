@@ -1,6 +1,7 @@
 // Robot's paper account (Alpaca Paper, fictional $100,000): ./data/paper.json written by the server (1.6.0).
 // Missing file -> everything here renders '' (section hidden).
 import * as F from '../format.js';
+import * as B from '../brief.js';
 import * as D from '../domain.js';
 import { t } from '../i18n/index.js';
 import { icon, monogram, sparkline } from '../ui.js';
@@ -43,7 +44,8 @@ function posRow(x, data) {
   return `<button class="pa-row" ${attrs}>
     ${monogram(x.symbol, '')}
     <span class="pa-id"><span class="pa-sym">${F.esc(x.symbol)} <span class="side-tag ${x.side === 'short' ? 'sell' : ''}">${sideTxt(x.side)}</span></span>
-      <span class="pa-meta num">${t('pa.qty', { q: F.num(+x.qty, 0), e: F.price(+x.avg_entry), p: F.price(+x.price) })}</span></span>
+      <span class="pa-meta num">${t('pa.qty', { q: F.num(+x.qty, 0), e: F.price(+x.avg_entry), p: F.price(+x.price) })}</span>
+      <span class="pa-meta">${F.esc(B.robotOpenText(x, data, sig?.stop))}</span></span>
     <span class="pa-r num ${tn}">${+x.pnl_usd >= 0 ? '+' : ''}${usd(+x.pnl_usd, 2)}<small>${F.spct(+x.pnl_pct, 2)}</small></span>
   </button>`;
 }

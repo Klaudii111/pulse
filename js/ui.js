@@ -244,7 +244,8 @@ function fallbackCopy(text) {
 export function monogram(symbol, name = '') {
   let h = 0;
   for (const c of symbol) h = (h * 31 + c.charCodeAt(0)) % 360;
-  const letters = symbol.replace(/[^A-Z]/g, '').slice(0, 1) || symbol.slice(0, 1);
+  /* index CFDs (US500, DE40 …): the first letter of the plain name (S&P, DAX) reads better than U / D */
+  const letters = (/^(US|DE|UK|JP)\d|^(XAU|XAG|WTI|BRENT|NATGAS)/.test(symbol) && name ? name.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase() : '') || symbol.replace(/[^A-Z]/g, '').slice(0, 1) || symbol.slice(0, 1);
   return `<span class="mono" style="--h:${h}" title="${F.esc(name)}" aria-hidden="true">${F.esc(letters)}</span>`;
 }
 

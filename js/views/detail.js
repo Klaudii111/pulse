@@ -10,6 +10,36 @@ import { instrumentText, glossaryFor } from '../explain.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 import { shareSignal } from '../share.js';
+import * as B from '../brief.js';
+import * as M from '../market.js';
+import * as store from '../store.js';
+
+/* 1.9.0 chart markers: ▲ robot bought (paper.json fill time), ▲ I bought (play money), ▼ exits */
+function chartMarks(ctx, s) {
+  const out = [];
+  const dir = s.action === 'SELL' ? -1 : 1;
+  const p = ctx.data?.paper;
+  const twin = (id) => String(id || '').replace(/-\d+$/, '');
+  const hit = (x) => x && x.signal_id && (x.signal_id === s.id || twin(x.signal_id) === twin(s.id));
+  const rp = (p?.positions || []).find(hit);
+  const rAt = rp && Date.parse(rp.filled_at || rp.opened_at || 0);
+  if (rp && rAt) out.push({ t: rAt, p: +rp.avg_entry, dir, kind: 'robot', label: t('mark.robot') });
+  (p?.closed || []).filter(hit).forEach((c) => {
+    const a = Date.parse(c.filled_at || c.opened_at || 0); if (a && c.avg_entry) out.push({ t: a, p: +c.avg_entry, dir, kind: 'robot', label: t('mark.robot') });
+    const b = Date.parse(c.closed_at || 0); if (b && c.exit) out.push({ t: b, p: +c.exit, dir: -dir, kind: 'exit', label: t('mark.robotOut') });
+  });
+  const w = store.get('wallet', null);
+  (w?.positions || []).filter((x) => x.sigId === s.id).forEach((x) => out.push({ t: x.entryT || x.openedAt, p: x.entry, dir: x.side === 'SELL' ? -1 : 1, kind: 'me', label: t('mark.me') }));
+  (w?.closed || []).filter((x) => x.sigId === s.id).forEach((x) => {
+    out.push({ t: x.entryT || x.openedAt, p: x.entry, dir: x.side === 'SELL' ? -1 : 1, kind: 'me', label: t('mark.me') });
+    out.push({ t: x.closedAt, p: x.exit, dir: x.side === 'SELL' ? 1 : -1, kind: 'exit', label: t('mark.meOut') });
+  });
+  const ex = s.status !== 'open' || s.intraday_hit ? D.exitPrice(s) : null;
+  const exAt = Date.parse(s.closed_at || s.hit_at || 0);
+  if (ex && exAt) out.push({ t: exAt, p: ex, dir: -dir, kind: 'exit', label: t('mark.end') });
+  return out;
+}
+export const verifyUrl = (sym) => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(M.tvSym(sym) || tvSymbol(sym))}`;
 
 let chartRef = null;
 let liveOff = null;
@@ -91,10 +121,11 @@ function onLiveDetail(el, ctx, s) {
   return () => document.removeEventListener('pulse:live', fn);
 }
 
-export function openDetail(ctx, id, sourceEl = null) {
+export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const s = D.findSignal(ctx.data, id);
   if (!s) { toast(t('det.notFound')); return; }
-  let pmode = defaultPriceMode(s);
+  /* 1.9.0: the chart opens on today's live line ("Živě") whenever there is one */
+  let pmode = hasToday(s) && s.status === 'open' && !s.intraday_hit ? 'today' : defaultPriceMode(s);
   const now = ctx.now();
   const isOpen = s.status === 'open';
   let state = liveState(s);
@@ -130,12 +161,38 @@ export function openDetail(ctx, id, sourceEl = null) {
       ${showR ? `<div style="text-align:right"><p class="kv-l">${t('det.inR')}</p><p class="mid num">${R(s.result_r)}</p></div>` : ''}</div>`;
   }
 
-  status = `<div data-status>${statusLine(s, { now, big: true })}</div>` + status;
+  /* 1.9.0: the four answers first – co to je (head), co mám udělat já, co udělal robot, jak se daří – then the chart */
+  const us = B.userState(s, now);
+  const td = B.todo(s, us, now);
+  const bot = B.robotLine(s, ctx.data);
+  const brief = `<div class="d-brief">
+      <p class="bc-tags">${B.stateChip(s, us)}<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
+      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
+      <p class="bc-todo is-big b-todo tone-${td.tone}">${F.esc(td.text)}</p>${td.sub ? `<p class="bc-sub">${F.esc(td.sub)}</p>` : ''}
+      ${bot ? `<p class="bc-bot b-bot">${icon('shield', 'icon-xs')}<span>${F.esc(bot)}</span></p>` : ''}
+      ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}
+      ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
+    </div>`;
+  const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
+  const legend = mk.size ? `<p class="pc-legend">${mk.has('robot') ? `<span class="lg-robot">▲ ${t('mark.robot')}</span>` : ''}${mk.has('me') ? `<span class="lg-me">▲ ${t('mark.me')}</span>` : ''}${mk.has('exit') ? `<span class="lg-exit">▼ ${t('mark.exit')}</span>` : ''}</p>` : '';
+  const chartHtml = s.price_path?.length > 1 ? `<div class="pchart">
+        <div class="pchart-headrow"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
+          ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
+          ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
+          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
+          <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
+          <span class="live-stamp" data-stamp></span></div>
+        ${legend}
+        <div class="pchart-box" id="pchart"></div>
+        <div class="tv-box" id="tvbox" hidden></div>
+        <a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
+        ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : '';
+  status = brief + `<div data-status>${statusLine(s, { now, big: true })}</div>` + chartHtml + status;
   const j = D.journal()[s.id];
   const html = `
     <div class="sheet-head">
-      <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}</div>
-        <p class="sheet-sub">${F.esc(s.name)}, ${F.CLASS_LABEL[s.asset_class] || ''}, ${F.HZ_LABEL[s.horizon]}</p></div></div>
+      <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="d-name b-what">${F.esc(B.whatIs(s.symbol, s.name).name)}</span><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span></div>
+        <p class="sheet-sub">${F.esc(B.whatIs(s.symbol, s.name).phrase)}</p></div></div>
       <div class="sheet-head-r">
         <button class="icon-btn fav-btn" type="button" data-action="follow" data-id="${F.esc(s.id)}" data-sym="${F.esc(s.symbol)}" aria-pressed="${D.isFollowed(s.id)}" aria-label="${t(D.isFollowed(s.id) ? 'fol.off' : 'fol.on')}" title="${t('fol.t')}">${icon('star', 'icon-sm')}</button>
         <button class="icon-btn" type="button" data-share aria-label="${t('share.btn')}" title="${t('share.btn')}">${icon('share', 'icon-sm')}</button>
@@ -144,18 +201,7 @@ export function openDetail(ctx, id, sourceEl = null) {
     </div>
     <div class="sheet-body">
       ${status}
-      ${est ? `<div class="entry-box is-${est.code}">${entryChip(est)}<p>${F.esc(est.note)}</p></div>` : ''}
       ${prox ? `<p class="prox-line ${prox.side === 'stop' ? 'down' : 'up'}">${icon('alert', 'icon-xs')}${t('det.prox', { v: F.pct(prox.dist, 1), side: t(`det.prox.${prox.side}`) })}</p>` : ''}
-      ${s.price_path?.length > 1 ? `<div class="pchart">
-        <div class="pchart-headrow"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
-          ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
-          ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
-          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
-          <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
-          <span class="live-stamp" data-stamp></span></div>
-        <div class="pchart-box" id="pchart"></div>
-        <div class="tv-box" id="tvbox" hidden></div>
-        ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>
       ${isOpen && state === 'open' ? `<section class="howto" aria-label="${t('det.howto.aria')}">
         <div class="howto-head"><h3 class="howto-t">${t('det.howto')}</h3><button class="btn btn-secondary btn-small" type="button" data-copy-order>${icon('copy', 'icon-sm')}${t('common.copy')}</button></div>
@@ -205,7 +251,8 @@ export function openDetail(ctx, id, sourceEl = null) {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
     const isLive = () => s.status === 'open' && !s.intraday_hit && Live.stamp(Date.parse(s.last_price_at || 0)).code === 'live';
-    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode, isLive }); }, 30);
+    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode, isLive, marks: () => chartMarks(ctx, s) }); }, 30);
+    if (focus === 'chart') setTimeout(() => { const c = el.querySelector('.pchart'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     let tvOn = false;
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
       const m = b.dataset.pmode;
@@ -213,7 +260,7 @@ export function openDetail(ctx, id, sourceEl = null) {
       const tvb = el.querySelector('#tvbox');
       if (m === 'tv') {
         box.hidden = true; tvb.hidden = false;
-        if (!tvOn) { tvOn = true; mountTV(tvb, tvSymbol(s.symbol)); }
+        if (!tvOn) { tvOn = true; mountTV(tvb, M.tvSym(s.symbol) || tvSymbol(s.symbol)); }
         return;
       }
       box.hidden = false; if (tvb) tvb.hidden = true;

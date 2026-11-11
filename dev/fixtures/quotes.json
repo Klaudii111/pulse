@@ -1,0 +1,471 @@
+{
+ "updated_at": "2026-11-11T17:37:51+00:00",
+ "source": "alpaca-iex",
+ "sources": [
+  "alpaca-iex",
+  "alpaca-crypto",
+  "yahoo"
+ ],
+ "market_open": true,
+ "q": {
+  "US500": {
+   "p": 7633.7,
+   "t": "2026-11-11T17:37:21Z",
+   "prev_close": 7520.93,
+   "chg_pct": 1.499,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "US100": {
+   "p": 28558.06,
+   "t": "2026-11-11T17:37:19Z",
+   "prev_close": 27740.795,
+   "chg_pct": 2.946,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "US30": {
+   "p": 52351.62,
+   "t": "2026-11-11T17:37:20Z",
+   "prev_close": 52231.89,
+   "chg_pct": 0.229,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "DE40": {
+   "p": 26662.77,
+   "t": "2026-11-11T17:00:00Z",
+   "prev_close": 26347.45,
+   "chg_pct": 1.197,
+   "src": "yahoo",
+   "delayed": true,
+   "open": false
+  },
+  "UK100": {
+   "p": 10835.47,
+   "t": "2026-11-11T16:35:30Z",
+   "prev_close": 10751.59,
+   "chg_pct": 0.78,
+   "src": "yahoo",
+   "delayed": true,
+   "open": false
+  },
+  "JP225": {
+   "p": 61248.59,
+   "t": "2026-11-11T06:45:02Z",
+   "prev_close": 60459.58,
+   "chg_pct": 1.305,
+   "src": "yahoo",
+   "delayed": true,
+   "open": false
+  },
+  "EURUSD": {
+   "p": 1.1094,
+   "t": "2026-11-11T17:36:34Z",
+   "prev_close": 1.1167,
+   "chg_pct": -0.654,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "GBPUSD": {
+   "p": 1.3274,
+   "t": "2026-11-11T17:36:34Z",
+   "prev_close": 1.3346,
+   "chg_pct": -0.539,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "USDJPY": {
+   "p": 159.852,
+   "t": "2026-11-11T17:37:20Z",
+   "prev_close": 158.702,
+   "chg_pct": 0.725,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "USDCHF": {
+   "p": 0.8335,
+   "t": "2026-11-11T17:37:19Z",
+   "prev_close": 0.8244,
+   "chg_pct": 1.104,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "AUDUSD": {
+   "p": 0.6854,
+   "t": "2026-11-11T17:35:34Z",
+   "prev_close": 0.6871,
+   "chg_pct": -0.247,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "EURCZK": {
+   "p": 24.3815,
+   "t": "2026-11-11T17:37:11Z",
+   "prev_close": 24.332,
+   "chg_pct": 0.203,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "USDCZK": {
+   "p": 21.975,
+   "t": "2026-11-11T17:37:20Z",
+   "prev_close": 21.7811,
+   "chg_pct": 0.89,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "XAUUSD": {
+   "p": 4011.1,
+   "t": "2026-11-11T17:27:18Z",
+   "prev_close": 4030.2,
+   "chg_pct": -0.474,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "XAGUSD": {
+   "p": 52.17,
+   "t": "2026-11-11T17:27:16Z",
+   "prev_close": 51.225,
+   "chg_pct": 1.845,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "WTI": {
+   "p": 86.97,
+   "t": "2026-11-11T17:27:19Z",
+   "prev_close": 86.04,
+   "chg_pct": 1.081,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "BRENT": {
+   "p": 93.02,
+   "t": "2026-11-11T17:27:00Z",
+   "prev_close": 91.49,
+   "chg_pct": 1.672,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "NATGAS": {
+   "p": 3.291,
+   "t": "2026-11-11T17:27:21Z",
+   "prev_close": 3.296,
+   "chg_pct": -0.152,
+   "src": "yahoo",
+   "delayed": true,
+   "open": true
+  },
+  "BTCUSD": {
+   "p": 74331.75,
+   "t": "2026-11-11T17:33:28.921466948Z",
+   "prev_close": 73698.0125,
+   "chg_pct": 0.86,
+   "src": "alpaca-crypto",
+   "delayed": false,
+   "open": true
+  },
+  "ETHUSD": {
+   "p": 2090.5,
+   "t": "2026-11-11T17:31:30.95345627Z",
+   "prev_close": 2050.438,
+   "chg_pct": 1.954,
+   "src": "alpaca-crypto",
+   "delayed": false,
+   "open": true
+  },
+  "SOLUSD": {
+   "p": 85.513,
+   "t": "2026-11-11T17:23:19.41458484Z",
+   "prev_close": 83.2725,
+   "chg_pct": 2.691,
+   "src": "alpaca-crypto",
+   "delayed": false,
+   "open": true
+  },
+  "WDAY": {
+   "p": 189.02,
+   "t": "2026-11-11T17:36:41.997347116Z",
+   "prev_close": 188.875,
+   "chg_pct": 0.077,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "XOM": {
+   "p": 165.68,
+   "t": "2026-11-11T17:37:43.273191055Z",
+   "prev_close": 164.42,
+   "chg_pct": 0.766,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "IT": {
+   "p": 188.11,
+   "t": "2026-11-11T17:37:48.608850115Z",
+   "prev_close": 188.61,
+   "chg_pct": -0.265,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "EFX": {
+   "p": 187.68,
+   "t": "2026-11-11T17:35:16.927508838Z",
+   "prev_close": 188.24,
+   "chg_pct": -0.297,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "PM": {
+   "p": 193.68,
+   "t": "2026-11-11T17:37:44.664841729Z",
+   "prev_close": 194.27,
+   "chg_pct": -0.304,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "XLE": {
+   "p": 62.985,
+   "t": "2026-11-11T17:37:45.216825149Z",
+   "prev_close": 62.23,
+   "chg_pct": 1.213,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "XLV": {
+   "p": 187.6,
+   "t": "2026-11-11T17:36:30.114619177Z",
+   "prev_close": 188.895,
+   "chg_pct": -0.686,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "XLP": {
+   "p": 90.52,
+   "t": "2026-11-11T17:37:13.117190413Z",
+   "prev_close": 91.04,
+   "chg_pct": -0.571,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "MRNA": {
+   "p": 246.84,
+   "t": "2026-11-11T17:37:46.809022808Z",
+   "prev_close": 250.67,
+   "chg_pct": -1.528,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "DBC": {
+   "p": 30.895,
+   "t": "2026-11-11T17:36:10.421376738Z",
+   "prev_close": 30.75,
+   "chg_pct": 0.472,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "HUM": {
+   "p": 444.395,
+   "t": "2026-11-11T17:37:45.732591091Z",
+   "prev_close": 437.97,
+   "chg_pct": 1.467,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "VTRS": {
+   "p": 20.895,
+   "t": "2026-11-11T17:37:37.191047989Z",
+   "prev_close": 20.86,
+   "chg_pct": 0.168,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "AAPL": {
+   "p": 354.43,
+   "t": "2026-11-11T17:37:19.336110946Z",
+   "prev_close": 348.49,
+   "chg_pct": 1.704,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "MSFT": {
+   "p": 521.1,
+   "t": "2026-11-11T17:37:38.333700639Z",
+   "prev_close": 533.18,
+   "chg_pct": -2.266,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "NVDA": {
+   "p": 176.945,
+   "t": "2026-11-11T17:37:48.935370553Z",
+   "prev_close": 168.785,
+   "chg_pct": 4.835,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "AMZN": {
+   "p": 266.4,
+   "t": "2026-11-11T17:37:44.268029237Z",
+   "prev_close": 270.9,
+   "chg_pct": -1.661,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "GOOGL": {
+   "p": 293.865,
+   "t": "2026-11-11T17:37:37.937796376Z",
+   "prev_close": 287.445,
+   "chg_pct": 2.233,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "META": {
+   "p": 642.92,
+   "t": "2026-11-11T17:37:47.412215897Z",
+   "prev_close": 641.43,
+   "chg_pct": 0.232,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "TSLA": {
+   "p": 393.37,
+   "t": "2026-11-11T17:37:46.448861611Z",
+   "prev_close": 379.73,
+   "chg_pct": 3.592,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "NFLX": {
+   "p": 64.015,
+   "t": "2026-11-11T17:37:49.607199711Z",
+   "prev_close": 63.25,
+   "chg_pct": 1.209,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "AMD": {
+   "p": 559.045,
+   "t": "2026-11-11T17:37:49.018422968Z",
+   "prev_close": 515.09,
+   "chg_pct": 8.533,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "JPM": {
+   "p": 343.145,
+   "t": "2026-11-11T17:37:20.009794749Z",
+   "prev_close": 342.03,
+   "chg_pct": 0.326,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "V": {
+   "p": 422.17,
+   "t": "2026-11-11T17:37:44.240109458Z",
+   "prev_close": 423.0,
+   "chg_pct": -0.196,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "KO": {
+   "p": 96.72,
+   "t": "2026-11-11T17:37:35.414680278Z",
+   "prev_close": 96.91,
+   "chg_pct": -0.196,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "PLTR": {
+   "p": 173.165,
+   "t": "2026-11-11T17:34:23.820890638Z",
+   "prev_close": 168.91,
+   "chg_pct": 2.519,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "COIN": {
+   "p": 138.41,
+   "t": "2026-11-11T17:36:25.018503137Z",
+   "prev_close": 132.08,
+   "chg_pct": 4.793,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "SPY": {
+   "p": 761.06,
+   "t": "2026-11-11T17:37:44.087018349Z",
+   "prev_close": 749.93,
+   "chg_pct": 1.484,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "QQQ": {
+   "p": 694.515,
+   "t": "2026-11-11T17:37:48.400707141Z",
+   "prev_close": 674.82,
+   "chg_pct": 2.919,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "DIA": {
+   "p": 523.02,
+   "t": "2026-11-11T17:35:53.586743316Z",
+   "prev_close": 521.8,
+   "chg_pct": 0.234,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  },
+  "GLD": {
+   "p": 366.73,
+   "t": "2026-11-11T17:37:19.595414088Z",
+   "prev_close": 369.42,
+   "chg_pct": -0.728,
+   "src": "alpaca-iex",
+   "delayed": false,
+   "open": true
+  }
+ }
+}

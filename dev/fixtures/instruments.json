@@ -1,0 +1,515 @@
+{
+ "updated_at": "2026-11-11T17:34:20+00:00",
+ "groups": [
+  {
+   "id": "indexy",
+   "name_cs": "Indexy",
+   "name_en": "Indices",
+   "items": [
+    {
+     "key": "US500",
+     "name_cs": "S&P 500 (USA)",
+     "name_en": "S&P 500 (USA)",
+     "class": "index",
+     "ccy": "USD",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "US100",
+     "name_cs": "Nasdaq 100 (USA)",
+     "name_en": "Nasdaq 100 (USA)",
+     "class": "index",
+     "ccy": "USD",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "US30",
+     "name_cs": "Dow Jones 30 (USA)",
+     "name_en": "Dow Jones 30 (USA)",
+     "class": "index",
+     "ccy": "USD",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "DE40",
+     "name_cs": "DAX 40 (Německo)",
+     "name_en": "DAX 40 (Germany)",
+     "class": "index",
+     "ccy": "EUR",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 9:00–17:30",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "UK100",
+     "name_cs": "FTSE 100 (Velká Británie)",
+     "name_en": "FTSE 100 (UK)",
+     "class": "index",
+     "ccy": "GBP",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 9:00–17:30",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "JP225",
+     "name_cs": "Nikkei 225 (Japonsko)",
+     "name_en": "Nikkei 225 (Japan)",
+     "class": "index",
+     "ccy": "JPY",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 1:00–7:30 (pauza 3:30–4:30)",
+     "src": "yahoo",
+     "delayed": true
+    }
+   ]
+  },
+  {
+   "id": "meny",
+   "name_cs": "Měny",
+   "name_en": "Forex",
+   "items": [
+    {
+     "key": "EURUSD",
+     "name_cs": "EUR/USD (euro / americký dolar)",
+     "name_en": "EUR/USD (euro / US dollar)",
+     "class": "fx",
+     "ccy": "USD",
+     "max_leverage": 30,
+     "decimals": 5,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "GBPUSD",
+     "name_cs": "GBP/USD (libra / americký dolar)",
+     "name_en": "GBP/USD (pound / US dollar)",
+     "class": "fx",
+     "ccy": "USD",
+     "max_leverage": 30,
+     "decimals": 5,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "USDJPY",
+     "name_cs": "USD/JPY (americký dolar / jen)",
+     "name_en": "USD/JPY (US dollar / yen)",
+     "class": "fx",
+     "ccy": "JPY",
+     "max_leverage": 30,
+     "decimals": 3,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "USDCHF",
+     "name_cs": "USD/CHF (americký dolar / švýcarský frank)",
+     "name_en": "USD/CHF (US dollar / Swiss franc)",
+     "class": "fx",
+     "ccy": "CHF",
+     "max_leverage": 30,
+     "decimals": 5,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "AUDUSD",
+     "name_cs": "AUD/USD (australský dolar / americký dolar)",
+     "name_en": "AUD/USD (Australian dollar / US dollar)",
+     "class": "fx",
+     "ccy": "USD",
+     "max_leverage": 20,
+     "decimals": 5,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "EURCZK",
+     "name_cs": "EUR/CZK (euro / koruna)",
+     "name_en": "EUR/CZK (euro / Czech koruna)",
+     "class": "fx",
+     "ccy": "CZK",
+     "max_leverage": 20,
+     "decimals": 4,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "USDCZK",
+     "name_cs": "USD/CZK (americký dolar / koruna)",
+     "name_en": "USD/CZK (US dollar / Czech koruna)",
+     "class": "fx",
+     "ccy": "CZK",
+     "max_leverage": 20,
+     "decimals": 4,
+     "hours_cs": "Ne 23:00 – Pá 23:00",
+     "src": "yahoo",
+     "delayed": true
+    }
+   ]
+  },
+  {
+   "id": "komodity",
+   "name_cs": "Komodity",
+   "name_en": "Commodities",
+   "items": [
+    {
+     "key": "XAUUSD",
+     "name_cs": "Zlato",
+     "name_en": "Gold",
+     "class": "commodity",
+     "ccy": "USD",
+     "max_leverage": 20,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 0:00–23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "XAGUSD",
+     "name_cs": "Stříbro",
+     "name_en": "Silver",
+     "class": "commodity",
+     "ccy": "USD",
+     "max_leverage": 10,
+     "decimals": 3,
+     "hours_cs": "Po–Pá 0:00–23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "WTI",
+     "name_cs": "Ropa WTI",
+     "name_en": "WTI crude oil",
+     "class": "commodity",
+     "ccy": "USD",
+     "max_leverage": 10,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 0:00–23:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "BRENT",
+     "name_cs": "Ropa Brent",
+     "name_en": "Brent crude oil",
+     "class": "commodity",
+     "ccy": "USD",
+     "max_leverage": 10,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 2:00–24:00",
+     "src": "yahoo",
+     "delayed": true
+    },
+    {
+     "key": "NATGAS",
+     "name_cs": "Zemní plyn",
+     "name_en": "Natural gas",
+     "class": "commodity",
+     "ccy": "USD",
+     "max_leverage": 10,
+     "decimals": 3,
+     "hours_cs": "Po–Pá 0:00–23:00",
+     "src": "yahoo",
+     "delayed": true
+    }
+   ]
+  },
+  {
+   "id": "krypto",
+   "name_cs": "Kryptoměny",
+   "name_en": "Crypto",
+   "items": [
+    {
+     "key": "BTCUSD",
+     "name_cs": "Bitcoin",
+     "name_en": "Bitcoin",
+     "class": "crypto",
+     "ccy": "USD",
+     "max_leverage": 2,
+     "decimals": 2,
+     "hours_cs": "nonstop",
+     "src": "alpaca-crypto",
+     "delayed": false
+    },
+    {
+     "key": "ETHUSD",
+     "name_cs": "Ethereum",
+     "name_en": "Ethereum",
+     "class": "crypto",
+     "ccy": "USD",
+     "max_leverage": 2,
+     "decimals": 2,
+     "hours_cs": "nonstop",
+     "src": "alpaca-crypto",
+     "delayed": false
+    },
+    {
+     "key": "SOLUSD",
+     "name_cs": "Solana",
+     "name_en": "Solana",
+     "class": "crypto",
+     "ccy": "USD",
+     "max_leverage": 2,
+     "decimals": 2,
+     "hours_cs": "nonstop",
+     "src": "alpaca-crypto",
+     "delayed": false
+    }
+   ]
+  },
+  {
+   "id": "akcie",
+   "name_cs": "Akcie USA",
+   "name_en": "US stocks",
+   "items": [
+    {
+     "key": "AAPL",
+     "name_cs": "Apple",
+     "name_en": "Apple",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "MSFT",
+     "name_cs": "Microsoft",
+     "name_en": "Microsoft",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "NVDA",
+     "name_cs": "NVIDIA",
+     "name_en": "NVIDIA",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "AMZN",
+     "name_cs": "Amazon",
+     "name_en": "Amazon",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "GOOGL",
+     "name_cs": "Alphabet (Google)",
+     "name_en": "Alphabet (Google)",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "META",
+     "name_cs": "Meta Platforms (Facebook)",
+     "name_en": "Meta Platforms (Facebook)",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "TSLA",
+     "name_cs": "Tesla",
+     "name_en": "Tesla",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "NFLX",
+     "name_cs": "Netflix",
+     "name_en": "Netflix",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "AMD",
+     "name_cs": "AMD",
+     "name_en": "AMD",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "JPM",
+     "name_cs": "JPMorgan Chase",
+     "name_en": "JPMorgan Chase",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "V",
+     "name_cs": "Visa",
+     "name_en": "Visa",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "KO",
+     "name_cs": "Coca-Cola",
+     "name_en": "Coca-Cola",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "PLTR",
+     "name_cs": "Palantir",
+     "name_en": "Palantir",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "COIN",
+     "name_cs": "Coinbase",
+     "name_en": "Coinbase",
+     "class": "stock",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    }
+   ]
+  },
+  {
+   "id": "etf",
+   "name_cs": "ETF",
+   "name_en": "ETFs",
+   "items": [
+    {
+     "key": "SPY",
+     "name_cs": "SPY – ETF na S&P 500",
+     "name_en": "SPY – S&P 500 ETF",
+     "class": "etf",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "QQQ",
+     "name_cs": "QQQ – ETF na Nasdaq 100",
+     "name_en": "QQQ – Nasdaq 100 ETF",
+     "class": "etf",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "DIA",
+     "name_cs": "DIA – ETF na Dow Jones",
+     "name_en": "DIA – Dow Jones ETF",
+     "class": "etf",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    },
+    {
+     "key": "GLD",
+     "name_cs": "GLD – ETF na zlato",
+     "name_en": "GLD – gold ETF",
+     "class": "etf",
+     "ccy": "USD",
+     "max_leverage": 5,
+     "decimals": 2,
+     "hours_cs": "Po–Pá 15:30–22:00",
+     "src": "alpaca-iex",
+     "delayed": false
+    }
+   ]
+  }
+ ]
+}

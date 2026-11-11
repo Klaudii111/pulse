@@ -66,6 +66,7 @@ function slideB() {
         <span class="onb-r-v num">${F.pct(p.pct, 0)}</span><span class="onb-r-t">${t(`onb.b.${p.id}`)}</span><span class="onb-r-s">${t(`onb.b.${p.id}.s`)}</span></button>`).join('')}
     </div>
     <p class="onb-line" id="onb-line">${riskLine(cs)}</p>
+    <p class="onb-note onb-wal">${icon('wallet', 'icon-sm')}<span>${t('onb.b.wallet')}</span></p>
   </section>`;
 }
 
@@ -94,6 +95,9 @@ function slideC() {
     <p class="onb-s">${t('onb.c.s')}</p>
     <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('bell')}</span><div><p class="onb-bt">${t('onb.c.pushT')}</p><p class="onb-bs">${t('onb.c.pushS')}</p></div></div><div id="onb-push">${pushBlock()}</div></div>
     <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('plus-square')}</span><div><p class="onb-bt">${t('onb.c.installT')}</p><p class="onb-bs">${t('onb.c.installS')}</p></div></div><div id="onb-inst">${installBlock()}</div></div>
+    <div class="onb-box onb-auto"><div class="onb-box-h"><span class="onb-ic">${icon('spark')}</span><div><p class="onb-bt">${t('onb.c.autoT')}</p><p class="onb-bs">${t('onb.c.autoS')}</p></div></div>
+      <div class="onb-yn" role="radiogroup" aria-label="${t('onb.c.autoT')}"><button type="button" class="chip" role="radio" data-onb="auto-yes" aria-checked="${!!store.get('autoCopy', null)?.on}">${t('onb.c.autoYes')}</button><button type="button" class="chip" role="radio" data-onb="auto-no" aria-checked="${store.get('autoCopy', null)?.on === false}">${t('onb.c.autoNo')}</button></div></div>
+    <button type="button" class="btn btn-ghost btn-block onb-how" data-onb="how">${icon('help', 'icon-sm')}${t('onb.c.how')}</button>
     <p class="onb-fine">${F.esc(t('disclaimer'))}</p>
   </section>`;
 }
@@ -139,8 +143,8 @@ export function open(onDone) {
     const cs = D.calcState();
     el.querySelector('#onb-line').textContent = riskLine(cs);
     /* the play-money platform account follows the currency while it is still unused */
-    const w = store.get('wallet', null);
-    if (w && w.ccy !== cs.ccy && !(w.positions || []).length && !(w.closed || []).length) W.reset(cs.ccy);
+    /* 1.9.0: the same amount is loaded as fictional money on the platform (while the account is still unused) */
+    if (W.untouched()) W.resetWith(cs.ccy, cs.account);
   };
   acc.addEventListener('input', () => {
     typed = true;
@@ -186,6 +190,11 @@ export function open(onDone) {
     const a = b.dataset.onb;
     if (a === 'skip') finish('skipped');
     else if (a === 'next') { const i = idx(); if (i >= 2) finish('done'); else go(i + 1); }
+    else if (a === 'auto-yes' || a === 'auto-no') {
+      store.set('autoCopy', { on: a === 'auto-yes', at: Date.now() });
+      el.querySelectorAll('[data-onb^="auto-"]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    }
+    else if (a === 'how') { finish('how'); setTimeout(() => window.__pulseGo && window.__pulseGo('#/jak'), 350); }
     else if (a === 'push') {
       b.disabled = true;
       const r = await P.subscribePush().catch(() => ({ ok: false }));

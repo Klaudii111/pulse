@@ -4,6 +4,7 @@ import * as store from './store.js';
 import * as F from './format.js';
 import { LESSONS } from './lessons.js';
 import { t, L } from './i18n/index.js';
+import * as Live from './live.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
 
@@ -270,8 +271,11 @@ export function emptyReason(data, hz) {
 /* ---------- FX (from signals.json "fx", fallback config) ---------- */
 export function fxRates(data) {
   const f = data?.signals?.fx;
+  /* 1.9.0: live USD/CZK and EUR/USD quotes (quotes.json) win; other currencies (GBP, JPY …) from the config */
+  const uc = Live.quote('USDCZK')?.p, eu = Live.quote('EURUSD')?.p;
+  if (uc > 0 && eu > 0) return { ...CONFIG.CALC.FX_PER_USD, USD: 1, CZK: uc, EUR: 1 / eu, as_of: null, source: 'live' };
   if (f && f.USDCZK > 0 && f.EURCZK > 0) {
-    return { USD: 1, CZK: f.USDCZK, EUR: f.USDCZK / f.EURCZK, as_of: f.as_of || null, source: 'data' };
+    return { ...CONFIG.CALC.FX_PER_USD, USD: 1, CZK: f.USDCZK, EUR: f.USDCZK / f.EURCZK, as_of: f.as_of || null, source: 'data' };
   }
   return { ...CONFIG.CALC.FX_PER_USD, as_of: null, source: 'config' };
 }

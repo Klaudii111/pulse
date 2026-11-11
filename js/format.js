@@ -32,10 +32,12 @@ export const pct = (v, dec = 1) => num(v, dec) + pctSep() + '%';
 export const spct = (v, dec = 1) => signed(v, dec) + pctSep() + '%';
 export const sr = (v, dec = 2) => signed(v, dec) + '\u00a0R';
 
-export function price(v) {
+/* dec (1.9.0): the instrument's own decimals (currencies 4–5, indices 2) when known */
+export function price(v, dec = null) {
   if (v == null) return '–';
+  if (dec != null) return num(v, dec);
   const a = Math.abs(v);
-  return a >= 5000 ? num(v, 0) : a >= 1000 ? num(v, 1, 1) : num(v, 2);
+  return a >= 5000 ? num(v, 0) : a >= 1000 ? num(v, 1, 1) : a >= 10 ? num(v, 2) : a >= 2 ? num(v, 3) : num(v, 5);
 }
 
 export function money(v, ccy = 'CZK', dec) {

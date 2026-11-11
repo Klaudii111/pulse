@@ -7,6 +7,7 @@ import { t, L } from '../i18n/index.js';
 import { pricePoints } from '../charts.js';
 import { sparkline } from '../ui.js';
 import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
+import * as B from '../brief.js';
 
 const seen = new Set(); // ladders animate only the first time a card appears
 
@@ -222,6 +223,63 @@ function buyBanner(s, now) {
   return `<p class="buy-when is-${b.code}">${icon(b.code === 'now' ? 'spark' : 'clock', 'icon-xs')}<span>${F.esc(b.text)}</span></p>`;
 }
 
+/* 1.9.0: Signály = horizon tabs (1 den · 2–3 dny · Týden · Měsíc · Vše) + quick filters from the user's side
+   (Ke koupi teď · Mám koupeno · Robot drží · Ukončené). Each card answers the four questions (js/brief.js). */
+const HZ_TABS = ['DEN', 'DNY', 'TYDEN', 'MESIC', 'ALL'];
+const UF = ['buy', 'mine', 'robot', 'done'];
+const curHz = () => { const h = store.get('sigHz', 'ALL'); return HZ_TABS.includes(h) ? h : 'ALL'; };
+const curUf = () => { const f = store.get('sigF', 'buy'); return UF.includes(f) ? f : 'buy'; };
+const hidden = (h) => (CONFIG.HIDDEN_HORIZONS || []).includes(h);
+
+function openIn(data, hz) {
+  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h) && (hz === 'ALL' || h === hz));
+  return hzs.flatMap((h) => (data.signals.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })));
+}
+function closedIn(data, hz) {
+  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h) && (hz === 'ALL' || h === hz));
+  return (data.history?.signals || []).filter((x) => hzs.includes(x.horizon))
+    .sort((a, b) => String(b.closed_at || b.created_at).localeCompare(String(a.closed_at || a.created_at)));
+}
+
+function hzDesc(data, hz) {
+  const n = openIn(data, hz).filter((x) => !B.isDone(x, D.clock())).length;
+  return t(`u.hzDesc.${hz}`, { n, u: F.unit('signal', n) });
+}
+
+function sigBody(ctx) {
+  const { data } = ctx;
+  const now = ctx.now();
+  const hz = curHz(), f = curUf();
+  if (hz !== 'ALL' && hidden(hz)) return `<section class="calm u-empty">${calmArt()}<div><h3 class="calm-t">${t('u.den.t')}</h3><p class="calm-s">${t('u.den.s')}</p></div></section>`;
+  if (hz !== 'ALL' && !D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
+  const sigsIn = openIn(data, hz);
+  const bk = B.buckets(sigsIn, now);
+  /* same as the ROBOT DRŽÍ box on Dnes: what the robot holds on its paper account + too late to buy */
+  bk.robot = sigsIn.filter((x) => B.robotHolds(x, data) && !bk.robot.includes(x) && !bk.done.includes(x)).concat(bk.robot);
+  const chips = `<div class="uf-chips" role="group" aria-label="${t('u.filter')}">${UF.map((k) => {
+    const n = k === 'done' ? bk.done.length + closedIn(data, hz).length : bk[k].length;
+    return `<button type="button" class="uf-chip" data-action="sig-uf" data-id="${k}" aria-pressed="${k === f}">${t(`u.f.${k}`)}<span class="num">${n}</span></button>`;
+  }).join('')}</div>`;
+  let list;
+  if (f === 'done') {
+    const rows = bk.done.concat(closedIn(data, hz)).slice(0, 60);
+    list = rows.length ? `<div class="dev-list">${rows.map((x, i) => signalRow(x, now, i)).join('')}</div>` : `<p class="empty-line">${t('u.empty.done')}</p>`;
+  } else {
+    const l = bk[f];
+    list = l.length ? `<div class="grid-signals">${l.map((x, i) => B.card(x, { data, now, i })).join('')}</div>`
+      : `<p class="empty-line">${f === 'buy' ? t('u.empty.buy', { when: F.esc(nextCheck(data, now)) }) : t(`u.empty.${f}`)}</p>`;
+  }
+  const lead = f === 'robot' ? `<p class="u-robot-note">${icon('info', 'icon-xs')}<span>${t('u.robotNote')}</span></p>` : '';
+  return chips + lead + list;
+}
+
+/* "Další kontrola za X min" (market open) or the next official run */
+export function nextCheck(data, now) {
+  const scan = nextScan(now);
+  if (scan) return t('u.nextIn', { m: Math.max(1, Math.round((scan - now) / 60000)) });
+  return D.nextRunLabel(data, now);
+}
+
 export function render(ctx) {
   const { data, state } = ctx;
   const head = `<header class="page-head"><div><h1 class="page-title">${t('sig.title')}</h1>
@@ -230,52 +288,16 @@ export function render(ctx) {
     if (state.error) return head + errorBlock();
     return head + `<div class="grid-signals">${skCard()}${skCard()}${skCard()}</div>`;
   }
-  const s = data.signals;
   const now = ctx.now();
-  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h));
-  const all = hzs.flatMap((h) => (s.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })));
-  const fresh = all.filter((x) => D.isNew(x, data) && x.status === 'open' && !x.intraday_hit);
-  const events = data.calendar?.events || [];
-  let i = 0;
-  const freshCards = fresh.map((x) => `<div class="sig-wrap">${buyBanner(x, now)}${signalCard(x, { data, events, now, i: i++, showHz: true })}${investBtn(x)}</div>`).join('');
+  const hz = curHz();
+  const items = HZ_TABS.map((h) => ({ id: h, label: t(`u.tab.${h}`), count: h === 'ALL' || !hidden(h) ? openIn(data, h).filter((x) => !B.isDone(x, now)).length : 0 }));
   return head + `
-    <p class="headline">${fresh.length ? t('sig.headline', { n: fresh.length }) : t('sig.headline0')}</p>
-    <div class="signals-top">${nextLine(ctx.data, now)}${regimeLine(s.regime)}</div>
+    <div class="seg-wrap hz-tabs">${seg({ name: 'shz', label: t('u.tabs'), items, active: hz })}</div>
+    <p class="hz-desc" id="hz-desc">${hzDesc(data, hz)}</p>
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
-    <section aria-labelledby="sec-today">
-      <h2 class="section-title" id="sec-today">${t('sig.todayBuy')}${fresh.length ? `<small>${fresh.length}</small>` : ''}</h2>
-      <p class="section-sub">${t('sig.todayBuy.s')}</p>
-      ${fresh.length ? `<div class="grid-signals">${freshCards}</div>` : emptyState(ctx, null)}
-    </section>
-    <section aria-labelledby="sec-dev" class="dev">
-      <h2 class="section-title" id="sec-dev">${t('sig.dev')}</h2>
-      <p class="section-sub">${t('sig.dev.s')}</p>
-      <div class="seg-wrap">${seg({ name: 'dev', small: true, label: t('sig.dev'), items: [{ id: 'ALL', label: t('sig.filter.all') }, ...hzs.map((h) => ({ id: h, hz: h, label: F.HZ_LABEL[h], count: (s.tracks[h] || []).length }))], active: devFilter(hzs) })}</div>
-      <div id="sig-list">${devList(ctx, devFilter(hzs))}</div>
-    </section>
+    <div id="sig-body">${sigBody(ctx)}</div>
+    <div class="signals-top u-below">${nextLine(ctx.data, now)}${regimeLine(data.signals.regime)}</div>
     ${disclaimer()}`;
-}
-
-function devFilter(hzs) {
-  const f = store.get('devHz', 'ALL');
-  return f === 'ALL' || hzs.includes(f) ? f : 'ALL';
-}
-
-/* Every signal the robot issued: open ones first (live), then closed ones with their result */
-function devList(ctx, f) {
-  const { data } = ctx;
-  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h));
-  const pick = (h) => f === 'ALL' || h === f;
-  const open = hzs.filter(pick).flatMap((h) => (data.signals.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })))
-    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  const closed = (data.history?.signals || []).filter((x) => hzs.includes(x.horizon) && pick(x.horizon))
-    .sort((a, b) => String(b.closed_at || b.created_at).localeCompare(String(a.closed_at || a.created_at)));
-  if (!open.length && !closed.length) return `<p class="empty-line">${t('sig.dev.empty')}</p>`;
-  const events = data.calendar?.events || [];
-  let i = 0;
-  const rows = (l) => `<div class="dev-list">${l.map((x) => devRow(x, ctx.now(), i++)).join('')}</div>`;
-  return (open.length ? `<h3 class="sub-title">${t('sig.dev.open')}<small>${open.length}</small></h3>${rows(open)}` : '')
-    + (closed.length ? `<h3 class="sub-title">${t('sig.dev.closed')}<small>${closed.length}</small></h3>${rows(closed)}` : '');
 }
 
 /* Fictional trade in the Obchodní platforma, prefilled from the signal */
@@ -323,36 +345,21 @@ export function errorBlock() {
     <button class="btn btn-secondary btn-small" style="margin-top:16px" data-action="reload">${t('common.reload')}</button></div>`;
 }
 
+function rebody(ctx) {
+  const root = document.getElementById('view');
+  const b = root.querySelector('#sig-body');
+  if (b) { b.innerHTML = sigBody(ctx); b.classList.remove('is-enter'); void b.offsetWidth; b.classList.add('is-enter'); ctx.afterRender && ctx.afterRender(b, true); }
+  const d = root.querySelector('#hz-desc'); if (d) d.innerHTML = hzDesc(ctx.data, curHz());
+}
+
 export const actions = {
+  'sig-uf'(el, ev, ctx) { haptic(); store.set('sigF', el.dataset.id); rebody(ctx); },
   seg(el, ev, ctx) {
-    if (el.dataset.segName === 'dev') {
-      const f = el.dataset.id;
-      haptic();
-      store.set('devHz', f);
-      const root = document.getElementById('view');
-      segMove(root, 'dev', f);
-      const l = root.querySelector('#sig-list');
-      if (l) {
-        l.innerHTML = devList(ctx, f);
-        l.classList.remove('is-enter'); void l.offsetWidth; l.classList.add('is-enter');
-        ctx.afterRender && ctx.afterRender(l, true);
-      }
-      return true;
-    }
-    if (el.dataset.segName !== 'hz') return false;
-    const hz = el.dataset.id;
+    if (el.dataset.segName !== 'shz') return false;
     haptic();
-    store.set('hz', hz);
-    const root = document.getElementById('view');
-    segMove(root, 'hz', hz);
-    const hint = root.querySelector('#hz-hint span');
-    if (hint) hint.textContent = F.HZ_HINT[hz];
-    const l = root.querySelector('#sig-list');
-    if (l) {
-      l.innerHTML = devList(ctx, "ALL");
-      l.classList.remove('is-enter'); void l.offsetWidth; l.classList.add('is-enter');
-      ctx.afterRender && ctx.afterRender(l, true);
-    }
+    store.set('sigHz', el.dataset.id);
+    segMove(document.getElementById('view'), 'shz', el.dataset.id);
+    rebody(ctx);
     return true;
   },
 };

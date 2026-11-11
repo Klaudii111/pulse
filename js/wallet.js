@@ -13,19 +13,30 @@ import { CONFIG } from '../config.js';
 import * as store from './store.js';
 import * as D from './domain.js';
 import * as Live from './live.js';
+import * as M from './market.js';
+// 1.9.0 - like a real CFD broker account (kept simple on screen, details in "Podrobnosti"):
+//  * leverage up to the instrument's EU cap (market.js), the deposit (margin) is the most you can lose on a trade;
+//  * spread: a buy opens at the ask, a sell at the bid (mid +- half spread), so a new trade starts slightly negative;
+//  * overnight fee (swap) for leveraged positions held over 23:00 Prague, a cash row in Historie;
+//  * 0.5 % currency conversion fee on the result when the instrument currency differs from the account currency;
+//  * margin level = equity / used margin; warning (margin call) below 100 %, stop-out below 50 % closes the biggest loser;
+//  * market closed -> no instant trades (limit orders yes); a gap through the stop closes at the (worse) open price;
+//  * negative-balance protection: the balance never goes below zero;
+//  * fictional money can be loaded / withdrawn (w.cash rows); results are measured against what was put in.
 
 const KEY = 'wallet';
 export const START = { CZK: 100000, EUR: 4000, USD: 4500 };
 
 function fresh(ccy) {
   const c = ['CZK', 'EUR', 'USD'].includes(ccy) ? ccy : 'CZK';
-  return { v: 1, ccy: c, start: START[c], balance: START[c], positions: [], closed: [], orders: [], ordEnded: [], olog: [], createdAt: Date.now(), day: null, dayEquity: null, seq: 1 };
+  return { v: 1, ccy: c, start: START[c], balance: START[c], positions: [], closed: [], orders: [], ordEnded: [], olog: [], cash: [], createdAt: Date.now(), day: null, dayEquity: null, seq: 1 };
 }
 
 function norm(w) {
   if (!Array.isArray(w.orders)) w.orders = [];      // wallets from 1.6/1.7 have no orders yet
   if (!Array.isArray(w.ordEnded)) w.ordEnded = [];
   if (!Array.isArray(w.olog)) w.olog = [];
+  if (!Array.isArray(w.cash)) w.cash = [];          // 1.9.0: loads, withdrawals, overnight fees
   return w;
 }
 
@@ -42,6 +53,15 @@ export function reset(ccy = D.calcState().ccy) {
   return w;
 }
 
+/* a fresh account with the amount chosen in the first-run guide (1.9.0) */
+export function resetWith(ccy, amount) {
+  const w = fresh(ccy);
+  const a = Math.round(+amount);
+  if (a > 0 && a <= 100000000) { w.start = a; w.balance = a; }
+  save(w);
+  return w;
+}
+
 const dirOf = (side) => (side === 'SELL' ? -1 : 1);
 
 /* Current price of a symbol: live quote, else the signal's last price */
@@ -54,12 +74,20 @@ export function priceOf(sym, data) {
 }
 
 /* Money result of a position at price px, in the wallet currency */
-export const pnlAt = (pos, px) => pos.notional * dirOf(pos.side) * (px - pos.entry) / pos.entry;
+/* a buy is closed at the bid, a sell at the ask (mid price px -+ half spread) */
+export const exitPx = (pos, px) => px - dirOf(pos.side) * (pos.half || 0);
+export const pnlAt = (pos, px) => pos.notional * dirOf(pos.side) * (exitPx(pos, px) - pos.entry) / pos.entry;
 /* What happens at the stop-loss / take-profit (shown before the user confirms) */
 export function outcome({ side, entry, amount, lev, sl, tp }) {
   const notional = amount * lev;
   const at = (px) => (px > 0 && entry > 0 ? notional * dirOf(side) * (px - entry) / entry : null);
-  return { notional, atStop: sl > 0 ? Math.max(-amount, at(sl)) : null, atTarget: tp > 0 ? at(tp) : null };
+  return { notional, atStop: sl > 0 ? Math.max(-amount, at(sl)) : null, atTarget: tp > 0 ? at(tp) : null, wipe: 100 / Math.max(1, lev) };
+}
+/* Costs shown in the ticket before confirming (approximate, like a broker's cost sheet) */
+export function costs({ sym, side, amount, lev, px, ccy }) {
+  const notional = amount * lev;
+  const sp = M.spread(sym, px);
+  return { spread: px > 0 ? notional * sp / px : 0, swap: lev > 1 ? notional * M.swapRate(sym, side) : 0, conv: M.ccy(sym) !== ccy, spreadPx: sp };
 }
 
 /* Amount for a risk profile: lose `riskPct` of the balance when the stop is hit */
@@ -84,8 +112,40 @@ export function summary(data) {
   const equity = w.balance + open;
   const today = new Date().toDateString();
   if (w.day !== today) { w.day = today; w.dayEquity = equity; save(w); }
-  return { w, rows, balance: w.balance, equity, open, used, reserved, free: equity - used - reserved, today: equity - (w.dayEquity ?? equity), total: equity - w.start };
+  const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
+  /* margin level (%): equity / money held in open trades; null without open trades */
+  const level = used > 0 ? (equity / used) * 100 : null;
+  return { w, rows, balance: w.balance, equity, open, used, reserved, free: equity - used - reserved, today: equity - (w.dayEquity ?? equity), total: equity - putIn, putIn,
+    totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
+
+/* ---------- Fictional money: load / withdraw (1.9.0) ---------- */
+function cashRow(w, k, amount, extra = {}) {
+  w.cash.unshift({ id: `c${w.seq++}`, k, amount, at: Date.now(), ...extra });
+  w.cash = w.cash.slice(0, 300);
+}
+export function deposit(amount) {
+  const a = Math.round(+amount);
+  if (!(a > 0) || a > 100000000) return { ok: false, reason: 'amount' };
+  const w = get();
+  w.balance += a;
+  if (w.dayEquity != null) w.dayEquity += a; // "Dnes" shows trading only, not the load
+  cashRow(w, 'dep', a);
+  save(w);
+  return { ok: true };
+}
+export function withdraw(data, amount) {
+  const a = Math.round(+amount);
+  if (!(a > 0)) return { ok: false, reason: 'amount' };
+  if (a > Math.floor(summary(data).free)) return { ok: false, reason: 'wdFree' };
+  const w = get();
+  w.balance -= a;
+  if (w.dayEquity != null) w.dayEquity -= a;
+  cashRow(w, 'wd', -a);
+  save(w);
+  return { ok: true };
+}
+export const untouched = () => { const w = store.get(KEY, null); return !w || (!w.positions?.length && !w.closed?.length && !(w.cash || []).length && !w.orders?.length); };
 
 /* SL / TP must be on the right side of the price the trade starts at (null = fine, else the error code) */
 function levelsBad(side, px, sl, tp) {
@@ -94,11 +154,12 @@ function levelsBad(side, px, sl, tp) {
   if (tp > 0 && dir * (tp - px) <= 0) return 'tp';
   return null;
 }
-const clampLev = (lev) => Math.max(CONFIG.CALC.LEVERAGE_MIN, Math.min(CONFIG.CALC.LEVERAGE_MAX, Math.round(lev)));
+const clampLev = (lev, sym) => Math.max(CONFIG.CALC.LEVERAGE_MIN, Math.min(M.maxLev(sym), Math.round(lev)));
 
 /* The position itself (shared by "Hned" and a filled limit order) */
-function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId, order = null }) {
-  const pos = { id: `w${w.seq++}`, sym, name, side, entry, entryT, lev, margin: amount, notional: amount * lev, sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, openedAt: Date.now(), sigId };
+function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId, order = null, half = 0, mid = null }) {
+  const pos = { id: `w${w.seq++}`, sym, name, side, entry, entryT, lev, margin: amount, notional: amount * lev, sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, openedAt: Date.now(), sigId,
+    half, mid: mid ?? entry, ccy: M.ccy(sym), swap: 0, swapAt: Date.now() };
   if (order) pos.order = order;
   w.positions.push(pos);
   /* journal: never overwrite the user's own entry (only a fresh one, or one this wallet wrote) */
@@ -111,13 +172,16 @@ export function open(data, { sym, name = '', side, amount, lev = 1, sl = null, t
   const w = get();
   const q = priceOf(sym, data);
   if (!q || !(q.p > 0)) return { ok: false, reason: 'noPrice' };
+  /* market closed -> no instant trade (a limit order may wait) */
+  if (!M.isOpen(sym)) return { ok: false, reason: 'closed' };
   const s = summary(data);
   if (!(amount > 0)) return { ok: false, reason: 'amount' };
   if (amount > s.free + 0.01) return { ok: false, reason: 'free' };
   /* a stop on the wrong side would close the trade at once -> refuse */
   const bad = levelsBad(side, q.p, sl, tp);
   if (bad) return { ok: false, reason: bad };
-  const pos = addPos(w, { sym, name, side, entry: q.p, entryT: q.t || Date.now(), lev: clampLev(lev), amount, sl, tp, sigId });
+  const half = M.spread(sym, q.p) / 2;
+  const pos = addPos(w, { sym, name, side, entry: q.p + dirOf(side) * half, entryT: q.t || Date.now(), lev: clampLev(lev, sym), amount, sl, tp, sigId, half, mid: q.p });
   save(w);
   return { ok: true, pos };
 }
@@ -184,7 +248,7 @@ export function placeOrder(data, { sym, name = '', side, limit, amount, lev = 1,
   if (bad) return { ok: false, reason: bad };
   const now = Date.now();
   const v = valid === 'sig' && !sigId ? 'gtc' : valid;
-  const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now) };
+  const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now) };
   w.orders.push(o);
   logOrder(w, 'placed', o);
   save(w);
@@ -252,7 +316,7 @@ export function checkOrders(data) {
     const hit = pricesSince(data, o.sym, from).find((p) => p.t <= until && marketable(o.side, o.limit, p.p));
     if (hit) {
       const reopen = hit.t < SESSION_START;
-      const pos = addPos(w, { sym: o.sym, name: o.name, side: o.side, entry: o.limit, entryT: hit.t, lev: o.lev, amount: o.amount, sl: o.sl, tp: o.tp, sigId: o.sigId, order: o.id });
+      const pos = addPos(w, { sym: o.sym, name: o.name, side: o.side, entry: o.limit, entryT: hit.t, lev: o.lev, amount: o.amount, sl: o.sl, tp: o.tp, sigId: o.sigId, order: o.id, half: M.spread(o.sym, o.limit) / 2 });
       endOrder(w, o, 'filled', { fillT: hit.t, fillPx: hit.p, src: hit.src, reopen, pos: pos.id });
       filled.push({ ...pos, reopen, fillT: hit.t });
       return;
@@ -265,10 +329,13 @@ export function checkOrders(data) {
 
 function closeIn(w, pos, px, why) {
   const pnl = pnlAt(pos, px);
-  const loss = Math.max(-pos.margin, pnl); // never lose more than the money put in
-  w.balance += loss;
+  /* 0.5 % conversion fee on the result when the instrument trades in another currency than the account */
+  const fee = pos.ccy && pos.ccy !== w.ccy ? Math.abs(pnl) * M.CONV_FEE : 0;
+  const loss = Math.max(-pos.margin, pnl - fee); // never lose more than the money put in (fees included)
+  const net = Math.max(-w.balance, loss);       // negative-balance protection
+  w.balance += net;
   w.positions = w.positions.filter((x) => x.id !== pos.id);
-  const rec = { ...pos, exit: px, pnl: loss, pnlPct: (loss / pos.margin) * 100, closedAt: Date.now(), why };
+  const rec = { ...pos, exit: exitPx(pos, px), mid: px, pnl: net, fee: Math.max(0, Math.min(fee, pnl - net)), pnlPct: (net / pos.margin) * 100, closedAt: Date.now(), why };
   w.closed.unshift(rec);
   w.closed = w.closed.slice(0, 200);
   const j = pos.sigId ? D.journal()[pos.sigId] : null;
@@ -301,10 +368,42 @@ function signalOf(data, pos) {
 }
 
 /* Called on every live tick and every data refresh. Returns the positions closed automatically. */
+/* number of 23:00 Prague moments in (a, b] */
+function prague23(x) {
+  const p = new Date(new Date(x).toLocaleString('en-US', { timeZone: 'Europe/Prague' }));
+  const u = new Date(new Date(x).toLocaleString('en-US', { timeZone: 'UTC' }));
+  const off = p - u;
+  return Date.UTC(p.getFullYear(), p.getMonth(), p.getDate(), 23, 0) - off;
+}
+export function nightsBetween(a, b) {
+  let c = prague23(a), n = 0;
+  if (c <= a) c += 86400000;
+  while (c <= b && n < 400) { n++; c += 86400000; }
+  return n;
+}
+/* overnight fee for leveraged positions -> cash rows "Poplatek přes noc" */
+function chargeSwaps(w, now = Date.now()) {
+  let any = false;
+  w.positions.forEach((pos) => {
+    if (pos.swapAt == null) pos.swapAt = pos.openedAt;
+    if (!(pos.lev > 1)) { pos.swapAt = now; return; }
+    const n = nightsBetween(pos.swapAt, now);
+    if (!n) return;
+    const fee = Math.min(Math.max(0, w.balance), pos.notional * M.swapRate(pos.sym, pos.side) * n);
+    pos.swap = (pos.swap || 0) + fee;
+    pos.swapAt = now;
+    any = true;
+    if (fee > 0) { w.balance -= fee; cashRow(w, 'swap', -fee, { sym: pos.sym, n }); }
+  });
+  return any;
+}
+
 export function check(data) {
   const w = store.get(KEY, null);
   if (!w || !w.positions?.length) return [];
+  norm(w);
   const done = [];
+  const swapped = chargeSwaps(w);
   [...w.positions].forEach((pos) => {
     const dir = dirOf(pos.side);
     const sig = pos.sigId ? signalOf(data, pos) : null;
@@ -312,7 +411,12 @@ export function check(data) {
     /* only a price newer than the one the position was opened at may close it */
     if (q && q.t && q.t > (pos.entryT || pos.openedAt)) {
       /* gap through the stop: exit at the (worse) market price, not at the stop level */
-      if (pos.sl && dir * (q.p - pos.sl) <= 0) { done.push(closeIn(w, pos, dir > 0 ? Math.min(q.p, pos.sl) : Math.max(q.p, pos.sl), 'sl')); return; }
+      if (pos.sl && dir * (exitPx(pos, q.p) - pos.sl) <= 0) {
+        const h = pos.half || 0;
+        const at = dir > 0 ? Math.min(q.p, pos.sl + h) : Math.max(q.p, pos.sl - h); // mid price that closes exactly at the stop, or worse
+        const gap = Math.abs(exitPx(pos, at) - pos.sl) / pos.sl > 0.001; // opened beyond the stop (night / weekend gap)
+        done.push(closeIn(w, pos, at, gap ? 'slgap' : 'sl')); return;
+      }
       if (pnlAt(pos, q.p) <= -pos.margin) { done.push(closeIn(w, pos, q.p, 'out')); return; }
       if (pos.tp && dir * (pos.tp - q.p) <= 0) { done.push(closeIn(w, pos, pos.tp, 'tp')); return; }
     }
@@ -323,8 +427,55 @@ export function check(data) {
       if (px > 0) done.push(closeIn(w, pos, px, sig.status === 'target' || sig.intraday_hit === 'target' ? 'tp' : sig.status === 'stop' || sig.intraday_hit === 'stop' ? 'sl' : 'signal'));
     }
   });
-  if (done.length) save(w);
+  /* account stop-out: margin level below 50 % -> close the biggest losing position first, until it is back above */
+  for (let k = 0; k < 20 && w.positions.length; k++) {
+    let used = 0, open = 0, worst = null;
+    w.positions.forEach((pos) => {
+      const q = priceOf(pos.sym, data);
+      const pnl = q ? Math.max(-pos.margin, pnlAt(pos, q.p)) : 0;
+      used += pos.margin; open += pnl;
+      if (!worst || pnl < worst.pnl) worst = { pos, pnl, px: q ? q.p : pos.mid || pos.entry };
+    });
+    const level = used > 0 ? (w.balance + open) / used * 100 : 1000;
+    if (level >= 50 || !worst || worst.pnl >= 0) break;
+    done.push(closeIn(w, worst.pos, worst.px, 'stopout'));
+  }
+  if (done.length || swapped) save(w);
   return done;
+}
+
+/* ---------- "Robot obchoduje za mě" (1.9.0): copy buyable robot signals into my fictional account ----------
+   mode: 'now' = buy at the live price (market open, price at / better than the entry),
+         otherwise a limit order at the signal's entry that waits until the signal ends.
+   Size: my capital x my risk profile (onboarding / calculator): lose riskPct of the balance at the stop, at most 10 % of equity.
+   Every signal is copied once (w.copied). A copy made while the app was closed says so (reopen). */
+export function autoOpen(data, sig, mode, onSince = 0) {
+  const w = get();
+  w.copied = Array.isArray(w.copied) ? w.copied : [];
+  if (w.copied.includes(sig.id)) return { ok: false, reason: 'done' };
+  const q = priceOf(sig.symbol, data);
+  if (!q) return { ok: false, reason: 'noPrice' };
+  const s = summary(data);
+  const prof = CONFIG.CALC.RISK_PROFILES.find((p) => p.id === D.calcState().profile) || CONFIG.CALC.RISK_PROFILES[0];
+  const px = mode === 'now' ? q.p : sig.entry;
+  let amount = amountForRisk(w, { entry: px, sl: sig.stop, lev: 1, riskPct: prof.pct }) || 0;
+  amount = Math.floor(Math.min(amount, s.equity * 0.1, s.free)); // at most 10 % of the account per trade (like the robot)
+  if (!(amount > 0)) return { ok: false, reason: 'free' };
+  /* "the app was closed": the signal came while the switch was already on, but before this app session */
+  const ca = Date.parse(sig.created_at || 0);
+  const reopen = ca < SESSION_START && ca > onSince;
+  let r;
+  if (mode === 'now' && M.isOpen(sig.symbol)) r = open(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id });
+  else r = placeOrder(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, limit: sig.entry, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id, valid: 'sig', sig });
+  if (!r.ok && (r.reason === 'limitNowBuy' || r.reason === 'limitNowSell') && M.isOpen(sig.symbol)) r = open(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id });
+  if (!r.ok) return r;
+  const w2 = get();
+  w2.copied = [sig.id, ...(Array.isArray(w2.copied) ? w2.copied : [])].slice(0, 400);
+  const p = r.pos || r.order;
+  const qty = p.notional ? p.notional / (p.entry * 1) : null;
+  w2.olog.unshift({ id: `${sig.id}:auto:${Date.now()}`, k: r.pos ? 'auto' : 'autoLim', oid: p.id, sym: sig.symbol, side: sig.action, limit: r.pos ? p.entry : p.limit, amount, sigId: sig.id, at: Date.now(), reopen });
+  save(w2);
+  return { ok: true, pos: r.pos || null, order: r.order || null, amount, reopen, qty };
 }
 
 /* Symbols the terminal wants live prices for (positions + the chosen symbol) */

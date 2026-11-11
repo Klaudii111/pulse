@@ -205,6 +205,16 @@ export function priceChart(box, s, opts = {}) {
     const area = `${d}L${xe.toFixed(1)},${(h - pad.b).toFixed(1)}L${X(0).toFixed(1)},${(h - pad.b).toFixed(1)}Z`;
     const live = !!(opts.isLive && opts.isLive());
     const first = path[0].t, lastT = path[path.length - 1].t;
+    /* 1.9.0 markers: where the robot bought, where I bought, exits (▲ in, ▼ out) - placed at the nearest point in time */
+    const t0 = Date.parse(first), t1 = Date.parse(lastT);
+    const marks = (opts.marks ? opts.marks() : []).filter((m) => m && m.p > 0 && m.t >= t0 - 60000 && m.t <= t1 + 300000).map((m) => {
+      let best = 0, bd = Infinity;
+      path.forEach((pt, i) => { const d = Math.abs(Date.parse(pt.t) - m.t); if (d < bd) { bd = d; best = i; } });
+      const x = X(best), y = Y(m.p);
+      const upTri = m.dir > 0;
+      const tri = upTri ? `M${x - 6},${y + 11}L${x + 6},${y + 11}L${x},${y + 2}Z` : `M${x - 6},${y - 11}L${x + 6},${y - 11}L${x},${y - 2}Z`;
+      return `<g class="pc-mark is-${m.kind}"><path d="${tri}"/><text x="${x}" y="${upTri ? y + 23 : y - 15}" text-anchor="middle" class="ax pc-mark-l">${F.esc(m.label)}</text></g>`;
+    }).join('');
     const intraday = mode === 'today' || mode === '5d' || s.horizon === 'DEN';
     geo = { path, X, Y, pad, w, intraday };
     box.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${F.esc(s.symbol)}">
@@ -215,6 +225,7 @@ export function priceChart(box, s, opts = {}) {
       <path class="pc-line" d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
       ${live ? `<circle class="pc-ping" cx="${xe}" cy="${ye}" r="5" fill="${col}"/>` : ''}
       <circle cx="${xe}" cy="${ye}" r="4.5" fill="${live ? col : 'var(--ink-3)'}" stroke="var(--raise)" stroke-width="2"/>
+      ${marks}
       ${labels.map((l) => `<text x="${w - pad.r + 10}" y="${l.y.toFixed(1)}" dy="0.35em" class="ax lvl num ${l.now ? 'is-now' : ''}" fill="${l.c}">${F.esc(l.txt)}</text>`).join('')}
       <text x="${pad.l}" y="${h - 5}" class="ax">${intraday ? (nyDayOf(first) === nyDayOf(lastT) ? F.time(first) : F.dmTime(first)) : F.dm(first)}</text>
       <text x="${xe}" y="${h - 5}" class="ax" text-anchor="end">${intraday ? F.time(lastT) : F.dm(lastT)}</text>

@@ -3,7 +3,8 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast } from './ui.js';
+import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet } from './ui.js';
+import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
 import * as Home from './views/home.js';
 import * as Signals from './views/signals.js';
@@ -23,6 +24,10 @@ import * as Feed from './feed.js';
 import * as Events from './views/events.js';
 import * as Moje from './views/moje.js';
 import * as Onb from './onboarding.js';
+import * as Mkt from './market.js';
+import * as B from './brief.js';
+import * as Tour from './tour.js';
+import * as Help from './views/help.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -43,13 +48,13 @@ const TABS = [
   { id: 'vysledky', icon: 'results' },
   { id: 'vice', icon: 'more' },
 ];
-const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5']);
+const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
 const PARENT = { robot: 'vysledky', moje: 'dnes', udalosti: 'dnes' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
-  signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions },
+  signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions, mount: () => setTimeout(() => Tour.maybeHint(), 900) },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
   terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
@@ -58,6 +63,8 @@ const VIEWS = {
   udalosti: { title: 'ev.title', render: Events.render, mount: Events.mount, enter: Events.beforeRender },
   stahnout: { title: 'title.stahnout', render: Pages.renderInstall },
   mt5: { title: 'title.mt5', render: Pages.renderMt5 },
+  jak: { title: 'jak.title', render: Help.renderHow },
+  duvera: { title: 'trust.title', render: Help.renderTrust },
   vice: { title: 'nav.vice', render: More.renderMore },
   info: { title: 'title.info', render: More.renderInfo },
   nastaveni: { title: 'title.nastaveni', render: More.renderSettings, mount: More.mountSettings, actions: More.actions },
@@ -104,7 +111,13 @@ function renderChrome() {
   const mode = data.signals?.mode;
   const badge = mode === 'paper' ? `<span class="demo-badge" title="${F.esc(t('badge.paper'))}"><span class="db-long">${t('badge.paper')}</span><span class="db-short">${t('badge.paperShort')}</span></span>`
     : mode === 'live' ? `<span class="demo-badge is-live">${t('badge.live')}</span>` : '';
-  document.querySelectorAll('[data-slot="badge"]').forEach((el) => { el.innerHTML = badge; });
+  /* 1.9.0: my fictional money is always visible (tap = Obchodní platforma); the DEMO word rides inside the pill */
+  let pill = badge;
+  try {
+    const sm = W.summary(data);
+    pill = `<a class="bal-pill" href="#/terminal" aria-label="${F.esc(t('u.pill', { v: F.money(sm.equity, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num">${F.money(sm.equity, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
+  } catch { /* storage blocked: keep the badge */ }
+  document.querySelectorAll('[data-slot="badge"]').forEach((el) => { if (el.innerHTML !== pill) el.innerHTML = pill; });
   const ls = Live.status();
   const lt = Live.dataTime();
   const liveHtml = ls === 'off' ? '' : `<span class="live-badge is-${ls}" title="${F.esc(lt ? Live.stamp(lt).text : '')}"><i aria-hidden="true"></i>${t(`live.${ls}`, { time: lt ? F.time(new Date(lt)) : '' })}</span>`;
@@ -178,7 +191,7 @@ async function fetchJSON(url) {
 async function loadAll() {
   state.loading = true;
   const keys = ['signals', 'history', 'performance', 'calendar', 'league', 'paper'];
-  const results = await Promise.allSettled(keys.map((k) => (CONFIG.DATA[k] ? fetchJSON(CONFIG.DATA[k]) : Promise.reject(new Error('off')))));
+  const [results] = await Promise.all([Promise.allSettled(keys.map((k) => (CONFIG.DATA[k] ? fetchJSON(CONFIG.DATA[k]) : Promise.reject(new Error('off'))))), Mkt.ready() ? null : Mkt.load()]);
   let cached = false;
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') { data[keys[i]] = r.value.json; cached = cached || (keys[i] === 'signals' && r.value.cached); }
@@ -208,15 +221,33 @@ async function pollPaper() {
 }
 
 /* fictional positions of the Obchodní platforma: auto close on stop-loss / take-profit / signal close */
+/* 1.9.0 "Robot obchoduje za mě": every buyable signal is copied once into my fictional account */
+function autoCopy() {
+  if (!store.get('autoCopy', null)?.on || !data.signals) return false;
+  const now = D.clock();
+  let any = false;
+  D.allOpen(data).filter((s) => D.horizonAllowed(data, s.horizon) && (CONFIG.HIDDEN_HORIZONS || []).indexOf(s.horizon) < 0).forEach((s) => {
+    const us = B.userState(s, now);
+    if (us.code !== 'buy') return;
+    const td = B.todo(s, us, now);
+    const r = W.autoOpen(data, s, td.code === 'now' ? 'now' : 'lim', store.get('autoCopy', null)?.at || 0);
+    if (!r.ok) return;
+    any = true;
+    toast(t(r.pos ? (r.reopen ? 'auto.boughtReopen' : 'auto.bought') : 'auto.waiting', { sym: s.symbol, v: F.price(r.pos ? r.pos.entry : s.entry), a: F.money(r.amount, W.get().ccy, 0) }), { timeout: 7000 });
+  });
+  return any;
+}
+
 function walletCheck() {
+  const copied = autoCopy();
   /* 1.8.0: pending limit orders first (a fill becomes a position that the stop / target check below watches) */
   const ord = W.checkOrders(data);
   ord.filled.forEach((p) => toast(t(p.reopen ? 'term.auto.fillReopen' : 'term.auto.fill', { sym: p.sym, side: F.SIDE[p.side], v: F.price(p.entry) }), { timeout: 7000 }));
   ord.expired.forEach((o) => toast(t('term.auto.expired', { sym: o.sym, v: F.price(o.limit) }), { timeout: 6000 }));
   const done = W.check(data);
   if (store.get('wallet', null)?.positions?.length) W.summary(data); // takes today's starting point as early as possible
-  done.forEach((r) => toast(t(`term.auto.${['tp', 'sl', 'out'].includes(r.why) ? r.why : 'sig'}`, { sym: r.sym, v: (r.pnl > 0 ? '+' : '') + F.money(r.pnl, W.get().ccy, 0) }), { timeout: 6000 }));
-  return done.length > 0 || ord.filled.length > 0 || ord.expired.length > 0;
+  done.forEach((r) => toast(t(`term.auto.${['tp', 'sl', 'out', 'slgap', 'stopout'].includes(r.why) ? r.why : 'sig'}`, { sym: r.sym, v: (r.pnl > 0 ? '+' : '') + F.money(r.pnl, W.get().ccy, 0), x: F.price(r.exit), sl: F.price(r.sl) }), { timeout: 7000 }));
+  return copied || done.length > 0 || ord.filled.length > 0 || ord.expired.length > 0;
 }
 
 async function poll() {
@@ -294,7 +325,23 @@ function applyTheme() {
 
 /* ---------- Global actions (event delegation) ---------- */
 const GLOBAL = {
-  'open-signal'(el) { openDetail(ctx(), el.dataset.id, el.classList.contains('sig') ? el : null); },
+  'open-signal'(el) { openDetail(ctx(), el.dataset.id, el.classList.contains('sig') ? el : null, { focus: el.dataset.focus || null }); },
+  /* Nabít / Vybrat fictional money (Dnes, Obchodní platforma, header) */
+  'w-load'() { const go = () => Term.loadSheet(ctx(), 'dep'); if (sheetOpen()) { closeTopSheet(); setTimeout(go, 380); } else go(); },
+  'w-withdraw'() { Term.loadSheet(ctx(), 'wd'); },
+  /* guided tour on the real screens (Dnes "?", Více, after the first-run guide) */
+  tour() { if (sheetOpen()) closeAllSheets(); store.set('faq3off', 0); Tour.start(); },
+  /* "Robot obchoduje za mě (nanečisto)" switch (Dnes account card, platform) */
+  'auto-toggle'() {
+    const on = !store.get('autoCopy', null)?.on;
+    store.set('autoCopy', { on, at: Date.now() });
+    toast(t(on ? 'auto.on' : 'auto.off'), { timeout: 6000 });
+    walletCheck();
+    rerender({ soft: true });
+  },
+  'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
+  /* "?" next to a trading word: one sentence + an example */
+  'term-help'(el) { termHelp(el.dataset.k); },
   rtip() { toast(t('rtip')); },
   /* "Změnit kapitál": the calculator holds the user's account size, currency and risk profile */
   'go-calc'() {
@@ -323,7 +370,7 @@ const GLOBAL = {
 /* a span with role="button" inside a card (star) reacts to Enter / Space like a button */
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter' && ev.key !== ' ') return;
-  const el = ev.target.closest && ev.target.closest('span[role="button"][data-action]');
+  const el = ev.target.closest && ev.target.closest('[role="button"][data-action]:not(button)');
   if (!el) return;
   ev.preventDefault(); ev.stopPropagation(); el.click();
 });
@@ -341,6 +388,17 @@ document.addEventListener('click', (ev) => {
     if (r !== false) return;
   }
 });
+
+/* ---------- 1.9.0: "?" next to every trading word -> small sheet with one plain sentence and an example ---------- */
+function termHelp(k) {
+  openSheet({
+    small: true, label: t(`th.${k}.t`),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(`th.${k}.t`)}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="th-text">${F.esc(gloss(k))}</p></div>`,
+    onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
+  });
+}
 
 /* ---------- Gate ---------- */
 async function gate() {
@@ -405,7 +463,9 @@ async function boot() {
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
   /* first-run guide: only after the access gate, only once */
-  Onb.maybeShow(() => rerender({ soft: true }));
+  B.setInstrLookup(Mkt.get);
+  Onb.maybeShow((fresh) => { rerender({ soft: true }); if (fresh === 'done') setTimeout(() => Tour.start({ auto: true }), 600); });
+  Tour.init({ go: (h) => window.__pulseGo(h), route: () => route.name });
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).
   window.__pulseGo = (href) => {
