@@ -7,6 +7,7 @@ import { t, L } from './i18n/index.js';
 import * as Live from './live.js';
 import { nextUsOpen } from './views/signals.js';
 import { priceOf, pnlAt, outcome, costs } from './wallet.js';
+import * as M from './market.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
 
@@ -500,7 +501,9 @@ export function cardState(s, data = null, now = clock()) {
 /* 1.9.1: the example on every signal card – "Vlož např. 10 000 Kč → při cíli +1 880 Kč, při stopu −940 Kč".
    Same function as the investment sheet preview (wallet.outcome, leverage 1:1), so the numbers match everywhere. */
 export const EXAMPLE_DEP = { CZK: 10000, EUR: 400, USD: 500 };
-export const DEP_CHIPS = { CZK: [5000, 10000, 25000], EUR: [200, 400, 1000], USD: [250, 500, 1000] };
+/* 1.10.0: four amount chips from the minimum up (owner: "od 100 Kč") */
+export const DEP_CHIPS = { CZK: [100, 1000, 5000, 10000], EUR: [4, 40, 200, 400], USD: [5, 50, 250, 500] };
+export const DEP_MIN = { CZK: 100, EUR: 4, USD: 5 };
 export function walletCcy() { return store.get('wallet', null)?.ccy || calcState().ccy; }
 export function example(s, amount = null, lev = 1) {
   const ccy = walletCcy();
@@ -514,3 +517,80 @@ export function example(s, amount = null, lev = 1) {
 /* signals the user tapped "Teď ne" on (hidden from Dnes, still in Signály) */
 export const dismissed = () => { const d = store.get('notNow', []); return Array.isArray(d) ? d : []; };
 export function dismiss(id) { store.set('notNow', [id, ...dismissed().filter((x) => x !== id)].slice(0, 300)); }
+
+
+/* ---------- 1.10.0: a signal as a clearly named "campaign" ----------
+   "Exxon Mobil nahoru #11" – plain name + direction + a short stable number.
+   Official signals carry a running counter at the end of the id (DNY-2026-11-10-XOM-11 -> #11);
+   intraday previews (counter >= 900000) get a stable 4-digit number hashed from the id. */
+export function sigNo(s) {
+  const m = /-(\d+)$/.exec(String(s?.id || ''));
+  if (m && +m[1] < 900000) return +m[1];
+  let h = 2166136261;
+  for (const c of String(s?.id || '')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return 1000 + (h % 9000);
+}
+/* phase of the SIGNAL itself (not of the user): open = can still enter · running = too late to enter · closed */
+export function sigPhase(s, now = clock()) {
+  if (isDoneSig(s, now)) return 'closed';
+  const est = entryState(s, now);
+  return est && (est.code === 'ok' || est.code === 'limit') ? 'open' : 'running';
+}
+/* days a signal lasts: open -> until the exit date (from today), closed -> from publish to close */
+export function sigDays(s, now = clock()) {
+  if (isDoneSig(s, now)) {
+    const a = F.toDate(s.created_at), b = F.toDate(s.closed_at || s.hit_at || s.exit_date);
+    if (!a || !b || Number.isNaN(+a) || Number.isNaN(+b)) return null;
+    const a0 = new Date(a); a0.setHours(0, 0, 0, 0);
+    const b0 = new Date(b); b0.setHours(0, 0, 0, 0);
+    return Math.max(1, Math.round((b0 - a0) / 86400000));
+  }
+  return s.exit_date ? Math.max(0, F.daysUntil(s.exit_date, now)) : null;
+}
+export const closeDate = (s) => s.closed_at || s.hit_at || null;
+
+/* The price the investment sheet starts from (the SAME rule as views/terminal.js ticket):
+   a limit order (button "Nastavit nákup za …", or the market of the instrument is closed) -> the signal's entry,
+   otherwise "buy now" -> the current price (wallet.priceOf). */
+export function investBase(s, data, now = clock()) {
+  const cs = cardState(s, data, now);
+  const q = data ? priceOf(s.symbol, data) : null;
+  const lim = cs.cta === 'limit' || !M.isOpen(s.symbol);
+  if (lim || !q || !(q.p > 0)) return { px: s.entry, lim: true, mode: cs.cta === 'invest' ? 'now' : 'limit' };
+  return { px: q.p, lim: false, mode: 'now' };
+}
+
+/* THE money numbers of a signal for a deposit (card, detail, invest sheet – one function):
+   maxLoss = the result at the stop (the trade is closed there; capped at the deposit), potential = at the robot's target. */
+export function offerNums(s, data, { amount = null, lev = 1, base = null, sl = null, tp = null, now = clock() } = {}) {
+  const ccy = walletCcy();
+  const a = amount ?? EXAMPLE_DEP[ccy] ?? 10000;
+  const px = base ?? investBase(s, data, now).px;
+  const side = s.action === 'SELL' ? 'SELL' : 'BUY';
+  const o = outcome({ side, entry: px, amount: a, lev, sl: sl ?? s.stop, tp: tp ?? s.target });
+  return { amount: a, ccy, base: px, maxLoss: o.atStop, potential: o.atTarget, potentialPct: o.atTarget != null && a > 0 ? (o.atTarget / a) * 100 : null };
+}
+/* result of a CLOSED signal for the example deposit (leverage 1:1): money + % (= zhodnocení of the deposit) */
+export function closedNums(s) {
+  const ccy = walletCcy();
+  const a = EXAMPLE_DEP[ccy] ?? 10000;
+  const pct = priceMove(s);
+  return { amount: a, ccy, pct, money: pct == null ? null : (a * pct) / 100 };
+}
+
+/* ---------- 1.10.0: headline numbers – ONLY real closed signals from history.json (+ open signals that ended) ---------- */
+export function closedSignals(data, now = clock()) {
+  const vis = HORIZONS.filter((h) => !(CONFIG.HIDDEN_HORIZONS || []).includes(h));
+  const hist = (data?.history?.signals || []).filter((x) => vis.includes(x.horizon));
+  const ids = new Set(hist.map((x) => x.id));
+  const ended = allOpen(data).filter((x) => vis.includes(x.horizon) && !x.preview && isDoneSig(x, now) && !ids.has(x.id) && (x.status !== 'open' || x.intraday_hit));
+  return hist.concat(ended).sort((a, b) => String(closeDate(b) || b.exit_date || '').localeCompare(String(closeDate(a) || a.exit_date || '')));
+}
+export function headStats(data, now = clock()) {
+  const list = closedSignals(data, now);
+  const moves = list.map((x) => priceMove(x)).filter((v) => v != null && Number.isFinite(v));
+  const wins = list.filter((x) => (x.result_r != null ? x.result_r > 0 : (priceMove(x) ?? 0) > 0)).length;
+  const since = data?.performance?.equity?.[0]?.date || null;
+  return { n: list.length, wins, winRate: list.length ? (wins / list.length) * 100 : null,
+    avg: moves.length ? moves.reduce((a, v) => a + v, 0) / moves.length : null, since, list };
+}

@@ -21,6 +21,8 @@ export const MORE_ITEMS = [
     { id: 'duvera', icon: 'shield', sub: () => t('more.duvera.s') },
   ] },
   { group: 'more.g.you', items: [
+    /* 1.10.0: my play-money account – load, withdraw, start again */
+    { id: 'ucet', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(w.balance, w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
     { id: 'moje', icon: 'star', sub: () => { const n = D.followed().length; const w = store.get('wallet', null); const p = w?.positions?.length || 0; return p || n ? t('more.moje.s', { p, n }) : t('more.moje.s0'); } },
     { id: 'auto', action: true, icon: 'spark', sub: () => t(store.get('autoCopy', null)?.on ? 'auto.sOn' : 'auto.sOff') },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },

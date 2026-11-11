@@ -50,11 +50,12 @@ const TABS = [
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'vice' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
   zainvestovano: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
+  ucet: { title: 'acc.title', render: Home.renderAccount, actions: Home.actions },
   signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions, mount: () => setTimeout(() => Tour.maybeHint(), 900) },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
@@ -371,6 +372,7 @@ const GLOBAL = {
   /* Nabít / Vybrat fictional money (Dnes, Obchodní platforma, header) */
   'w-load'() { const go = () => Term.loadSheet(ctx(), 'dep'); if (sheetOpen()) { closeTopSheet(); setTimeout(go, 380); } else go(); },
   'w-withdraw'() { Term.loadSheet(ctx(), 'wd'); },
+  'w-reset'() { Term.resetSheet(ctx()); },
   /* guided tour on the real screens (Dnes "?", Více, after the first-run guide) */
   tour() { if (sheetOpen()) closeAllSheets(); store.set('faq3off', 0); Tour.start(); },
   /* "Robot obchoduje za mě (nanečisto)" switch (Dnes account card, platform) */
@@ -450,7 +452,7 @@ function termHelp(k) {
     small: true, label: t(`th.${k}.t`),
     html: `<div class="sheet-head"><div><p class="sheet-title">${t(`th.${k}.t`)}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-      <div class="sheet-body"><p class="th-text">${F.esc(gloss(k))}</p></div>`,
+      <div class="sheet-body"><p class="th-text">${F.esc(gloss(k) || t(`th.${k}.s`))}</p></div>`,
     onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
   });
 }

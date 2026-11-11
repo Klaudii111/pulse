@@ -223,53 +223,55 @@ function buyBanner(s, now) {
   return `<p class="buy-when is-${b.code}">${icon(b.code === 'now' ? 'spark' : 'clock', 'icon-xs')}<span>${F.esc(b.text)}</span></p>`;
 }
 
-/* 1.9.0: Signály = horizon tabs (1 den · 2–3 dny · Týden · Měsíc · Vše) + quick filters from the user's side
-   (Ke koupi teď · Mám koupeno · Robot drží · Ukončené). Each card answers the four questions (js/brief.js). */
-const HZ_TABS = ['DEN', 'DNY', 'TYDEN', 'MESIC', 'ALL'];
-const UF = ['buy', 'mine', 'robot', 'done'];
+/* 1.10.0: Signály = three tabs by the SIGNAL's phase (Otevřené = can still enter · Běžící · Uzavřené)
+   with the horizon chips (1 den · 2–3 dny · Týden · Měsíc · Vše) as a filter inside. One card everywhere (B.offer). */
+const HZ_TABS = ['ALL', 'DEN', 'DNY', 'TYDEN', 'MESIC'];
+const PH = ['open', 'running', 'closed'];
 const curHz = () => { const h = store.get('sigHz', 'ALL'); return HZ_TABS.includes(h) ? h : 'ALL'; };
-const curUf = () => { const f = store.get('sigF', 'buy'); return UF.includes(f) ? f : 'buy'; };
+const curPh = () => { const f = store.get('sigPh', 'open'); return PH.includes(f) ? f : 'open'; };
 const hidden = (h) => (CONFIG.HIDDEN_HORIZONS || []).includes(h);
 
 function openIn(data, hz) {
   const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h) && (hz === 'ALL' || h === hz));
   return hzs.flatMap((h) => (data.signals.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })));
 }
-function closedIn(data, hz) {
-  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h) && (hz === 'ALL' || h === hz));
-  return (data.history?.signals || []).filter((x) => hzs.includes(x.horizon))
-    .sort((a, b) => String(b.closed_at || b.created_at).localeCompare(String(a.closed_at || a.created_at)));
-}
-
-function hzDesc(data, hz) {
-  const n = openIn(data, hz).filter((x) => !['late', 'done'].includes(D.cardState(x, data, D.clock()).code)).length;
-  return t(`u.hzDesc.${hz}`, { n, u: F.unit('signal', n) });
+function phaseList(data, hz, ph, now) {
+  if (ph === 'closed') return D.closedSignals(data, now).filter((x) => hz === 'ALL' || x.horizon === hz);
+  return openIn(data, hz).filter((x) => D.sigPhase(x, now) === ph);
 }
 
 function sigBody(ctx) {
   const { data } = ctx;
   const now = ctx.now();
-  const hz = curHz(), f = curUf();
+  const hz = curHz(), ph = curPh();
   if (hz !== 'ALL' && hidden(hz)) return `<section class="calm u-empty">${calmArt()}<div><h3 class="calm-t">${t('u.den.t')}</h3><p class="calm-s">${t('u.den.s')}</p></div></section>`;
   if (hz !== 'ALL' && !D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
-  /* 1.9.1: the same card as Dnes "Nový signál" for every signal; invested -> "Máš investováno · …";
-     too late and ended signals in collapsed groups. The robot's info is only in the detail. */
-  const sigsIn = openIn(data, hz);
-  const by = { act: [], late: [], done: [] };
-  sigsIn.forEach((x) => {
-    const c = D.cardState(x, data, now).code;
-    if (c === 'late') by.late.push(x); else if (c === 'done') by.done.push(x); else by.act.push(x);
-  });
-  const rank = { mine: 0, order: 1, buy: 2, soon: 2, wait: 3 };
-  by.act.sort((a, b) => (rank[D.cardState(a, data, now).code] - rank[D.cardState(b, data, now).code]) || String(b.created_at).localeCompare(String(a.created_at)));
-  const ended = by.done.concat(closedIn(data, hz)).slice(0, 60);
-  const list = by.act.length ? `<div class="sc-list">${by.act.map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`
-    : `<p class="empty-line">${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
-  const late = by.late.length ? `<details class="sg-group"><summary>${t('sg.late')}<span class="num">${by.late.length}</span>${icon('chev-down', 'icon-xs')}</summary>
-    <p class="sg-note">${t('sg.lateS')}</p><div class="sc-list">${by.late.map((x, i) => B.offer(x, { data, now, i })).join('')}</div></details>` : '';
-  const done = ended.length ? `<details class="sg-group"><summary>${t('sg.done')}<span class="num">${ended.length}</span>${icon('chev-down', 'icon-xs')}</summary>
-    <div class="dev-list">${ended.map((x, i) => signalRow(x, now, i)).join('')}</div></details>` : '';
-  return list + late + done;
+  const list = phaseList(data, hz, ph, now);
+  if (ph === 'open') {
+    const rank = { mine: 0, order: 1, buy: 2, soon: 2, wait: 3 };
+    list.sort((a, b) => ((rank[D.cardState(a, data, now).code] ?? 4) - (rank[D.cardState(b, data, now).code] ?? 4)) || String(b.created_at).localeCompare(String(a.created_at)));
+  } else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  if (!list.length) {
+    if (ph === 'open') return `<p class="empty-line">${t('sg.today0')} ${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
+    return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
+  }
+  return `<div class="sc-list">${list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`;
+}
+
+function phDesc(ph, data = null, now = D.clock()) {
+  const c = D.walletCcy();
+  if (ph === 'open' && data?.signals) {
+    /* honest count: the robot sends only what passes its rules – some days 2, some days 10, some days none */
+    const day = (x) => new Date(x).toDateString();
+    const list = phaseList(data, 'ALL', 'open', now);
+    const today = list.filter((x) => x.created_at && day(x.created_at) === day(now)).length;
+    if (!list.length) return t('sg.today0');
+    return `${today ? t('sg.todayN', { n: today }) : t('sg.todayNone')} ${t('sg.rules')}${list.length > today ? ` ${t('sg.older', { n: list.length - today })}` : ''}`;
+  }
+  return t(`sg.phS.${ph}`, { a: F.money(D.EXAMPLE_DEP[c] || 10000, c, 0) });
+}
+function hzChips(hz) {
+  return `<div class="range-chips sg-hz" role="group" aria-label="${F.esc(t('sg.hz'))}">${HZ_TABS.map((h) => `<button type="button" class="range-chip" data-action="sig-hz" data-id="${h}" aria-pressed="${h === hz}">${h === 'ALL' ? t('sg.hzAll') : t(`u.tab.${h}`)}</button>`).join('')}</div>`;
 }
 
 /* "Další kontrola za X min" (market open) or the next official run */
@@ -288,11 +290,12 @@ export function render(ctx) {
     return head + `<div class="grid-signals">${skCard()}${skCard()}${skCard()}</div>`;
   }
   const now = ctx.now();
-  const hz = curHz();
-  const items = HZ_TABS.map((h) => ({ id: h, label: t(`u.tab.${h}`), count: h === 'ALL' || !hidden(h) ? openIn(data, h).filter((x) => !B.isDone(x, now)).length : 0 }));
+  const ph = curPh(), hz = curHz();
+  const items = PH.map((p) => ({ id: p, label: t(`sg.ph.${p}`), count: phaseList(data, 'ALL', p, now).length }));
   return head + `
-    <div class="seg-wrap hz-tabs">${seg({ name: 'shz', label: t('u.tabs'), items, active: hz })}</div>
-    <p class="hz-desc" id="hz-desc">${hzDesc(data, hz)}</p>
+    <div class="seg-wrap ph-tabs">${seg({ name: 'sph', label: t('sg.tabs'), items, active: ph })}</div>
+    <p class="hz-desc" id="hz-desc">${phDesc(ph, data, now)}</p>
+    ${hzChips(hz)}
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
     <div id="sig-body">${sigBody(ctx)}</div>
     <div class="signals-top u-below">${nextLine(ctx.data, now)}${regimeLine(data.signals.regime)}</div>
@@ -348,16 +351,17 @@ function rebody(ctx) {
   const root = document.getElementById('view');
   const b = root.querySelector('#sig-body');
   if (b) { b.innerHTML = sigBody(ctx); b.classList.remove('is-enter'); void b.offsetWidth; b.classList.add('is-enter'); ctx.afterRender && ctx.afterRender(b, true); }
-  const d = root.querySelector('#hz-desc'); if (d) d.innerHTML = hzDesc(ctx.data, curHz());
+  const d = root.querySelector('#hz-desc'); if (d) d.innerHTML = phDesc(curPh(), ctx.data, ctx.now());
+  root.querySelectorAll('[data-action="sig-hz"]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.id === curHz())));
 }
 
 export const actions = {
-  'sig-uf'(el, ev, ctx) { haptic(); store.set('sigF', el.dataset.id); rebody(ctx); },
+  'sig-hz'(el, ev, ctx) { haptic(); store.set('sigHz', el.dataset.id); rebody(ctx); },
   seg(el, ev, ctx) {
-    if (el.dataset.segName !== 'shz') return false;
+    if (el.dataset.segName !== 'sph') return false;
     haptic();
-    store.set('sigHz', el.dataset.id);
-    segMove(document.getElementById('view'), 'shz', el.dataset.id);
+    store.set('sigPh', el.dataset.id);
+    segMove(document.getElementById('view'), 'sph', el.dataset.id);
     rebody(ctx);
     return true;
   },

@@ -184,6 +184,32 @@ export function renderInvested(ctx) {
   <section class="d-block"><h2 class="d-h">${t('zi.hist')}</h2>${histList(sm)}</section>`;
 }
 
+/* 1.10.0 Více -> Můj účet: where my (fictional) money is + Nabít / Vybrat / Začít znovu */
+export function renderAccount(ctx) {
+  const head = `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('acc.title')}</h1><p class="page-sub">${t('acc.sub')}</p></div></header>`;
+  if (!ctx.data?.signals) return head + skBlock(220);
+  const sm = W.summary(ctx.data);
+  const c = sm.w.ccy;
+  const tot = D.moneyTone(sm.total, c, sm.totalPct);
+  const row = (k, v, cls = '') => `<div class="acc-r"><span>${k}</span><b class="num ${cls}">${v}</b></div>`;
+  return head + `
+  <section class="big-acc is-page"><p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('acc.big')}</p>
+    <p class="big-acc-v num">${F.money(sm.equity, c, 0)}</p>
+    <div class="big-acc-row num"><span>${t('acc.free')} <b>${F.money(Math.max(0, sm.free), c, 0)}</b></span><span>${t('acc.inPlay')} <b>${F.money(sm.used + sm.reserved, c, 0)}</b></span></div></section>
+  <section class="card acc-rows">
+    ${row(t('acc.putIn'), F.money(sm.putIn, c, 0))}
+    ${row(t('acc.result'), `${F.esc(tot.text)}${tot.zero ? '' : ` (${F.spct(sm.totalPct, 1)})`}`, tot.tone)}
+    ${row(t('acc.open'), String(sm.rows.length))}
+    ${row(t('acc.orders'), String(sm.w.orders.length))}
+  </section>
+  <div class="acc-page-btns">
+    <button type="button" class="btn btn-primary btn-block" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('acc.load')}</button>
+    <button type="button" class="btn btn-secondary btn-block" data-action="w-withdraw">${t('acc.wd')}</button>
+    <button type="button" class="btn btn-ghost btn-block" data-action="w-reset">${t('acc.reset')}</button>
+  </div>
+  <p class="honest">${icon('shield', 'icon-xs')} ${t('acc.note')}</p>`;
+}
+
 /* 4 ROBOT: one line -> the robot page */
 function robotLine1(ctx) {
   const p = ctx.data?.paper;
@@ -218,10 +244,12 @@ export function render(ctx) {
   const more = fresh.length > 3 ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: fresh.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
   return head + `
   ${accountCard(ctx)}
+  ${B.statsRow(ctx.data, now)}
   <section class="d-block" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${icon('chev-right', 'icon-xs')}</a></h2>
     ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.offer(x, { data: ctx.data, now, notNow: true, i })).join('')}</div>${more}` : `<p class="d-empty">${t('d.new0')}</p>`}
   </section>
   <section class="d-block" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   ${robotLine1(ctx)}
+  ${D.headStats(ctx.data, now).n ? `<section class="d-block" aria-labelledby="d-fresh"><h2 class="d-h" id="d-fresh"><a href="#/vysledky">${t('fr.title')}${icon('chev-right', 'icon-xs')}</a></h2>${B.freshTable(ctx.data, { n: 3, now, more: true })}</section>` : ''}
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

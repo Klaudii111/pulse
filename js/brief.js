@@ -7,7 +7,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as Live from './live.js';
-import { t, lang } from './i18n/index.js';
+import { t, lang, L } from './i18n/index.js';
 import { INSTR } from './instruments.js';
 import { icon, monogram, track } from './ui.js';
 import { nextUsOpen } from './views/signals.js';
@@ -254,17 +254,84 @@ export function row(s, { data, now = D.clock(), i = 0 } = {}) {
   </article>`;
 }
 
-/* ---------- 1.9.1 THE signal card (Dnes "Nový signál" and Signály – the same card) ----------
-   KOUPIT · Exxon Mobil / ropná firma z USA · na 2–3 dny / Vlož např. 10 000 Kč → při cíli +1 880 Kč, při stopu −940 Kč /
-   one plain answer "can I still invest?" (D.cardState: a / b / c) / [Zainvestovat] [Teď ne].
-   Already invested -> "Máš investováno · +128 Kč" instead of the buttons. No robot info here (only in the detail). */
+/* ---------- 1.10.0 "Proč:" – 2–3 plain bullets from the signal's own explanation (no unexplained abbreviations) ---------- */
+export function whyBullets(s, max = 3) {
+  const ex = s.explanation;
+  let txt = ex ? L(ex.summary || ex) : '';
+  if (typeof txt !== 'string') txt = '';
+  txt = txt.replace(/^\s*(Proč|Why)\s*:\s*/i, '').split(/\s+(?:Neplatí|Invalidated)[\s,]/)[0].replace(/\.\s*$/, '');
+  const cs = lang() === 'cs';
+  const plain = (x) => x
+    .replace(/\s*\(RSI\(\d+\)\s*[<>]\s*\d+\)/g, '')
+    .replace(/\s*\(ATR\)/g, '')
+    .replace(/\(VIX (nad|above) (\d+)\)/g, (m, w, n) => (cs ? `(„index strachu“ VIX nad ${n})` : `(the “fear index” VIX above ${n})`))
+    .replace(/\bVIX (nad|above) (\d+)\b(?!\))/g, (m, w, n) => (cs ? `„index strachu“ VIX nad ${n}` : `the “fear index” VIX above ${n}`))
+    .replace(/\bbot\b/g, cs ? 'robot' : 'the robot')
+    .trim();
+  let out = txt.split(/\s*;\s*/).map(plain).filter((x) => x.length > 3);
+  if (!out.length) out = (s.reasons || []).map((r) => L(r)).filter(Boolean);
+  return out.slice(0, max).map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+}
+export function whyBlock(s) {
+  const b = whyBullets(s);
+  if (!b.length) return '';
+  return `<div class="sc-why"><p class="sc-why-k">${t('c.why')}</p><ul>${b.map((x) => `<li>${F.esc(x)}</li>`).join('')}</ul>
+    <button type="button" class="link sc-why-more" data-action="open-signal" data-id="${F.esc(s.id)}" data-focus="why">${t('c.whyMore')}${icon('chev-right', 'icon-xs')}</button></div>`;
+}
+
+/* ---------- 1.10.0 THE signal card: a clearly named "campaign" ----------
+   Exxon Mobil nahoru #11 / 2–3denní signál · ropná firma z USA
+   Předmět · Směr · Stav · Délka, then fixed numbers upfront for the example deposit:
+   "Maximální možná ztráta −790 Kč" and "Odhadovaný potenciál +1 373 Kč (+13,7 %)" (D.offerNums – the SAME function
+   as the investment sheet), one plain sentence (D.cardState), one button. Max 4 accents: state chip, loss, potential, button.
+   Closed signals: Zisk (example deposit) · Zhodnocení · Uzavřeno. */
+export const qh = (k) => `<span class="qm" role="button" tabindex="0" data-action="term-help" data-k="${k}" aria-label="${F.esc(t('th.ask'))}">?</span>`;
+const sMoney = (v, c) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), c, 0);
+export function sigTitle(s) {
+  const w = whatIs(s.symbol, s.name);
+  return `${F.esc(t('c.title', { n: w.name, d: t(`c.dir.${s.action === 'SELL' ? 'SELL' : 'BUY'}`) }))} <span class="sc-no num">#${D.sigNo(s)}</span>`;
+}
+export const sigTitleText = (s) => `${t('c.title', { n: whatIs(s.symbol, s.name).name, d: t(`c.dir.${s.action === 'SELL' ? 'SELL' : 'BUY'}`) })} #${D.sigNo(s)}`;
+export function lenText(s, now = D.clock()) {
+  const n = D.sigDays(s, now);
+  if (n == null) return '–';
+  if (D.isDoneSig(s, now)) return t('c.lenDays', { n, u: F.unit('day', n) });
+  return n === 0 ? t('c.lenToday', { d: F.dm(s.exit_date) }) : t('c.lenOpen', { d: F.dm(s.exit_date), n, u: F.unit('day', n) });
+}
+export function phaseChip(ph) {
+  return `<span class="ph-chip is-${ph}">${t(`c.ph.${ph}`)}</span>`;
+}
+/* the two fixed numbers (card, detail) – same words as the investment sheet */
+export function moneyLines(n) {
+  return `<p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.maxLoss != null ? sMoney(n.maxLoss, n.ccy) : '–'}</b></p>
+    <p class="sc-m"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.potential != null ? `${sMoney(n.potential, n.ccy)} <small>(${F.spct(n.potentialPct, 1)})</small>` : '–'}</b></p>
+    <p class="sc-note">${t('c.potNote')}</p>`;
+}
+export function facts(s, ph, now = D.clock()) {
+  const w = whatIs(s.symbol, s.name);
+  return `<dl class="sc-facts">
+    <div><dt>${t('c.subj')}</dt><dd class="sc-subj">${monogram(s.symbol, s.name)}<span>${F.esc(w.name)}${w.name !== s.symbol ? ` <span class="ticker">${F.esc(s.symbol)}</span>` : ''}</span></dd></div>
+    <div><dt>${t('c.side')}</dt><dd>${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</dd></div>
+    <div><dt>${t('c.state')}</dt><dd>${phaseChip(ph)}</dd></div>
+    <div><dt>${t('c.len')}${qh('DELKA')}</dt><dd class="num">${F.esc(lenText(s, now))}</dd></div>
+  </dl>`;
+}
+/* closed: what the example deposit made */
+export function closedLines(s, now = D.clock()) {
+  const r = D.closedNums(s);
+  const mt = D.moneyTone(r.money, r.ccy, r.pct);
+  const at = D.closeDate(s);
+  return `<div class="sc-res">
+    <div><p class="sc-rl">${t('c.profit')}</p><p class="sc-rv num ${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</p><p class="sc-rs">${t('c.profitS', { a: F.money(r.amount, r.ccy, 0) })}</p></div>
+    <div><p class="sc-rl">${t('c.ret')}${qh('ZHOD')}</p><p class="sc-rv num ${mt.tone}">${r.pct != null ? F.spct(r.pct, 1) : '–'}</p></div>
+    <div><p class="sc-rl">${t('c.closedAt')}</p><p class="sc-rv num">${at ? F.dm(at) : '–'}</p></div>
+  </div>`;
+}
 export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) {
   const cs = D.cardState(s, data, now);
+  const ph = D.sigPhase(s, now);
   const w = whatIs(s.symbol, s.name);
-  const sell = s.action === 'SELL';
-  const ex = D.example(s);
-  const sm = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), ex.ccy, 0);
-  const hz = t(`u.hzShort.${s.horizon}`);
+  const sub = [t(`c.type.${s.horizon}`), w.phrase].filter(Boolean).join(' · ');
   let foot = '';
   if (cs.code === 'mine' || (cs.code === 'done' && cs.my)) {
     const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
@@ -273,18 +340,65 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) 
     const lim = cs.cta === 'limit';
     foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
-  const exLine = cs.code === 'done' ? '' : `<p class="sc-ex num">${t('sc.example', { a: F.money(ex.amount, ex.ccy, 0), t: `<b class="up">${ex.atTarget != null ? sm(ex.atTarget) : '–'}</b>`, s: `<b class="down">${ex.atStop != null ? sm(ex.atStop) : '–'}</b>` })}</p>`;
-  return `<article class="sc is-${cs.code}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}">
-    <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(`${w.name} ${s.symbol}`)}">
-      ${monogram(s.symbol, s.name)}
-      <span class="sc-id"><span class="sc-k"><b class="sc-act ${sell ? 'is-sell' : ''}">${t(sell ? 'sc.sell' : 'sc.buy')}</b><span class="sc-dot">·</span><span class="sc-name">${F.esc(w.name)}</span>${w.name !== s.symbol ? `<span class="ticker">${F.esc(s.symbol)}</span>` : ''}</span>
-        <span class="sc-s">${F.esc([w.phrase, hz].filter(Boolean).join(' · '))}</span></span>
+  let money = '';
+  if (ph === 'closed') money = closedLines(s, now);
+  else if (ph === 'open' && !['mine', 'order'].includes(cs.code)) {
+    const n = D.offerNums(s, data, { now });
+    money = `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${moneyLines(n)}</div>`;
+  } else if (ph === 'running') {
+    const mv = D.priceMove(s);
+    if (mv != null) money = `<p class="sc-mv"><span>${t('c.move')}</span><b class="num">${F.spct(mv, 1)}</b></p>`;
+  }
+  const when = cs.code === 'mine' || ph === 'closed' ? '' : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`;
+  /* 1.10.0: the whole card is one tappable tile -> the detail (inner buttons keep their own action) */
+  return `<article class="sc is-${cs.code} ph-${ph} is-tile" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
+    <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">
+      <span class="sc-id"><span class="sc-title">${sigTitle(s)}</span>
+        <span class="sc-s">${F.esc(sub)}${s.preview ? ` <span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}</span></span>
       ${icon('chev-right', 'icon-xs sc-chev')}
     </div>
-    ${exLine}
-    ${cs.code === 'mine' ? '' : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`}
+    ${facts(s, ph, now)}
+    ${ph === 'closed' ? '' : whyBlock(s)}
+    ${money}
+    ${when}
     ${foot}
   </article>`;
+}
+
+/* ---------- 1.10.0 headline numbers (Dnes: one compact row; Výsledky: big) – only real closed signals ---------- */
+export function statsRow(data, now = D.clock()) {
+  const h = D.headStats(data, now);
+  const txt = h.n ? t('hs.row', { n: h.n, w: F.pct(h.winRate, 0), a: F.spct(h.avg, 1) }) : t('hs.row0');
+  return `<a class="hs-row" href="#/vysledky">${icon('results', 'icon-xs')}<span>${F.esc(txt)}${h.since ? ` · ${F.esc(t('hs.since', { d: F.dmy(h.since) }))}` : ''}</span>${icon('chev-right', 'icon-xs')}</a>`;
+}
+export function statsBig(data, now = D.clock()) {
+  const h = D.headStats(data, now);
+  const v = (x) => (h.n ? x : '–');
+  return `<section class="hs-big" aria-label="${F.esc(t('hs.closed'))}">
+    <div class="hs-grid">
+      <div class="hs-c"><p class="hs-l">${t('hs.closed')}</p><p class="hs-v num">${h.n}</p></div>
+      <div class="hs-c"><p class="hs-l">${t('hs.win')}${qh('USPECH')}</p><p class="hs-v num">${v(F.pct(h.winRate, 0))}</p>${h.n ? `<p class="hs-s">${t('hs.winS', { w: h.wins, n: h.n })}</p>` : ''}</div>
+      <div class="hs-c"><p class="hs-l">${t('hs.avg')}${qh('AVG')}</p><p class="hs-v num ${h.avg > 0 ? 'up' : h.avg < 0 ? 'down' : ''}">${v(F.spct(h.avg, 1))}</p></div>
+      <div class="hs-c"><p class="hs-l">${t('hs.sinceL')}</p><p class="hs-v num">${h.since ? F.dmy(h.since) : '–'}</p></div>
+    </div>
+    ${h.n ? '' : `<p class="hs-zero">${t('hs.zero')}</p>`}
+    <p class="hs-foot"><span>${t('hs.asOf', { d: F.dmy(now) })}</span><a class="link" href="#/duvera">${t('trust.title')}</a></p>
+  </section>`;
+}
+/* "Výsledky čerstvě uzavřených signálů" – the last N closed (losses too) */
+export function freshTable(data, { n = 10, now = D.clock(), more = false } = {}) {
+  const list = D.closedSignals(data, now).slice(0, n);
+  if (!list.length) return `<p class="d-empty">${t('fr.none')}</p>`;
+  const rows = list.map((s) => {
+    const r = D.closedNums(s);
+    const tone = r.pct == null ? '' : r.pct > D.FLAT_PCT ? 'up' : r.pct < -D.FLAT_PCT ? 'down' : '';
+    const d = D.sigDays(s, now);
+    const at = D.closeDate(s);
+    return `<tr data-action="open-signal" data-id="${F.esc(s.id)}" tabindex="0"><th scope="row">${sigTitle(s)}</th><td>${t(`c.typeS.${s.horizon}`)}</td>
+      <td class="num ${tone}">${r.pct != null ? F.spct(r.pct, 1) : '–'}</td><td class="num">${d != null ? `${d} ${F.unit('day', d)}` : '–'}</td><td class="num">${at ? F.dm(at) : '–'}</td></tr>`;
+  }).join('');
+  return `<div class="fr-wrap"><table class="fr-tab"><thead><tr><th scope="col">${t('fr.c.sig')}</th><th scope="col">${t('fr.c.type')}</th><th scope="col">${t('fr.c.ret')}</th><th scope="col">${t('fr.c.len')}</th><th scope="col">${t('fr.c.date')}</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>${more ? `<a class="d-more" href="#/vysledky">${t('fr.more')}${icon('chev-right', 'icon-xs')}</a>` : `<p class="fr-note">${t('fr.note')}</p>`}`;
 }
 
 /* ---------- the three boxes (Dnes) / quick filters (Signály) ---------- */

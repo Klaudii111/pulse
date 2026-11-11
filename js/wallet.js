@@ -484,5 +484,8 @@ export function watched() {
   const syms = new Set((w?.positions || []).concat(w?.orders || []).map((p) => p.sym));
   const cur = store.get('termSym', null);
   if (cur) syms.add(cur);
+  /* 1.10.0: the "Sledované grafy" list (default US500, gold, EUR/USD, Bitcoin) */
+  const wl = store.get('watch', null);
+  (Array.isArray(wl) ? wl : ['US500', 'XAUUSD', 'EURUSD', 'BTCUSD']).slice(0, 12).forEach((x) => syms.add(x));
   return [...syms];
 }

@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.9.1',
+  APP_VERSION: '1.10.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -31,7 +31,7 @@ export const CONFIG = {
   /* Primary: ./data/quotes.json written by our server every 15 s (same origin, no rate limit).
      Fallback: the Worker, only when quotes.json is missing or older than QUOTES_STALE_SEC. */
   /* STREAM_URL (1.9.0): real-time prices from our server (Server-Sent Events); not used on GitHub Pages copies */
-  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', STREAM_URL: '/api/stream', POLL_SEC: 10, QUOTES_POLL_SEC: 15, QUOTES_STALE_SEC: 120, FRESH_SEC: 60, RENDER_MS: 1500 },
+  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', STREAM_URL: '/api/stream', POLL_SEC: 10, QUOTES_POLL_SEC: 15, QUOTES_STALE_SEC: 120, FRESH_SEC: 60, RENDER_MS: 1000 },
   /* Intraday scan of the server (Prague time, Mon-Fri): every 20 min at :05/:25/:45 while the US market is open */
   SCAN: { MINUTES: [5, 25, 45] },
 

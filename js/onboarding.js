@@ -10,6 +10,7 @@ import * as W from './wallet.js';
 import * as store from './store.js';
 import { t, lang } from './i18n/index.js';
 import { icon, ladder, toast } from './ui.js';
+import { howStrip } from './views/help.js';
 
 let root = null;
 
@@ -35,6 +36,8 @@ function slideA() {
     <p class="onb-k">${t('onb.step', { n: 1 })}</p>
     <h2 class="onb-t">${t('onb.a.t')}</h2>
     <p class="onb-s">${t('onb.a.s')}</p>
+    <p class="onb-l onb-how">${t('onb.how')}</p>
+    ${howStrip()}
     <ul class="onb-pts">
       <li>${icon('clock', 'icon-sm')}<span>${t('onb.a.p1')}</span></li>
       <li>${icon('shield', 'icon-sm')}<span>${t('onb.a.p2')}</span></li>

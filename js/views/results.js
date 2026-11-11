@@ -159,6 +159,7 @@ export function render(ctx) {
   const series = rangeSeries(perf, range, ctx.data);
   const h = heroVals(series);
   return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>
+  ${B.statsBig(ctx.data, now)}
   <p class="res-counts num">${counts}</p>
   ${paperLink(ctx)}
   <div class="results-layout">
@@ -183,6 +184,8 @@ export function render(ctx) {
   </div>
   ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${counts}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
   <div class="srow-list">${openNow.map((x, i) => signalRow(x, now, i)).join('')}</div>` : ''}
+  <h2 class="section-title">${t('fr.title')}</h2>
+  ${B.freshTable(ctx.data, { n: 10, now })}
   <div id="res-lower">${lower(perf, hist, hz, showR)}</div>`;
 }
 

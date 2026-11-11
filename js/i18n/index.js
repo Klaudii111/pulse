@@ -5,13 +5,15 @@ import cs from './cs.js';
 import en from './en.js';
 import cs19 from './cs19.js';
 import en19 from './en19.js';
+import cs110 from './cs110.js';
+import en110 from './en110.js';
 
 export const LOCALES = [
   { id: 'cs', label: 'Čeština', tag: 'cs-CZ' },
   { id: 'en', label: 'English', tag: 'en-GB' },
 ];
 /* 1.9.0 texts live in cs19.js / en19.js and win over older keys of the same name (e.g. nav.terminalShort) */
-const DICTS = { cs: { ...cs, ...cs19 }, en: { ...en, ...en19 } };
+const DICTS = { cs: { ...cs, ...cs19, ...cs110 }, en: { ...en, ...en19, ...en110 } };
 const FALLBACK = 'cs';
 
 function detect() {

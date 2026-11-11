@@ -298,7 +298,7 @@ export function calmArt() {
 /* ---------- Live status (1.6.0): one sentence + one bar, same everywhere ----------
  * statusLine: "Vydělává +0,8 %" + "+80 Kč na 10 000 Kč v obchodu · do cíle zbývá 3,1 %"
  * track: stop <- entry -> target bar with the price dot (closed: the exit point), labels under it. */
-export function statusLine(s, { now, big = false } = {}) {
+export function statusLine(s, { now, big = false, money = true } = {}) {
   const st = D.liveStatus(s, now);
   if (!big) return `<p class="st-line tone-${st.tone} is-${st.code}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b>${st.sub ? `<span>${F.esc(st.sub)}</span>` : ''}</p>`;
   /* big (cards + detail): 1) price move in plain words, 2) the money result for THIS user, 3) money at target / stop */
@@ -314,11 +314,11 @@ export function statusLine(s, { now, big = false } = {}) {
       /* 1.9.1: real money only on the user's own trade; otherwise grey "Kdybyste koupili" */
       const cs = D.cardState(s, null, now);
       if (cs.my) { const mt = D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct); return `<p class="st-you"><span>${F.esc(t('st.youReal'))}</span><b class="num ${mt.tone}">${F.esc(mt.text)}</b></p>`; }
-      if (um.now == null || st.done) return '';
+      if (um.now == null || st.done || !money) return ''; // 1.10.0: the detail shows the card's own money lines (D.offerNums)
       const mt = D.moneyTone(um.now, um.ccy, st.move);
       return `<p class="st-you is-if"><span>${F.esc(t('st.ifBoughtBig', { a: F.money(um.account, um.ccy, 0), r: F.num(um.risk, 0) }))}</span><b class="num">${F.esc(mt.text)}</b></p>`;
     })()}
-    <p class="st-lv num">${t('st.levels', { t: `<b class="up">${um.atTarget != null ? sm(um.atTarget) : '–'}</b>`, s: `<b class="down">${sm(um.atStop)}</b>` })}<span class="st-chg" role="link" tabindex="0" data-action="go-calc">${t('st.change')}</span></p>
+    ${money ? `<p class="st-lv num">${t('st.levels', { t: `<b class="up">${um.atTarget != null ? sm(um.atTarget) : '–'}</b>`, s: `<b class="down">${sm(um.atStop)}</b>` })}<span class="st-chg" role="link" tabindex="0" data-action="go-calc">${t('st.change')}</span></p>` : ''}
   </div>`;
 }
 

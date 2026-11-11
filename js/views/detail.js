@@ -13,6 +13,7 @@ import { shareSignal } from '../share.js';
 import * as B from '../brief.js';
 import * as M from '../market.js';
 import * as store from '../store.js';
+import * as Bars from '../bars.js';
 
 /* 1.9.0 chart markers: ▲ robot bought (paper.json fill time), ▲ I bought (play money), ▼ exits */
 function chartMarks(ctx, s) {
@@ -43,6 +44,7 @@ export const verifyUrl = (sym) => `https://www.tradingview.com/chart/?symbol=${e
 
 let chartRef = null;
 let liveOff = null;
+let barsRef = null;
 
 /* TradingView symbol for the live candlestick chart (free official widget). */
 const TV = { US500: 'FOREXCOM:SPXUSD', US100: 'FOREXCOM:NSXUSD', US30: 'FOREXCOM:DJI', DE40: 'XETR:DAX', UK100: 'FOREXCOM:UKXGBP',
@@ -62,7 +64,7 @@ export function mountTV(box, sym) {
 
 /* What the deposited money does at different leverage: price move to target / stop times the leverage. */
 const LEVS = [1, 2, 5, 10, 20, 30];
-function levTable(s, lev) {
+function levTable(s, lev, data = null) {
   if (!(s.entry > 0) || s.stop == null) return '';
   const up = s.target != null ? Math.abs(s.target - s.entry) / s.entry * 100 : null;
   const dn = Math.abs(s.entry - s.stop) / s.entry * 100;
@@ -71,14 +73,17 @@ function levTable(s, lev) {
   const FX = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD'];
   const legal = FX.includes(s.symbol) ? 30 : IDX.includes(s.symbol) ? 20 : 5;
   /* example deposit (margin) the user puts into the trade, in money */
-  const cs = lang() === 'cs';
-  const dep = cs ? 10000 : 500, ccy = cs ? 'CZK' : 'USD';
+  /* 1.10.0: the same deposit, price and function as the card and the investment sheet (D.offerNums) */
+  const base = D.offerNums(s, data);
+  const dep = base.amount, ccy = base.ccy;
   const rows = LEVS.map((L) => {
-    const loss = Math.min(100, dn * L);
-    const gainM = up == null ? null : dep * up * L / 100, lossM = dep * loss / 100;
+    const n = D.offerNums(s, data, { lev: L, base: base.base });
+    const lossM = n.maxLoss != null ? Math.abs(n.maxLoss) : 0, gainM = n.potential;
+    const loss = Math.min(100, (lossM / dep) * 100);
+    const upL = gainM != null ? (gainM / dep) * 100 : null;
     const over = legal && L > legal;
     return `<tr class="${over ? 'is-over' : ''}"><td class="num">1:${L}</td>
-      <td class="num up">${up == null ? '–' : `+${F.money(gainM, ccy, 0)}<small>${F.spct(up * L, 1)}</small>`}</td>
+      <td class="num up">${gainM == null ? '–' : `+${F.money(gainM, ccy, 0)}<small>${F.spct(upL, 1)}</small>`}</td>
       <td class="num down">−${F.money(lossM, ccy, 0)}<small>${loss >= 100 ? t('lev.all') : F.spct(-loss, 1)}</small></td>
       <td>${over ? t('lev.overLegal') : ''}</td></tr>`;
   }).join('');
@@ -112,10 +117,11 @@ function onLiveDetail(el, ctx, s) {
       const pr = pnl.querySelector('.pnl-r'); if (pr && D.showR(ctx.data)) pr.innerHTML = rTip(s.pnl_r);
     }
     const lad = el.querySelector('[data-vt="ladder"]'); if (lad) lad.innerHTML = ladder(s, { large: true });
-    const sl = el.querySelector('[data-status]'); if (sl) sl.innerHTML = statusLine(s, { now: ctx.now(), big: true });
+    const sl = el.querySelector('[data-status]'); if (sl) sl.innerHTML = statusLine(s, { now: ctx.now(), big: true, money: false });
     const cta = el.querySelector('#cta'); if (cta) cta.innerHTML = ctaHtml(ctx, s);
     const cb = el.querySelector('[data-j="close"]'); if (cb && s.last_price != null) cb.textContent = t('j.closeAt', { price: F.price(s.last_price) });
     chartRef && chartRef.refresh && chartRef.refresh();
+    barsRef && barsRef.refresh();
   };
   document.addEventListener('pulse:live', fn);
   return () => document.removeEventListener('pulse:live', fn);
@@ -167,6 +173,9 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const bot = B.robotLine(s, ctx.data);
   const brief = `<div class="d-brief">
       <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
+      <p class="d-ctitle">${B.sigTitle(s)}<small>${t(`c.type.${s.horizon}`)}</small></p>
+      ${B.facts(s, D.sigPhase(s, now), now)}
+      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const n = D.offerNums(s, ctx.data, { now }); return `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${B.moneyLines(n)}</div>`; })() : ''}
       <p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
       ${cs.my ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
@@ -183,14 +192,16 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
           ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
           ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
           <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
+          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="false">${t('bars.mode')}</button>
           <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
           <span class="live-stamp" data-stamp></span></div>
         ${legend}
         <div class="pchart-box" id="pchart"></div>
         <div class="tv-box" id="tvbox" hidden></div>
+        <div class="d-bars" id="dbars" hidden>${Bars.controls('db')}</div>
         <a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : '';
-  status = brief + `<div data-status>${statusLine(s, { now, big: true })}</div>` + chartHtml + status;
+  status = brief + `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + chartHtml + status;
   const j = D.journal()[s.id];
   const html = `
     <div class="sheet-head">
@@ -219,7 +230,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
       </div>
       <p class="acct-note">${icon('info', 'icon-xs')}<span>${t('det.acctNote', { r: F.pct(risk.risk, risk.risk % 1 ? 1 : 0), t: F.spct(risk.target, 1), p: s.target ? F.pct(Math.abs(s.target - s.entry) / s.entry * 100, 1) : '–' })}</span></p>
-      ${levTable(s, lev)}
+      ${levTable(s, lev, ctx.data)}
       ${isOpen && state === 'open' ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
         <div class="timeline-row"><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div></div>
@@ -227,7 +238,8 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
 
       ${instrumentText(s.symbol) ? `<h3 class="sheet-label">${t('det.what')}</h3><p class="why">${F.esc(instrumentText(s.symbol))}</p>` : ''}
-      <h3 class="sheet-label">${t('det.why')}</h3>
+      <h3 class="sheet-label" id="det-why">${t('det.why')}</h3>
+      ${B.miniChart(s).replace(/ data-action="open-signal"[^>]*?role="button" tabindex="0"/, "")}
       ${ex?.summary ? `<p class="why">${F.esc(L(ex.summary))}</p>` : (ex && (ex.cs || ex.en) ? `<p class="why">${F.esc(L(ex))}</p>` : '')}
       ${ex?.strategies?.length ? `<p class="why-l">${t('det.strategies')}</p><div class="chips" style="margin-top:8px">${ex.strategies.map((x) => `<span class="chip chip-gold">${F.esc(L(x))}</span>`).join('')}</div>` : ''}
       <ul class="reasons">${(s.reasons || []).map((r) => `<li>${icon('check')}${F.esc(L(r))}</li>`).join('')}</ul>
@@ -255,12 +267,28 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     const box = el.querySelector('#pchart');
     const isLive = () => s.status === 'open' && !s.intraday_hit && Live.stamp(Date.parse(s.last_price_at || 0)).code === 'live';
     if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode, isLive, marks: () => chartMarks(ctx, s) }); }, 30);
+    if (focus === 'why') setTimeout(() => { const c = el.querySelector('#det-why'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     if (focus === 'chart') setTimeout(() => { const c = el.querySelector('.pchart'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     let tvOn = false;
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
       const m = b.dataset.pmode;
       el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === m)));
       const tvb = el.querySelector('#tvbox');
+      const dbx = el.querySelector('#dbars');
+      if (dbx) dbx.hidden = m !== 'bars';
+      if (m === 'bars') {
+        box.hidden = true; if (tvb) tvb.hidden = true;
+        if (!barsRef) barsRef = Bars.mount(dbx, 'db', s.symbol, { levels: [{ v: s.target, label: t('lad.target'), cls: 'up' }, { v: s.entry, label: t('lad.entry'), cls: 'ent' }, { v: s.stop, label: t('lad.stop'), cls: 'down' }], onFail() {
+          /* no market history for this key (e.g. single stocks) -> the chip goes away, back to the signal's own chart */
+          const chip = el.querySelector('[data-pmode="bars"]'); if (chip) chip.remove();
+          dbx.hidden = true; box.hidden = false; pmode = defaultPriceMode(s);
+          el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
+          chartRef && chartRef.refresh && chartRef.refresh();
+          toast(t('bars.noHist'));
+        } });
+        else barsRef.refresh();
+        return;
+      }
       if (m === 'tv') {
         box.hidden = true; tvb.hidden = false;
         if (!tvOn) { tvOn = true; mountTV(tvb, M.tvSym(s.symbol) || tvSymbol(s.symbol)); }
@@ -311,7 +339,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       }
     });
   };
-  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { liveOff && liveOff(); liveOff = null; chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
+  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { liveOff && liveOff(); liveOff = null; barsRef && barsRef.destroy(); barsRef = null; chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
 
   // Shared-element morph: card ticker + ladder -> sheet (View Transitions API)
   const srcTicker = sourceEl?.querySelector?.('.ticker');
