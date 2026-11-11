@@ -274,7 +274,8 @@ function mountWatch(el, ctx) {
   el.querySelectorAll('.wc').forEach((card, i) => {
     const sym = card.dataset.wsym;
     const box = card.querySelector('.wc-chart');
-    watchRefs.push(Bars.mount(box, `wcb${i}`, sym, { fmt: (v) => pxOf(sym, v), tfKey: `barsTf.w.${sym}`, type: 'line', ticks: true }));
+    /* 1.11.2: candles like the big chart, same fallback (saved bars / the signal's prices / prices collected here) */
+    watchRefs.push(Bars.mount(box, `wcb${i}`, sym, { fmt: (v) => pxOf(sym, v), tfKey: `barsTf.w.${sym}`, type: 'candle', path: () => (D.allOpen(ctx.data).find((x) => x.symbol === sym)?.price_path || []) }));
   });
 }
 function refreshWatch(el, ctx) {
@@ -333,7 +334,7 @@ export function render(ctx) {
       <div class="seg-wrap">${seg({ name: 'ttab', small: true, label: t('term.tabs'), items: [{ id: 'pos', label: t('term.tab.pos'), count: sm.rows.length }, { id: 'ord', label: t('term.tab.ord'), count: sm.w.orders.length }, { id: 'hist', label: t('term.tab.hist'), count: histCount(sm) }], active: tab })}</div>
       <div id="t-tab">${tabBody(sm, ctx.data)}</div>
       ${sigs.length ? `<h2 class="section-title">${t('term.sigs')}</h2><div class="chips term-chips">${sigs.slice(0, 12).map((x) => `<button type="button" class="chip ${x.symbol === sym ? 'chip-gold' : ''}" data-action="t-sym" data-sym="${F.esc(x.symbol)}">${F.esc(x.symbol)}</button>`).join('')}</div>` : ''}
-      <details class="gloss term-gloss"><summary>${t('term.words')}</summary><ul>${['PAKA', 'MARZE', 'OBJEM', 'STOPOUT', 'SHORT', 'SPREAD', 'SWAP', 'MCALL', 'DELAY'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
+      <details class="gloss term-gloss"><summary>${t('term.words')}</summary><ul>${['PAKA', 'PAKAMT', 'MARZE', 'OBJEM', 'STOPOUT', 'SHORT', 'SPREAD', 'SWAP', 'MCALL', 'DELAY'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
       <div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5">${t('mt5.help')}</a></div>
       <button type="button" class="btn btn-ghost btn-small term-reset" data-action="t-reset">${t('term.reset')}</button>
     </section>
@@ -484,7 +485,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const sigLim = useSig && sig.entry > 0 && dir * (q.p - sig.entry) > 0;
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
   const st = { side, amount: D.EXAMPLE_DEP[c] || presets[1], lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
-    type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day' };
+    type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: true, exOpen: false };
   const isLim = () => st.type === 'lim';
   const basePx = () => (isLim() && st.limit > 0 ? st.limit : q.p);
   const fmtIn = (v) => (v == null ? '' : String(v));
@@ -500,16 +501,6 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   };
   const goText = () => (isLim() ? t('inv.confirmLim', { v: pxOf(sym, st.limit || 0) }) : t('inv.confirm'));
   const blocked = () => !isLim() && !open;
-  /* leverage in money, live: what the deposit controls, what 1 % does, which move wipes the deposit */
-  const levText = () => {
-    const n = st.amount * st.lev;
-    const ic = M.ccy(sym);
-    const nx = ic !== c ? ` (≈ ${money(D.convert(n, c, ic, ctx.data), ic, 0)})` : '';
-    const wipe = 100 / st.lev;
-    return `<p class="lev-ex">${t('lev.ex', { a: money(st.amount, c), lev: st.lev, n: money(n, c) + nx, one: money(n / 100, c), m: `${side === 'SELL' ? '+' : '−'}${F.num(wipe, wipe % 1 ? 1 : 0)}` })}</p>
-      ${st.lev >= 10 ? `<p class="lev-warn">${icon('alert', 'icon-xs')}<span>${t('lev.warn', { m: F.num(wipe, wipe % 1 ? 1 : 0) })}</span></p>` : ''}`;
-  };
-  const levSum = () => (st.lev === 1 ? t('lev.none') : t('lev.sumOn', { lev: st.lev, x: st.lev }));
   const costLine = () => {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     return `<p class="tk-cost">${qm('SPREAD')}<span>${t('tk.costs', { s: money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0) })}${k.swap > 0 ? ` · ${t('tk.swap', { v: money(k.swap, c, k.swap < 10 ? 2 : 0) })}` : ''}${k.conv ? ` · ${t('tk.conv', { ic: M.ccy(sym) })}` : ''}. ${t('tk.costsS')}</span></p>`;
@@ -518,7 +509,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev })}
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen })}
+      ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
       ${isLim() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
@@ -535,13 +527,6 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     <details class="tk-adv"><summary>${t('inv.adv')}${icon('chev-down', 'icon-xs')}</summary>
     <p class="sheet-label">${t('inv.riskL')}</p>
     <div class="chips tk-chips">${CONFIG.CALC.RISK_PROFILES.map((p) => `<button type="button" class="chip" data-risk="${p.pct}" aria-pressed="${st.risk === p.pct}">${t('term.riskChip', { v: p.pct })}</button>`).join('')}</div>
-    <details class="tk-lev" id="tk-lev">
-      <summary class="lev-sum"><span id="tk-levsum">${levSum()}</span><span class="lev-ch">${t('lev.change')}${icon('chev-down', 'icon-xs')}</span></summary>
-      <p class="sheet-label">${t('lev.title')}${qm('PAKA')}<small>${t('lev.max', { v: maxLev })}</small></p>
-      <div class="lev-chips" role="radiogroup" aria-label="${t('lev.title')}">${levs.map((v) => `<button type="button" class="lev-chip" role="radio" data-lev="${v}" aria-checked="${st.lev === v}">1:${v}</button>`).join('')}</div>
-      <div id="tk-levx">${levText()}</div>
-      <p class="lev-eu">${t('lev.eu')}</p>
-    </details>
     <p class="sheet-label">${t('term.otype')}${qm('LIMIT')}</p>
     <div class="tk-type" role="radiogroup" aria-label="${t('term.otype')}">${['mkt', 'lim'].map((id) => `<button type="button" class="tk-type-b" role="radio" data-otype="${id}" aria-checked="${st.type === id}"><b>${t(`term.otype.${id}`)}</b><small>${id === 'mkt' && !open ? t('term.otype.mktClosed') : t(`term.otype.${id}S`)}</small></button>`).join('')}</div>
     <div id="tk-limf" ${isLim() ? '' : 'hidden'}>
@@ -553,7 +538,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       <label class="tk-in"><span>${t('term.tp')}${qm('CIL')}</span><input class="jin num" inputmode="decimal" data-in="tp" value="${fmtIn(st.tp)}"></label></div>
     <p class="why-s">${t('term.slS')}</p>
     ${costLine()}
-    <details class="gloss tk-gloss"><summary>${t('term.whatLimit')}</summary><ul>${['LIMIT', 'PLATNOST', 'PAKA', 'MARZE', 'STOPOUT', 'SPREAD', 'SWAP'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
+    <details class="gloss tk-gloss"><summary>${t('term.whatLimit')}</summary><ul>${['LIMIT', 'PLATNOST', 'PAKA', 'PAKAMT', 'MARZE', 'STOPOUT', 'SPREAD', 'SWAP'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
     </details>
     <p class="tk-block" id="tk-block" ${blocked() ? '' : 'hidden'}>${icon('clock', 'icon-xs')}<span>${t('term.closedWhy', { h: F.esc(M.hours(sym)) })}</span></p>
     <button type="button" class="btn btn-primary btn-block tk-go" data-go ${blocked() ? 'disabled' : ''}>${goText()}</button>
@@ -568,15 +553,12 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       const root = sh.querySelector('#tk');
       const upd = () => {
         root.querySelector('#tk-out').innerHTML = preview();
-        root.querySelector('#tk-levx').innerHTML = levText();
-        root.querySelector('#tk-levsum').textContent = levSum();
         const go = root.querySelector('[data-go]');
         go.textContent = goText();
         go.disabled = blocked();
         root.querySelector('#tk-block').hidden = !blocked();
         root.querySelectorAll('[data-amt]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk == null && +b.dataset.amt === st.amount)));
         root.querySelectorAll('[data-risk]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk === +b.dataset.risk)));
-        root.querySelectorAll('[data-lev]').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.lev === st.lev)));
       };
       const applyRisk = () => {
         if (st.risk == null) return;
@@ -593,6 +575,9 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (a) { st.risk = null; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
         if (r) { st.risk = +r.dataset.risk; applyRisk(); haptic(); upd(); }
         if (lv) { st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd(); }
+        /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */
+        if (ev.target.closest('[data-action="lev-own-open"]')) st.ownOpen = !st.ownOpen;
+        const lx = ev.target.closest('[data-lx]'); if (lx) st.exOpen = !lx.parentElement.open;
         const goB = ev.target.closest('[data-go]');
         if (!goB || goB.disabled) return;
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }

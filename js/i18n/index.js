@@ -9,13 +9,15 @@ import cs110 from './cs110.js';
 import en110 from './en110.js';
 import cs111 from './cs111.js';
 import en111 from './en111.js';
+import cs112 from './cs112.js';
+import en112 from './en112.js';
 
 export const LOCALES = [
   { id: 'cs', label: 'Čeština', tag: 'cs-CZ' },
   { id: 'en', label: 'English', tag: 'en-GB' },
 ];
 /* 1.9.0 texts live in cs19.js / en19.js and win over older keys of the same name (e.g. nav.terminalShort) */
-const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111 }, en: { ...en, ...en19, ...en110, ...en111 } };
+const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111, ...cs112 }, en: { ...en, ...en19, ...en110, ...en111, ...en112 } };
 const FALLBACK = 'cs';
 
 function detect() {

@@ -7,6 +7,7 @@ import { LESSONS } from '../lessons.js';
 import { icon, seg, segMove, toast, openSheet, closeTopSheet } from '../ui.js';
 import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
 import * as Live from '../live.js';
+import * as Mkt from '../market.js';
 
 export const MORE_ITEMS = [
   /* 1.9.0: how it works first (guided tour + page), and why it is not made up */
@@ -124,6 +125,9 @@ export function renderSettings(ctx) {
     <div class="card"><p class="card-t">${t('set.prox')}</p>
       <div style="margin-top:12px">${seg({ name: 'prox', small: true, label: t('set.proxAria'), items: CONFIG.PROXIMITY_OPTIONS.map((v) => ({ id: String(v), label: F.pct(v, v % 1 ? 1 : 0) })), active: String(prox) })}</div></div>
   </div><div>
+    <h2 class="section-title">${t('set.trade')}</h2>
+    <div class="card"><div class="card-row"><div><p class="card-t">${t('set.pro')}</p><p class="card-s">${t('set.proS')}</p></div>
+      <button class="switch" role="switch" type="button" aria-checked="${Mkt.isPro()}" data-action="pro-toggle" aria-label="${t('set.pro')}"></button></div></div>
     <h2 class="section-title">${t('set.look')}</h2>
     <div class="card">${seg({ name: 'theme', small: true, label: t('set.look'), items: [{ id: 'dark', label: t('set.dark') }, { id: 'light', label: t('set.light') }], active: theme })}</div>
     <h2 class="section-title">${t('set.app')}</h2>

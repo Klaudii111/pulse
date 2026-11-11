@@ -70,7 +70,7 @@ function slideB() {
     </div>
     <p class="onb-line" id="onb-line">${riskLine(cs)}</p>
     <p class="onb-l">${t('onb.b.lev')}</p>
-    <div class="onb-ccy onb-levp" role="radiogroup" aria-label="${t('onb.b.lev')}">${[['cons', 1], ['bal', 2], ['aggr', 5]].map(([id, v]) => `<button type="button" role="radio" class="chip" data-levp="${id}" aria-checked="${id === (store.get('levProfile', 'cons') || 'cons')}"><b>${t(`mb.p.${id}`)}</b><small>${v === 1 ? t('mb.noLev') : t('mb.lev', { v })}</small></button>`).join('')}</div>
+    <div class="onb-ccy onb-levp" role="radiogroup" aria-label="${t('onb.b.lev')}">${[['cons', 1], ['bal', 2], ['aggr', 5]].map(([id, v]) => `<button type="button" role="radio" class="chip" data-levp="${id}" aria-checked="${id === (store.get('levProfile', 'cons') || 'cons')}"><b>${t(`mb.p.${id}`)}</b><small>${v === 1 ? t('mb.noLev') : id === 'aggr' ? t('mb.levCap') : t('mb.lev', { v })}</small></button>`).join('')}</div>
     <p class="onb-note">${t('onb.b.levS')}</p>
     <p class="onb-note onb-wal">${icon('wallet', 'icon-sm')}<span>${t('onb.b.wallet')}</span></p>
   </section>`;

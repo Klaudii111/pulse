@@ -102,6 +102,8 @@ function ctx(extra = {}) {
 function renderNav() {
   const active = PARENT[route.name] || (SECONDARY.has(route.name) ? 'vice' : route.name);
   const tabbar = document.getElementById('tabbar');
+  /* 1.11.2: the background takes a gentle tint per tab (css: html[data-tab]) */
+  document.documentElement.dataset.tab = active;
   const prevActive = tabbar.querySelector('[aria-current="page"]')?.getAttribute('href');
   /* tab bar uses the short label where one exists ("Platforma"), the sidebar the full one ("Obchodní platforma") */
   tabbar.innerHTML = TABS.map((x) => `<a class="tab" href="#/${x.id}" ${x.id === active ? 'aria-current="page"' : ''}>${icon(x.icon)}<span>${t(x.id === 'terminal' ? 'nav.terminalShort' : `nav.${x.id}`)}</span></a>`).join('');
@@ -402,6 +404,14 @@ const GLOBAL = {
   'term-help'(el) { termHelp(el.dataset.k); },
   /* 1.11.1: leverage profile column on a money block (card, detail; the invest sheet also sets its own leverage) */
   'lev-prof'(el) { B.setLevProfile(el.dataset.prof); },
+  /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */
+  'lev-own'(el) { B.setLevOwn(+el.dataset.lev, el.dataset.sym || null); },
+  'lev-own-open'(el) { B.toggleOwn(el); },
+  'lev-why'(el) { if (!B.showWhy(el)) toast(B.levWhy(el.dataset.sym, +el.dataset.v), { timeout: 9000 }); },
+  'pro-toggle'(el) {
+    if (Mkt.isPro()) { store.set('proClient', false); el.setAttribute('aria-checked', 'false'); toast(t('pro.offDone')); return; }
+    proSheet(el);
+  },
   rtip() { toast(t('rtip')); },
   /* 1.9.1 signal card buttons: [Zainvestovat] / [Nastavit nákup za …] and [Teď ne] */
   invest(el) {
@@ -462,6 +472,30 @@ document.addEventListener('click', (ev) => {
 });
 
 /* ---------- 1.9.0: "?" next to every trading word -> small sheet with one plain sentence and an example ---------- */
+/* 1.11.2 "Profesionální klient (vyšší páky)": a clear warning first, fictional money only */
+function proSheet(sw) {
+  openSheet({
+    small: true, label: t('pro.title'),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t('pro.title')}</p><p class="sheet-sub">${t('pro.sub')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body pro-warn"><p class="pro-alert">${icon('alert', 'icon-sm')}<span>${t('pro.alert')}</span></p>
+      <ul class="pro-list"><li>${t('pro.l1')}</li><li>${t('pro.l2')}</li><li>${t('pro.l3')}</li><li>${t('pro.l4')}</li></ul>
+      <p class="pro-caps">${t('pro.caps')}</p>
+      <button type="button" class="btn btn-danger btn-block" data-pro-on>${t('pro.on')}</button>
+      <button type="button" class="btn btn-ghost btn-block" data-close2 style="margin-top:8px">${t('pro.cancel')}</button></div>`,
+    onMount(sh) {
+      sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-close2]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-pro-on]').addEventListener('click', () => {
+        store.set('proClient', true);
+        if (sw) sw.setAttribute('aria-checked', 'true');
+        closeTopSheet();
+        toast(t('pro.onDone'), { timeout: 7000 });
+      });
+    },
+  });
+}
+
 function termHelp(k) {
   openSheet({
     small: true, label: t(`th.${k}.t`),

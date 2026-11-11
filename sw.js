@@ -4,7 +4,7 @@
  * - Web push: shows notification from JSON payload {title, body, url, tag}
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'pulse-v1.11.1';
+const VERSION = 'pulse-v1.11.2';
 const SHELL = `${VERSION}-shell`;
 const DATA = 'pulse-data';
 
@@ -52,6 +52,8 @@ const SHELL_FILES = [
   './js/i18n/cs110.js',
   './js/i18n/en110.js',
   './js/i18n/cs111.js',
+  './js/i18n/cs112.js',
+  './js/i18n/en112.js',
   './js/i18n/en111.js',
   './js/health.js',
   './js/views/learn.js',

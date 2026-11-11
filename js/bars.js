@@ -111,7 +111,8 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   if (!box) return;
   const w = box.clientWidth || 340, h = box.clientHeight || 220;
   const all = withLive(d);
-  const ks = all.slice(-(type === 'candle' ? Math.max(30, Math.min(120, Math.floor(w / 4))) : 400));
+  /* 1.11.2: small charts (Sledované grafy) get fewer, wider candles */
+  const ks = all.slice(-(type === 'candle' ? (w < 280 ? Math.max(16, Math.floor((w - 70) / 6)) : Math.max(30, Math.min(120, Math.floor(w / 4)))) : 400));
   const lv = levels.filter((x) => x.v > 0);
   let lo = Math.min(...ks.map((k) => k.l), ...lv.map((x) => x.v)), hi = Math.max(...ks.map((k) => k.h), ...lv.map((x) => x.v));
   const span = (hi - lo) || hi * 0.001 || 1; lo -= span * 0.06; hi += span * 0.06;
@@ -179,8 +180,13 @@ function lastPx(key, d, fmt) {
   return { p: fmt(p), ch, when, src, delayed: !!m.delayed };
 }
 function fbHtml(key, d, fmt, reason, compact) {
-  if (compact) return `<p class="br-fb-note">${F.esc(t('bars.fb.short'))}</p>`;
   const x = lastPx(key, d, fmt);
+  /* 1.11.2 small charts (Sledované grafy): the short note + when the last price is from (price itself is in the card head) */
+  if (compact) {
+    const s = x?.src ? x.src + (x.delayed ? `, ${t('bars.delayed')}` : '') : '';
+    const at = x?.when ? t(s ? 'bars.fb.atSrc' : 'bars.fb.at', { t: x.when, s }) : '';
+    return `<p class="br-fb-note">${F.esc(t('bars.fb.short'))}</p>${at ? `<p class="br-fb-at">${F.esc(at.charAt(0).toUpperCase() + at.slice(1))}</p>` : ''}`;
+  }
   const note = t(reason === 'nokey' ? 'bars.fb.nokey' : 'bars.fb.note');
   if (!x) return `<p class="br-fb-note">${F.esc(t('bars.fb.none'))}</p>`;
   const s = x.src ? x.src + (x.delayed ? `, ${t('bars.delayed')}` : '') : '';

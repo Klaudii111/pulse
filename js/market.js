@@ -5,6 +5,7 @@
 import { CONFIG } from '../config.js';
 import * as Live from './live.js';
 import { INSTR } from './instruments.js';
+import * as store from './store.js';
 import { t, lang } from './i18n/index.js';
 
 let REG = null; // { updated_at, groups, byKey }
@@ -39,7 +40,7 @@ export function ccy(k) {
 }
 const FX_MAJOR = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD'];
 /* EU retail caps (ESMA): fx majors 30, other fx / major indices / gold 20, other commodities 10, shares & ETFs 5, crypto 2 */
-export function maxLev(k) {
+export function retailLev(k) {
   const it = get(k);
   if (it?.max_leverage > 0) return Math.round(it.max_leverage);
   const C = CONFIG.CALC.LEVERAGE_CAPS || {};
@@ -48,9 +49,28 @@ export function maxLev(k) {
   if (c === 'commodity') return k === 'XAUUSD' ? C.gold || 20 : C.commodity || 10;
   return C[c] || CONFIG.CALC.LEVERAGE_MAX;
 }
-/* leverage steps for the chips: 1:1 ... max */
+/* 1.11.2 "Profesionální klient" (Více -> Nastavení, default off, fictional money only): caps like a broker's pro account */
+export const PRO_CAPS = { stock: 20, etf: 20, index: 100, fx: 100, gold: 100, commodity: 50, crypto: 5 };
+export const isPro = () => store.get('proClient', false) === true;
+export function proLev(k) {
+  const c = cls(k);
+  const v = c === 'commodity' && k === 'XAUUSD' ? PRO_CAPS.gold : PRO_CAPS[c];
+  return Math.max(retailLev(k), v || 20);
+}
+/* the cap that applies to this user now */
+export const maxLev = (k) => (isPro() ? proLev(k) : retailLev(k));
+/* 1.11.2 broker-style leverage chips (like MetaTrader brokers); chips above the cap are shown disabled */
+export const LEV_CHIPS = [1, 2, 5, 10, 20, 30, 50, 100];
 export function levSteps(max) {
-  return [1, 2, 3, 5, 10, 20, 30].filter((x) => x <= max).concat([1, 2, 3, 5, 10, 20, 30].includes(max) ? [] : [max]).sort((a, b) => a - b);
+  return LEV_CHIPS.filter((x) => x <= max).concat(LEV_CHIPS.includes(max) ? [] : [max]).sort((a, b) => a - b);
+}
+/* kind of market for the explanation of a disabled chip: stock | index | gold | fx | commodity | crypto */
+export function levKind(k) {
+  const c = cls(k);
+  if (c === 'etf') return 'stock';
+  if (c === 'commodity' && k === 'XAUUSD') return 'gold';
+  if (c === 'fx') return FX_MAJOR.includes(k) ? 'fxMajor' : 'fx';
+  return c;
 }
 
 /* ---------- market hours ---------- */

@@ -309,16 +309,23 @@ export function phaseChip(ph) {
    then how many signals made money (win_rate), the maximum possible loss, the best case (target) in grey,
    and a small comparison of three leverage profiles (Konzervativně 1:1 · Vyváženě 1:2 · Agresivněji 1:5, capped at the
    instrument's legal max). No health.json -> the 1.11.0 lines (loss + potential at the target). */
-export const LEV_PROFILES = [{ id: 'cons', lev: 1 }, { id: 'bal', lev: 2 }, { id: 'aggr', lev: 5 }];
-export const levProfile = () => LEV_PROFILES.find((p) => p.id === store.get('levProfile', 'cons')) || LEV_PROFILES[0];
+/* 1.11.2: the 3rd profile uses the instrument's current cap (retail: shares 1:5, pro: 1:20); "own" = any broker chip */
+export const LEV_PROFILES = [{ id: 'cons', lev: 1 }, { id: 'bal', lev: 2 }, { id: 'aggr', lev: 'max' }];
+const ownLev = () => { const v = +store.get('levOwn', 10); return v >= 1 ? Math.round(v) : 10; };
+export const levProfile = () => {
+  const id = store.get('levProfile', 'cons');
+  if (id === 'own') return { id: 'own', lev: ownLev() };
+  return LEV_PROFILES.find((p) => p.id === id) || LEV_PROFILES[0];
+};
+const profLev = (p, mx) => (p.lev === 'max' ? mx : Math.min(p.lev, mx));
 export function profCols(sym) {
   const mx = M.maxLev(sym) || 1;
   const out = [];
-  for (const p of LEV_PROFILES) { const lev = Math.min(p.lev, mx); if (!out.some((o) => o.lev === lev)) out.push({ ...p, lev }); }
+  for (const p of LEV_PROFILES) { const lev = profLev(p, mx); if (!out.some((o) => o.lev === lev)) out.push({ ...p, lev }); }
   return out;
 }
-/* the leverage of the user's profile for this instrument (capped at its legal max) */
-export const selLev = (sym) => Math.min(levProfile().lev, M.maxLev(sym) || 1);
+/* the leverage of the user's profile for this instrument (capped at the cap that applies now) */
+export const selLev = (sym) => profLev(levProfile(), M.maxLev(sym) || 1);
 /* "1 ze 2" / "3 z 5" / "6 z 10": the simplest fraction within 3 points of the test's win rate */
 export function winFrac(w) {
   if (!(w > 0 && w < 1)) return null;
@@ -340,44 +347,107 @@ export function testGrowth(bt, ccy) {
 export function levNums({ side, entry, amount, sl, tp, lev, bt }) {
   const o = W.outcome({ side, entry, amount, lev, sl, tp });
   const risk = sl > 0 && entry > 0 ? Math.abs(amount * lev * (sl - entry) / entry) : null;
-  return { lev, worst: o.atStop, best: o.atTarget, capped: o.atStop != null && o.atStop <= -amount + 0.5,
-    avg: bt && risk != null && Number.isFinite(+bt.avg_r) ? risk * bt.avg_r : null };
+  const capped = o.atStop != null && o.atStop <= -amount + 0.5;
+  /* stop-out before the stop: the test average (made with the full stop) does not apply -> no average */
+  return { lev, worst: o.atStop, best: o.atTarget, capped, notional: amount * lev, wipe: o.wipe,
+    avg: bt && risk != null && Number.isFinite(+bt.avg_r) && !capped ? risk * bt.avg_r : null };
 }
-/* m = { s, data, sym, side, amount, ccy, base, sl, tp, sel } */
+/* 1.11.2 "S pákou 1:20 stačí, aby cena klesla o 5 %, a přijdeš o celý vklad." (stop-out at the deposit) */
+export function wipeLine(lev, side) {
+  const sell = side === 'SELL';
+  if (!(lev > 1)) return t(sell ? 'lv.wipe1Sell' : 'lv.wipe1');
+  const m = 100 / lev;
+  return t(sell ? 'lv.wipeSell' : 'lv.wipe', { lev, m: F.num(m, m % 1 ? 1 : 0) });
+}
+/* why a chip is disabled: the EU retail cap of this market (+ the pro cap / where to switch it on) */
+export function levWhy(sym, v) {
+  let kind = M.levKind(sym);
+  if (kind === 'fxMajor' || kind === 'fx') kind = M.retailLev(sym) >= 30 ? 'fxMajor' : 'fx';
+  if (!['stock', 'index', 'gold', 'fxMajor', 'fx', 'commodity', 'crypto'].includes(kind)) kind = 'stock';
+  let x = `${t(`lv.why.${kind}`, { v: M.retailLev(sym) })} ${t('lv.whyMt')}`;
+  if (M.isPro()) x += ` ${t('lv.whyProMax', { v: M.proLev(sym) })}`;
+  else if (v <= M.proLev(sym)) x += ` ${t('lv.whyPro', { v: M.proLev(sym) })}`;
+  return x;
+}
+/* the broker chips 1:1 … 1:100 (like MetaTrader brokers); above the cap disabled (tap = the reason) */
+export function levChips(sym, sel) {
+  const mx = M.maxLev(sym) || 1;
+  const list = M.LEV_CHIPS.concat(M.LEV_CHIPS.includes(mx) ? [] : [mx]).sort((a, b) => a - b);
+  return `<div class="lev-chips" role="radiogroup" aria-label="${F.esc(t('lv.chipsAria'))}">${list.map((v) => (v <= mx
+    ? `<button type="button" class="lev-chip" role="radio" data-action="lev-own" data-sym="${F.esc(sym)}" data-lev="${v}" aria-checked="${v === sel}">1:${v}</button>`
+    : `<button type="button" class="lev-chip is-off" aria-disabled="true" data-action="lev-why" data-sym="${F.esc(sym)}" data-v="${v}">1:${v}</button>`)).join('')}</div>
+    <p class="lev-why" hidden></p>`;
+}
+/* m = { s, data, sym, side, amount, ccy, base, sl, tp, sel, open } – open: the chip list shown (invest sheet) */
 export function moneyBlock(m) {
   const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
   const arg = { side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
+  const mx = M.maxLev(m.sym) || 1;
   const cols = profCols(m.sym).map((c) => ({ ...c, n: levNums({ ...arg, lev: c.lev }) }));
-  const levs = cols.map((c) => c.lev);
+  /* every enabled chip has its block ready, so a tap anywhere on the page only switches what is shown */
+  const levs = M.levSteps(mx);
   if (!levs.includes(m.sel)) levs.push(m.sel);
   const sm = (v) => sMoney(v, m.ccy);
   const wf = ok ? winFrac(bt.win_rate) : null;
+  const worstTxt = (n) => (n.worst == null ? '–' : n.capped ? `${sm(n.worst)} <small class="mb-allw">${t('mb.all')}</small>` : sm(n.worst));
   const main = (lev) => {
     const n = levNums({ ...arg, lev });
     const on = lev === m.sel;
     const nums = F.esc(JSON.stringify({ a: m.amount, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
+    const wl = `<p class="mb-wipe${lev >= 10 ? ' is-hot' : ''}"><span>${F.esc(wipeLine(lev, m.side))}</span>${qh('STOPOUT')}</p>`;
     if (!ok) {
       const pp = n.best != null && m.amount > 0 ? (n.best / m.amount) * 100 : null;
       return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
-        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.worst != null ? sm(n.worst) : '–'}</b></p>
-        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
+        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
+        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p>${wl}</div>`;
     }
     return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
-      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}` : '–'}<small>${t(`mb.dur.${m.s.horizon}`)}</small></b></p>
+      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
-      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.worst != null ? sm(n.worst) : '–'}</b></p>
-      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p></div>`;
+      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
+      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p>${wl}</div>`;
   };
   const cell = (c) => `<button type="button" class="mb-col${c.lev === m.sel ? ' is-on' : ''}" role="radio" aria-checked="${c.lev === m.sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
       <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
       <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
-  const table = cols.length > 1 ? `<div class="mb-lev" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
+  const ownOn = !cols.some((c) => c.lev === m.sel);
+  const own = `<div class="mb-ownw${m.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${ownOn ? ' is-on' : ''}" data-action="lev-own-open" aria-expanded="${!!m.open}">
+      <span>${t('mb.own')}</span><b class="num mb-own-v">${ownOn ? `1:${m.sel}` : ''}</b>${icon('chev-down', 'icon-xs')}</button>
+    <div class="mb-own"${m.open ? '' : ' hidden'}>${levChips(m.sym, m.sel)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>`;
+  const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div><p class="mb-note">${t('mb.levNote')}</p>` : '';
-  return `<div class="mb" data-max="${M.maxLev(m.sym) || 1}">${levs.map(main).join('')}${table}
+      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>`;
+  return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${levs.map(main).join('')}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
+}
+/* 1.11.2 "Příklady pák" (invest sheet): this signal / instrument and this deposit at 1:1 … 1:30 – the same numbers (levNums) */
+export function levExamples(m) {
+  const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
+  const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
+  const arg = { side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
+  const mx = M.maxLev(m.sym) || 1, pro = M.proLev(m.sym);
+  const rows = [1, 2, 5, 10, 20, 30].concat([50, 100].filter((v) => v <= mx));
+  const sm = (v) => sMoney(v, m.ccy);
+  const tr = rows.map((lev) => {
+    const n = levNums({ ...arg, lev });
+    const off = lev > mx;
+    const tag = off ? `<small class="lx-off">${t(lev <= pro && !M.isPro() ? 'lx.onlyPro' : 'lx.never')}</small>` : '';
+    const w = 100 / lev;
+    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}"` : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}"`;
+    return `<tr class="${off ? 'is-off' : ''}${lev === m.sel ? ' is-on' : ''}" ${act} tabindex="0">
+      <th scope="row" class="num">1:${lev}${tag}</th>
+      <td class="num">${F.money(n.notional, m.ccy, 0)}</td>
+      <td class="num up">${n.avg != null ? `≈ ${sm(n.avg)}` : '–'}</td>
+      <td class="num up">${n.best != null ? sm(n.best) : '–'}</td>
+      <td class="num down">${n.worst != null ? (n.capped ? `${sm(n.worst)}<small class="lx-all">${t('mb.all')}</small>` : sm(n.worst)) : '–'}</td>
+      <td class="num">${F.num(w, w % 1 ? 1 : 0)} %</td></tr>`;
+  }).join('');
+  return `<details class="lx"${m.exOpen ? ' open' : ''}><summary data-lx>${t('lx.title')}${icon('chev-down', 'icon-xs')}</summary>
+    <p class="lx-sub">${t('lx.sub', { a: F.money(m.amount, m.ccy, 0) })}</p>
+    <div class="lx-wrap"><table class="lx-tab"><thead><tr><th scope="col">${t('lx.c.lev')}</th><th scope="col">${t('lx.c.n')}</th><th scope="col">${t('lx.c.avg')}</th><th scope="col">${t('lx.c.tp')}</th><th scope="col">${t('lx.c.sl')}</th><th scope="col">${t(m.side === 'SELL' ? 'lx.c.wipeSell' : 'lx.c.wipe')}</th></tr></thead>
+    <tbody>${tr}</tbody></table></div><p class="lev-why" hidden></p><p class="lx-note">${t(ok ? 'lx.note' : 'lx.noteOld')}</p></details>`;
 }
 /* card / detail: the block for the example deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {
@@ -391,17 +461,44 @@ export function testLine(s, data) {
   if (!g) return '';
   return `<p class="mb-test">${icon('spark', 'icon-xs')}<span>${t('mb.test', { y0: g.y0, y1: g.y1, a: F.money(g.start, c, 0), b: F.money(g.end, c, 0) })}</span>${qh('TESTACC')}</p>`;
 }
-/* tap on a profile column: remember it on this device and show it in every money block on the page */
-export function setLevProfile(id) {
-  if (!LEV_PROFILES.some((p) => p.id === id)) return;
+/* tap on a profile column / a broker chip: remember it on this device and show it in every money block on the page */
+export function setLevProfile(id, own = null) {
+  if (id === 'own') { if (!(own >= 1)) return; store.set('levOwn', Math.round(own)); } else if (!LEV_PROFILES.some((p) => p.id === id)) return;
   store.set('levProfile', id);
-  const want = levProfile().lev;
+  syncLev();
+}
+/* a broker chip: when it equals a profile column of the instrument, that profile is remembered instead */
+export function setLevOwn(v, sym) {
+  const c = sym ? profCols(sym).find((x) => x.lev === v) : null;
+  if (c) setLevProfile(c.id); else setLevProfile('own', v);
+}
+export function syncLev() {
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
-    const lev = Math.min(want, +mb.dataset.max || 1);
+    const lev = selLev(mb.dataset.sym);
     mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', +x.dataset.l === lev));
-    mb.querySelectorAll('.mb-col').forEach((x) => { const on = +x.dataset.lev === lev; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
+    let any = false;
+    mb.querySelectorAll('.mb-col').forEach((x) => { const on = +x.dataset.lev === lev; any = any || on; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
+    mb.querySelectorAll('.mb-own .lev-chip[data-lev]').forEach((x) => x.setAttribute('aria-checked', String(+x.dataset.lev === lev)));
+    const ob = mb.querySelector('.mb-own-b');
+    if (ob) { ob.classList.toggle('is-on', !any); const v = ob.querySelector('.mb-own-v'); if (v) v.textContent = any ? '' : `1:${lev}`; }
   });
+}
+/* "Vlastní páka ▾" opens / closes the chip list of its block */
+export function toggleOwn(el) {
+  const w = el.closest('.mb-ownw'); if (!w) return;
+  const box = w.querySelector('.mb-own');
+  const open = box.hidden;
+  box.hidden = !open; w.classList.toggle('is-open', open); el.setAttribute('aria-expanded', String(open));
+}
+/* tap on a disabled chip / row: the plain reason right under it */
+export function showWhy(el) {
+  const host = el.closest('.mb-own, .lx');
+  const p = host?.querySelector('.lev-why');
+  if (!p) return false;
+  p.textContent = levWhy(el.dataset.sym, +el.dataset.v);
+  p.hidden = false;
+  return true;
 }
 export function facts(s, ph, now = D.clock()) {
   const w = whatIs(s.symbol, s.name);
@@ -436,7 +533,7 @@ export function healthNote(s, data) {
   return `<a class="le-note is-${st === 'vypnuto' ? 'off' : 'watch'}" href="#/uceni">${icon('shield', 'icon-xs')}<span>${t(st === 'vypnuto' ? 'le.det.off' : 'le.det.watch')}</span>${icon('chev-right', 'icon-xs')}</a>`;
 }
 
-export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = null } = {}) {
+export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = null, isNew = false } = {}) {
   const cs = D.cardState(s, data, now);
   const ph = D.sigPhase(s, now);
   const w = whatIs(s.symbol, s.name);
@@ -447,7 +544,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
     foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
   } else if (cs.cta) {
     const lim = cs.cta === 'limit';
-    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</span></button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
   let money = '';
   if (ph === 'closed') money = closedLines(s, now);
@@ -463,7 +560,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
   }
   const when = cs.code === 'mine' || ph === 'closed' ? '' : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`;
   /* 1.10.0: the whole card is one tappable tile -> the detail (inner buttons keep their own action) */
-  return `<article class="sc is-${cs.code} ph-${ph} is-tile" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
+  return `<article class="sc is-${cs.code} ph-${ph} hz-${F.esc(s.horizon || '')}${isNew ? ' is-new' : ''} is-tile" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">
       <span class="sc-id"><span class="sc-title">${sigTitle(s)}</span>
         <span class="sc-s">${F.esc(sub)}${s.preview ? ` <span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : ''}</span></span>
