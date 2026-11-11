@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.2.0',
+  APP_VERSION: '1.2.2',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -21,7 +21,7 @@ export const CONFIG = {
   /*
    * Live prices: the app polls our Cloudflare Worker (PROXY_URL), which holds the data-provider key server-side.
    */
-  LIVE: { PROXY_URL: '', POLL_SEC: 10, RENDER_MS: 1500 },
+  LIVE: { PROXY_URL: 'https://pulse-live.y2tbnvrwtj.workers.dev', POLL_SEC: 10, RENDER_MS: 1500 },
 
   /* Horizons hidden in the app until their strategy passes the out-of-sample test (1-day: no edge yet) */
   HIDDEN_HORIZONS: ['DEN'],
