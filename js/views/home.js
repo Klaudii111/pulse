@@ -2,6 +2,8 @@ import * as F from '../format.js';
 import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
 import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline } from '../ui.js';
+import { pricePoints } from '../charts.js';
+import { withLive } from './results.js';
 import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock } from './signals.js';
 
 export function miniBar(s) {
@@ -85,7 +87,9 @@ export function render(ctx) {
   const fresh = open.filter((x) => D.isNew(x, ctx.data));
   const sumPct = open.reduce((a, x) => a + (x.pnl_r || 0) * (x.risk_pct_account || 0), 0);
   const al = alerts(ctx, open);
-  const spark = (ctx.data.performance?.equity || []).slice(-30).map((p) => p.bot);
+  const spark = withLive(ctx.data.performance?.equity || [], ctx.data).slice(-30).map((p) => p.bot);
+  /* today's price line of a position (5-min points), shown once there are at least 3 of them */
+  const daySpark = (x) => { const pp = pricePoints(x, 'today'); return pp.length >= 4 ? `<span class="pos-spark">${sparkline(pp.map((p) => p.p), { w: 56, h: 18 })}</span>` : ''; };
   const urgency = (x) => {
     const p = D.proximity(x);
     if (p) return p.dist;
@@ -125,7 +129,7 @@ export function render(ctx) {
         return `<button type="button" class="pos-row ${st !== 'open' ? `is-${st}` : ''} ${i >= CAPP ? 'is-extra' : ''}" style="--i:${Math.min(i, 6)}" data-action="open-signal" data-id="${F.esc(x.id)}">
           <span class="pos-id">${monogram(x.symbol, x.name)}<span><span class="hist-sym">${F.esc(x.symbol)}</span><span class="hist-meta">${F.HZ_LABEL[x.horizon]}, ${st === 'target' ? t('home.m.target') : st === 'stop' ? t('home.m.stop') : F.countdown(x.exit_date, now)}</span></span></span>
           ${miniBar(x)}
-          <span class="pos-v num ${up ? 'up' : 'down'}">${F.spct(x.pnl_pct_position, 2)}${showR ? `<small>${rTip(x.pnl_r)}</small>` : ''}</span>
+          <span class="pos-v num ${up ? 'up' : 'down'}">${daySpark(x)}${F.spct(x.pnl_pct_position, 2)}${showR ? `<small>${rTip(x.pnl_r)}</small>` : ''}</span>
         </button>`;
       }).join('')}${open.length > CAPP ? `<button type="button" class="alert-more" data-action="pos-all" data-n="${open.length}">${t('common.showAllN', { n: open.length })}</button>` : ''}</div>` : `<p class="quiet">${t('home.noPositions')}</p>`}
     </div>

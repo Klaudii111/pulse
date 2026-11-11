@@ -133,12 +133,22 @@ export function pricePoints(s, mode) {
     const last = out[out.length - 1];
     if (last && nyDayOf(last.t) === nyDayOf(p.t)) out[out.length - 1] = p; else out.push(p);
   });
-  return out;
+  return out.length >= 2 ? out : raw; // a signal from today: its intraday points are the whole story
+}
+
+/* 'today' has something to show only with at least 2 points of the newest trading day */
+export function hasToday(s) {
+  const raw = s.price_path || [];
+  if (raw.length < 2) return false;
+  const day = nyDayOf(raw[raw.length - 1].t);
+  return raw.filter((p) => nyDayOf(p.t) === day).length >= 2;
 }
 
 /* Default chart mode: 'today' once the newest day has at least 3 intraday points. */
 export function defaultPriceMode(s) {
-  return pricePoints(s, 'today').length >= 4 ? 'today' : 'all';
+  const raw = s.price_path || [];
+  const oneDay = raw.length >= 2 && nyDayOf(raw[0].t) === nyDayOf(raw[raw.length - 1].t);
+  return hasToday(s) && (oneDay || pricePoints(s, 'today').length >= 4) ? 'today' : 'all';
 }
 
 /** Price path with stop / entry / target levels. opts.mode = 'today' | 'all' (getter or value). */
@@ -170,7 +180,7 @@ export function priceChart(box, s, opts = {}) {
       ${lvl(s.entry, 'var(--ink-2)', t('lad.entry'), '1 3')}
       <path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="${X(path.length - 1)}" cy="${Y(lastP)}" r="4.5" fill="${col}" stroke="var(--raise)" stroke-width="2"/>
-      <text x="${pad.l}" y="${h - 5}" class="ax">${s.horizon === 'DEN' || mode === 'today' ? F.time(first) : F.dm(first)}</text>
+      <text x="${pad.l}" y="${h - 5}" class="ax">${mode === 'today' || s.horizon === 'DEN' ? (nyDayOf(first) === nyDayOf(lastT) ? F.time(first) : F.dmTime(first)) : F.dm(first)}</text>
       <text x="${X(path.length - 1)}" y="${h - 5}" class="ax" text-anchor="end">${s.horizon === 'DEN' || mode === 'today' ? F.time(lastT) : F.dm(lastT)}</text>
     </svg>`;
   };

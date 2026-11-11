@@ -195,6 +195,7 @@ function checkAlerts() {
   const pfx = CONFIG.APP_SHORT_NAME;
   D.allOpen(data).forEach((s) => {
     if (!D.horizonAllowed(data, s.horizon)) return;
+    if (s.preview && s.intraday_hit) return; // the robot did not hold an unconfirmed intraday signal
     if (s.intraday_hit && s.hit_at && (tNow - new Date(s.hit_at)) / 3600000 <= CONFIG.HIT_NOTIFY_MAX_AGE_H) {
       const k = `${s.id}:hit`;
       if (!done.has(k)) {

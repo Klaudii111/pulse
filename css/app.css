@@ -1405,3 +1405,5 @@ html.is-hidden .aurora i, html.is-hidden .regime-dot::after { animation-play-sta
 /* 1.3.0: intraday preview tag + price chart range chips */
 .hz-tag.is-preview { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 .pchart-modes { padding: 0; margin: 0 0 6px; }
+.pos-spark { display: block; margin: 0 0 2px auto; width: 56px; height: 18px; opacity: .9; }
+.pos-spark .spark { display: block; }

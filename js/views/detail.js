@@ -3,7 +3,7 @@ import * as F from '../format.js';
 import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
 import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
-import { priceChart, defaultPriceMode } from '../charts.js';
+import { priceChart, defaultPriceMode, hasToday } from '../charts.js';
 import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 
@@ -91,9 +91,9 @@ export function openDetail(ctx, id, sourceEl = null) {
       ${status}
       ${est ? `<div class="entry-box is-${est.code}">${entryChip(est)}<p>${F.esc(est.note)}</p></div>` : ''}
       ${prox ? `<p class="prox-line ${prox.side === 'stop' ? 'down' : 'up'}">${icon('alert', 'icon-xs')}${t('det.prox', { v: F.pct(prox.dist, 1), side: t(`det.prox.${prox.side}`) })}</p>` : ''}
-      ${s.price_path?.length > 1 ? `<div class="pchart"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
+      ${s.price_path?.length > 1 ? `<div class="pchart">${hasToday(s) ? `<div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
           <button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chartToday')}</button>
-          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button></div>
+          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button></div>` : ''}
         <div class="pchart-box" id="pchart"></div>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>

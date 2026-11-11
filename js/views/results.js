@@ -14,20 +14,22 @@ const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Amer
 
 /* Today's live point (the bot publishes equity once a day after the close): the robot = last equity moved by
    today's change of the open positions (in % of the account), S&P 500 = last value moved by SPY today. */
-function withLive(eq, data) {
+export function withLive(eq, data) {
   const last = eq[eq.length - 1];
   const today = nyDay(Date.now());
   if (!last || today <= last.date) return eq;
   let delta = 0, any = false;
-  D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon)).forEach((s) => {
-    if (!s.last_price_at || nyDay(Date.parse(s.last_price_at)) !== today || !(s.entry > s.stop)) return;
+  /* the account curve is an equal-start blend of the horizon sleeves -> a position moves it by its sleeve share */
+  const sleeves = Math.max(1, Object.keys(data?.performance?.by_horizon || {}).filter((k) => k !== 'ALL' && k !== 'DEN').length);
+  D.allOpen(data).forEach((s) => {
+    if (s.preview || !s.last_price_at || nyDay(Date.parse(s.last_price_at)) !== today || !(s.entry > s.stop)) return;
     const prev = [...(s.price_path || [])].reverse().find((p) => nyDay(Date.parse(p.t)) < today);
     const base = prev ? prev.p : s.entry;
-    delta += ((s.last_price - base) / (s.entry - s.stop)) * (s.risk_pct_account || 0);
+    delta += ((s.last_price - base) / (s.entry - s.stop)) * (s.risk_pct_account || 0) / sleeves;
     any = true;
   });
   const q = Live.quote('SPY');
-  const spyOk = q && q.pc > 0 && nyDay(q.t) === today;
+  const spyOk = q && q.pc > 0 && nyDay(q.t) === today && last.spy != null;
   if (!any && !spyOk) return eq;
   return eq.concat({ date: today, bot: last.bot * (1 + delta / 100), spy: spyOk ? last.spy * (q.p / q.pc) : last.spy, live: true });
 }

@@ -156,7 +156,7 @@ export function buyWhen(s, now) {
   const est = D.entryState(s, now);
   if (!est || est.code === 'late' || est.code === 'expired') return null;
   /* Intraday preview signal: found while the market is open -> buy now at the limit, while the session runs. */
-  if (s.preview && Live.marketOpen(now)) return { code: 'now', text: t('buy.preview', { price: F.price(s.entry) }) };
+  if (s.preview) return Live.marketOpen(now) ? { code: 'now', text: t('buy.preview', { price: F.price(s.entry) }) } : null;
   const open = nextUsOpen(s.created_at);
   if (!open) return null;
   const closeAt = new Date(open.getTime() + 390 * 60000);
