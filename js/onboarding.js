@@ -69,6 +69,9 @@ function slideB() {
         <span class="onb-r-v num">${F.pct(p.pct, 0)}</span><span class="onb-r-t">${t(`onb.b.${p.id}`)}</span><span class="onb-r-s">${t(`onb.b.${p.id}.s`)}</span></button>`).join('')}
     </div>
     <p class="onb-line" id="onb-line">${riskLine(cs)}</p>
+    <p class="onb-l">${t('onb.b.lev')}</p>
+    <div class="onb-ccy onb-levp" role="radiogroup" aria-label="${t('onb.b.lev')}">${[['cons', 1], ['bal', 2], ['aggr', 5]].map(([id, v]) => `<button type="button" role="radio" class="chip" data-levp="${id}" aria-checked="${id === (store.get('levProfile', 'cons') || 'cons')}"><b>${t(`mb.p.${id}`)}</b><small>${v === 1 ? t('mb.noLev') : t('mb.lev', { v })}</small></button>`).join('')}</div>
+    <p class="onb-note">${t('onb.b.levS')}</p>
     <p class="onb-note onb-wal">${icon('wallet', 'icon-sm')}<span>${t('onb.b.wallet')}</span></p>
   </section>`;
 }
@@ -173,8 +176,13 @@ export function open(onDone) {
   };
 
   el.addEventListener('click', async (ev) => {
-    const b = ev.target.closest('[data-onb], [data-ccy], [data-prof]');
+    const b = ev.target.closest('[data-onb], [data-ccy], [data-prof], [data-levp]');
     if (!b) return;
+    if (b.dataset.levp) { /* 1.11.1: the leverage profile the money blocks start from (B.levProfile) */
+      el.querySelectorAll('[data-levp]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      store.set('levProfile', b.dataset.levp);
+      return;
+    }
     if (b.dataset.ccy) {
       const c = b.dataset.ccy;
       el.querySelectorAll('[data-ccy]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));

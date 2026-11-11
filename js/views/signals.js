@@ -263,7 +263,7 @@ function sigBody(ctx) {
     if (ph === 'open') return off || `<p class="empty-line">${t('sg.today0')} ${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i })).join('')}</div>`;
+  return `${off}<div class="sc-list">${((seen) => list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i, seen })).join(''))(new Set())}</div>`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {

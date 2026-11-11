@@ -14,6 +14,7 @@ import { nextUsOpen } from './views/signals.js';
 import { pricePoints } from './charts.js';
 import * as W from './wallet.js';
 import * as H from './health.js';
+import * as M from './market.js';
 
 /* ---------- 1 CO TO JE ---------- */
 const SECTOR = [
@@ -302,11 +303,105 @@ export function lenText(s, now = D.clock()) {
 export function phaseChip(ph) {
   return `<span class="ph-chip is-${ph}">${t(`c.ph.${ph}`)}</span>`;
 }
-/* the two fixed numbers (card, detail) – same words as the investment sheet */
-export function moneyLines(n) {
-  return `<p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.maxLoss != null ? sMoney(n.maxLoss, n.ccy) : '–'}</b></p>
-    <p class="sc-m"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.potential != null ? `${sMoney(n.potential, n.ccy)} <small>(${F.spct(n.potentialPct, 1)})</small>` : '–'}</b></p>
-    <p class="sc-note">${t('c.potNote')}</p>`;
+/* ---------- 1.11.1 THE money block (card, detail, invest sheet – one function) ----------
+   main line = what the strategy's signals made ON AVERAGE in the 2023–2026 test, for this deposit:
+   risk at the stop (without the deposit cap) × avg_r of the strategy (health.json backtest) × leverage;
+   then how many signals made money (win_rate), the maximum possible loss, the best case (target) in grey,
+   and a small comparison of three leverage profiles (Konzervativně 1:1 · Vyváženě 1:2 · Agresivněji 1:5, capped at the
+   instrument's legal max). No health.json -> the 1.11.0 lines (loss + potential at the target). */
+export const LEV_PROFILES = [{ id: 'cons', lev: 1 }, { id: 'bal', lev: 2 }, { id: 'aggr', lev: 5 }];
+export const levProfile = () => LEV_PROFILES.find((p) => p.id === store.get('levProfile', 'cons')) || LEV_PROFILES[0];
+export function profCols(sym) {
+  const mx = M.maxLev(sym) || 1;
+  const out = [];
+  for (const p of LEV_PROFILES) { const lev = Math.min(p.lev, mx); if (!out.some((o) => o.lev === lev)) out.push({ ...p, lev }); }
+  return out;
+}
+/* the leverage of the user's profile for this instrument (capped at its legal max) */
+export const selLev = (sym) => Math.min(levProfile().lev, M.maxLev(sym) || 1);
+/* "1 ze 2" / "3 z 5" / "6 z 10": the simplest fraction within 3 points of the test's win rate */
+export function winFrac(w) {
+  if (!(w > 0 && w < 1)) return null;
+  for (const n of [2, 3, 4, 5, 10]) { const k = Math.round(w * n); if (k > 0 && k < n && Math.abs(k / n - w) <= 0.03) return { k, n }; }
+  return { k: Math.round(w * 10), n: 10 };
+}
+/* growth of a whole account in the test: start × (1 + cagr)^years of the test period */
+export function testGrowth(bt, ccy) {
+  if (!bt || !(bt.cagr > -1)) return null;
+  const m = String(bt.period || '').match(/(\d{4}-\d{2}-\d{2})\D+(\d{4}-\d{2}-\d{2})/);
+  if (!m) return null;
+  const yrs = (Date.parse(m[2]) - Date.parse(m[1])) / (365.25 * 86400000);
+  if (!(yrs > 0.5)) return null;
+  const start = (D.EXAMPLE_DEP[ccy] || 10000) * 10;
+  const end = start * (1 + bt.cagr) ** yrs;
+  const step = start >= 50000 ? 1000 : 100;
+  return { start, end: Math.round(end / step) * step, y0: m[1].slice(0, 4), y1: m[2].slice(0, 4) };
+}
+export function levNums({ side, entry, amount, sl, tp, lev, bt }) {
+  const o = W.outcome({ side, entry, amount, lev, sl, tp });
+  const risk = sl > 0 && entry > 0 ? Math.abs(amount * lev * (sl - entry) / entry) : null;
+  return { lev, worst: o.atStop, best: o.atTarget, capped: o.atStop != null && o.atStop <= -amount + 0.5,
+    avg: bt && risk != null && Number.isFinite(+bt.avg_r) ? risk * bt.avg_r : null };
+}
+/* m = { s, data, sym, side, amount, ccy, base, sl, tp, sel } */
+export function moneyBlock(m) {
+  const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
+  const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
+  const arg = { side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
+  const cols = profCols(m.sym).map((c) => ({ ...c, n: levNums({ ...arg, lev: c.lev }) }));
+  const levs = cols.map((c) => c.lev);
+  if (!levs.includes(m.sel)) levs.push(m.sel);
+  const sm = (v) => sMoney(v, m.ccy);
+  const wf = ok ? winFrac(bt.win_rate) : null;
+  const main = (lev) => {
+    const n = levNums({ ...arg, lev });
+    const on = lev === m.sel;
+    const nums = F.esc(JSON.stringify({ a: m.amount, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
+    if (!ok) {
+      const pp = n.best != null && m.amount > 0 ? (n.best / m.amount) * 100 : null;
+      return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
+        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.worst != null ? sm(n.worst) : '–'}</b></p>
+        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
+    }
+    return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
+      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}` : '–'}<small>${t(`mb.dur.${m.s.horizon}`)}</small></b></p>
+      ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
+      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${n.worst != null ? sm(n.worst) : '–'}</b></p>
+      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p></div>`;
+  };
+  const cell = (c) => `<button type="button" class="mb-col${c.lev === m.sel ? ' is-on' : ''}" role="radio" aria-checked="${c.lev === m.sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
+      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
+      <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
+      <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
+  const table = cols.length > 1 ? `<div class="mb-lev" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
+      <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
+      ${cols.map(cell).join('')}</div><p class="mb-note">${t('mb.levNote')}</p>` : '';
+  return `<div class="mb" data-max="${M.maxLev(m.sym) || 1}">${levs.map(main).join('')}${table}
+    <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
+}
+/* card / detail: the block for the example deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
+export function moneyFor(s, data, now = D.clock()) {
+  const n = D.offerNums(s, data, { now });
+  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: selLev(s.symbol) }) };
+}
+/* the motivating but true line, once per strategy: the whole robot account in the test */
+export function testLine(s, data) {
+  const c = D.walletCcy();
+  const g = testGrowth(H.strat(data, s.horizon)?.backtest, c);
+  if (!g) return '';
+  return `<p class="mb-test">${icon('spark', 'icon-xs')}<span>${t('mb.test', { y0: g.y0, y1: g.y1, a: F.money(g.start, c, 0), b: F.money(g.end, c, 0) })}</span>${qh('TESTACC')}</p>`;
+}
+/* tap on a profile column: remember it on this device and show it in every money block on the page */
+export function setLevProfile(id) {
+  if (!LEV_PROFILES.some((p) => p.id === id)) return;
+  store.set('levProfile', id);
+  const want = levProfile().lev;
+  document.querySelectorAll('.mb').forEach((mb) => {
+    if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
+    const lev = Math.min(want, +mb.dataset.max || 1);
+    mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', +x.dataset.l === lev));
+    mb.querySelectorAll('.mb-col').forEach((x) => { const on = +x.dataset.lev === lev; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
+  });
 }
 export function facts(s, ph, now = D.clock()) {
   const w = whatIs(s.symbol, s.name);
@@ -341,7 +436,7 @@ export function healthNote(s, data) {
   return `<a class="le-note is-${st === 'vypnuto' ? 'off' : 'watch'}" href="#/uceni">${icon('shield', 'icon-xs')}<span>${t(st === 'vypnuto' ? 'le.det.off' : 'le.det.watch')}</span>${icon('chev-right', 'icon-xs')}</a>`;
 }
 
-export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) {
+export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = null } = {}) {
   const cs = D.cardState(s, data, now);
   const ph = D.sigPhase(s, now);
   const w = whatIs(s.symbol, s.name);
@@ -357,8 +452,11 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0 } = {}) 
   let money = '';
   if (ph === 'closed') money = closedLines(s, now);
   else if (ph === 'open' && !['mine', 'order'].includes(cs.code)) {
-    const n = D.offerNums(s, data, { now });
-    money = `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${moneyLines(n)}${strength(s, data, now)}</div>`;
+    const { n, html } = moneyFor(s, data, now);
+    /* the robot's whole-account test result: once per strategy in a list (seen), always on a single card */
+    const tl = !seen || !seen.has(s.horizon) ? testLine(s, data) : '';
+    if (seen) seen.add(s.horizon);
+    money = `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}${strength(s, data, now)}</div>${tl}`;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);
     if (mv != null) money = `<p class="sc-mv"><span>${t('c.move')}</span><b class="num">${F.spct(mv, 1)}</b></p>`;

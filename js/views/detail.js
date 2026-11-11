@@ -12,6 +12,7 @@ import { vtSupported } from '../motion.js';
 import { shareSignal } from '../share.js';
 import * as B from '../brief.js';
 import * as M from '../market.js';
+import * as H from '../health.js';
 import * as store from '../store.js';
 import * as Bars from '../bars.js';
 
@@ -175,7 +176,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
       <p class="d-ctitle">${B.sigTitle(s)}<small>${t(`c.type.${s.horizon}`)}</small></p>
       ${B.facts(s, D.sigPhase(s, now), now)}
-      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const n = D.offerNums(s, ctx.data, { now }); return `<div class="sc-money" data-nums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${B.moneyLines(n)}${B.strength(s, ctx.data, now)}</div>`; })() : ''}
+      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const { n, html } = B.moneyFor(s, ctx.data, now); return `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}${B.strength(s, ctx.data, now)}</div>${B.testLine(s, ctx.data)}`; })() : ''}
       <p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
       ${cs.my ? B.myLine(cs) : ''}
@@ -188,18 +189,20 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     </div>`;
   const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
   const legend = mk.size ? `<p class="pc-legend">${mk.has('robot') ? `<span class="lg-robot">▲ ${t('mark.robot')}</span>` : ''}${mk.has('me') ? `<span class="lg-me">▲ ${t('mark.me')}</span>` : ''}${mk.has('exit') ? `<span class="lg-exit">▼ ${t('mark.exit')}</span>` : ''}</p>` : '';
-  const chartHtml = s.price_path?.length > 1 ? `<div class="pchart">
+  /* 1.11.1: the market chart in candles (/api/bars) is the default; the signal's own line stays as a choice */
+  const hasPath = s.price_path?.length > 1;
+  const chartHtml = s.symbol ? `<div class="pchart">
         <div class="pchart-headrow"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
-          ${hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chart1D')}</button>` : ''}
-          ${hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="${pmode === '5d'}">${t('det.chart5D')}</button>` : ''}
-          <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button>
-          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="false" hidden>${t('bars.mode')}</button>
+          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="true">${t('bars.mode')}</button>
+          ${hasPath && hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="false">${t('det.chart1D')}</button>` : ''}
+          ${hasPath && hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="false">${t('det.chart5D')}</button>` : ''}
+          ${hasPath ? `<button type="button" class="range-chip" data-pmode="all" aria-pressed="false">${t('det.chartAll')}</button>` : ''}
           <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
           <span class="live-stamp" data-stamp></span></div>
         ${legend}
-        <div class="pchart-box" id="pchart"></div>
+        <div class="pchart-box" id="pchart" hidden></div>
         <div class="tv-box" id="tvbox" hidden></div>
-        <div class="d-bars" id="dbars" hidden>${Bars.controls('db')}</div>
+        <div class="d-bars" id="dbars">${Bars.controls('db')}</div>
         <a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : '';
   status = brief + `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + chartHtml + status;
@@ -229,7 +232,12 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
           const n = D.offerNums(s, ctx.data, { now });
           const sg = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), n.ccy, 0);
           return `<div class="kv-item" data-kvnums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="kv-l">${t('c.maxLoss')}${B.qh('MAXLOSS')}</p><p class="kv-v num down">${n.maxLoss != null ? sg(n.maxLoss) : '–'}</p><p class="kv-s">${t('c.profitS', { a: F.money(n.amount, n.ccy, 0) })}</p></div>
-        <div class="kv-item"><p class="kv-l">${t('c.pot')}${B.qh('POT')}</p><p class="kv-v num up">${n.potential != null ? sg(n.potential) : '–'}</p><p class="kv-s">${n.potentialPct != null ? `${F.spct(n.potentialPct, 1)} · ` : ''}${t('det.targetHit')}</p></div>`;
+        ${(() => { /* 1.11.1: average of the strategy in the test (no leverage); without health.json the target as before */
+          const bt = H.strat(ctx.data, s.horizon)?.backtest;
+          const v = bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0 ? B.levNums({ side: s.action === 'SELL' ? 'SELL' : 'BUY', entry: n.base, amount: n.amount, sl: s.stop, tp: s.target, lev: 1, bt }).avg : null;
+          return v != null ? `<div class="kv-item"><p class="kv-l">${t('c.pot')}${B.qh('POT')}</p><p class="kv-v num up">≈ ${sg(v)}</p><p class="kv-s">${t('mb.kvS', { d: t(`mb.dur.${s.horizon}`) })}</p></div>`
+            : `<div class="kv-item"><p class="kv-l">${t('c.potOld')}${B.qh('POTOLD')}</p><p class="kv-v num up">${n.potential != null ? sg(n.potential) : '–'}</p><p class="kv-s">${n.potentialPct != null ? `${F.spct(n.potentialPct, 1)} · ` : ''}${t('det.targetHit')}</p></div>`;
+        })()}`;
         })()}
         <div class="kv-item"><p class="kv-l">${t('det.rr')}</p><p class="kv-v num">${F.rr(s.rr)}</p><p class="kv-s">${t('det.rrS', { v: F.num(s.rr, 1) })}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
@@ -271,12 +279,16 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
     const isLive = () => s.status === 'open' && !s.intraday_hit && Live.stamp(Date.parse(s.last_price_at || 0)).code === 'live';
-    if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode, isLive, marks: () => chartMarks(ctx, s) }); }, 30);
+    /* the signal's own line chart is drawn only when it is chosen (the candles are the default) */
+    const lineChart = () => { if (box && !chartRef) chartRef = priceChart(box, s, { mode: () => pmode, isLive, marks: () => chartMarks(ctx, s) }); };
+    const lv = [{ v: s.target, label: t('lad.target'), cls: 'up' }, { v: s.entry, label: t('lad.entry'), cls: 'ent' }, { v: s.stop, label: t('lad.stop'), cls: 'down' }];
+    /* one chart per open detail (a detail opened over another one must not reuse the other's chart) */
+    let myBars = null;
+    const mountBars = () => { const dbx = el.querySelector('#dbars'); if (dbx && !myBars) { myBars = Bars.mount(dbx, 'db', s.symbol, { levels: lv, path: () => s.price_path || [] }); barsRef = myBars; } };
+    setTimeout(mountBars, 30);
     if (focus === 'why') setTimeout(() => { const c = el.querySelector('#det-why'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     if (focus === 'chart') setTimeout(() => { const c = el.querySelector('.pchart'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     let tvOn = false;
-    /* 1.10.1: "Graf trhu" appears only when /api/bars has history for this symbol (200); 400 / 503 -> stays hidden */
-    Bars.fetchBars(s.symbol, '1D').then((d) => { const c = el.querySelector('[data-pmode="bars"]'); if (c && d && el.isConnected) c.hidden = false; });
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
       const m = b.dataset.pmode;
       el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === m)));
@@ -285,24 +297,18 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       if (dbx) dbx.hidden = m !== 'bars';
       if (m === 'bars') {
         box.hidden = true; if (tvb) tvb.hidden = true;
-        if (!barsRef) barsRef = Bars.mount(dbx, 'db', s.symbol, { levels: [{ v: s.target, label: t('lad.target'), cls: 'up' }, { v: s.entry, label: t('lad.entry'), cls: 'ent' }, { v: s.stop, label: t('lad.stop'), cls: 'down' }], onFail() {
-          /* no market history for this key (e.g. single stocks) -> the chip goes away, back to the signal's own chart */
-          const chip = el.querySelector('[data-pmode="bars"]'); if (chip) chip.remove();
-          dbx.hidden = true; box.hidden = false; pmode = defaultPriceMode(s);
-          el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
-          chartRef && chartRef.refresh && chartRef.refresh();
-        } });
-        else barsRef.refresh();
+        if (!myBars) mountBars();
+        else myBars.refresh();
         return;
       }
       if (m === 'tv') {
-        box.hidden = true; tvb.hidden = false;
+        if (box) box.hidden = true; tvb.hidden = false;
         if (!tvOn) { tvOn = true; mountTV(tvb, M.tvSym(s.symbol) || tvSymbol(s.symbol)); }
         return;
       }
       box.hidden = false; if (tvb) tvb.hidden = true;
       pmode = m;
-      chartRef && chartRef.refresh && chartRef.refresh();
+      if (!chartRef) lineChart(); else chartRef.refresh && chartRef.refresh();
     }));
     const stampEl = el.querySelector('[data-stamp]');
     const tickStamp = () => {

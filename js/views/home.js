@@ -250,7 +250,7 @@ export function render(ctx) {
   ${B.statsRow(ctx.data, now)}
   <section class="d-block" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
-    ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.offer(x, { data: ctx.data, now, notNow: true, i })).join('')}</div>${more}` : `<p class="d-empty">${t('d.new0')}</p>`}
+    ${sigs.length ? `<div class="sc-list">${((seen) => sigs.map((x, i) => B.offer(x, { data: ctx.data, now, notNow: true, i, seen })).join(''))(new Set())}</div>${more}` : `<p class="d-empty">${t('d.new0')}</p>`}
   </section>
   <section class="d-block" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   ${robotLine1(ctx)}

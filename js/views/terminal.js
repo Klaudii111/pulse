@@ -385,11 +385,9 @@ export function mount(el, ctx) {
   if (termView() === 'watch') mountWatch(el, ctx); else { watchRefs.forEach((r) => r.destroy()); watchRefs = []; }
   const tbars = el.querySelector('#t-bars');
   if (tbars && !barsDead) {
-    barsRef = Bars.mount(tbars, 'tb', sym, { fmt: (v) => pxOf(sym, v), onFail() {
-      /* endpoint not there yet -> the old live chart; the chip disappears */
-      barsDead = true; if (cmode === 'bars') cmode = 'live';
-      if (el.isConnected) ctx.rerender({ soft: true });
-    } });
+    /* 1.11.1: candles stay the chart even when /api/bars fails – Bars.mount falls back to saved bars / the signal's
+       price_path / prices collected on the device, shows the last price and retries every 30 s */
+    barsRef = Bars.mount(tbars, 'tb', sym, { fmt: (v) => pxOf(sym, v), path: () => (D.allOpen(ctx.data).find((x) => x.symbol === sym)?.price_path || []) });
   }
   liveOff && liveOff();
   const fn = () => refresh(el, ctx);
@@ -485,7 +483,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   /* the robot's signals are LIMIT entries: price already past the entry (above it for a buy) -> wait for the entry price */
   const sigLim = useSig && sig.entry > 0 && dir * (q.p - sig.entry) > 0;
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
-  const st = { side, amount: D.EXAMPLE_DEP[c] || presets[1], lev: 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
+  const st = { side, amount: D.EXAMPLE_DEP[c] || presets[1], lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
     type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day' };
   const isLim = () => st.type === 'lim';
   const basePx = () => (isLim() && st.limit > 0 ? st.limit : q.p);
@@ -517,17 +515,13 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     return `<p class="tk-cost">${qm('SPREAD')}<span>${t('tk.costs', { s: money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0) })}${k.swap > 0 ? ` · ${t('tk.swap', { v: money(k.swap, c, k.swap < 10 ? 2 : 0) })}` : ''}${k.conv ? ` · ${t('tk.conv', { ic: M.ccy(sym) })}` : ''}. ${t('tk.costsS')}</span></p>`;
   };
   const preview = () => {
-    /* 1.10.0: the SAME function and words as the signal card (D.offerNums / B.moneyLines) */
-    const o = W.outcome({ side: st.side, entry: basePx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp });
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
-    const pp = o.atTarget != null && st.amount > 0 ? (o.atTarget / st.amount) * 100 : null;
-    return `<div class="tk-out" data-nums="${F.esc(JSON.stringify({ a: st.amount, l: Math.round(o.atStop ?? 0), p: Math.round(o.atTarget ?? 0) }))}">
-      <p><span>${t('c.maxLoss')}${B.qh('MAXLOSS')}</span><b class="num down">${o.atStop != null ? smoney(o.atStop, c) : '–'}</b></p>
-      <p><span>${t('c.pot')}${B.qh('POT')}</span><b class="num up">${o.atTarget != null ? `${smoney(o.atTarget, c)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p>
+    /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
+    return `<div class="tk-out">
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
       ${isLim() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
-      <p class="tk-small">${t('c.potNote')}</p>
     </div>${limLine()}`;
   };
   const body = () => `

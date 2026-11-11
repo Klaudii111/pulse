@@ -400,6 +400,8 @@ const GLOBAL = {
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
   /* "?" next to a trading word: one sentence + an example */
   'term-help'(el) { termHelp(el.dataset.k); },
+  /* 1.11.1: leverage profile column on a money block (card, detail; the invest sheet also sets its own leverage) */
+  'lev-prof'(el) { B.setLevProfile(el.dataset.prof); },
   rtip() { toast(t('rtip')); },
   /* 1.9.1 signal card buttons: [Zainvestovat] / [Nastavit nákup za …] and [Teď ne] */
   invest(el) {

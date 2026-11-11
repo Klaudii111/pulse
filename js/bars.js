@@ -18,8 +18,45 @@ export const TFS = [
 ];
 const URL0 = () => CONFIG.LIVE?.BARS_URL || '/api/bars';
 const cache = new Map(); // key|tf|range -> { at, data | null }
-const TTL_OK = 45000, TTL_FAIL = 120000;
+/* 1.11.1: a failure is retried after 25 s (the chart retries every 30 s); 400 = the server has no history for this key */
+const TTL_OK = 45000, TTL_FAIL = 25000, TTL_NOKEY = 600000;
 let dead = 0; // time of the last 404 – the endpoint does not exist yet
+const why = new Map(); // key -> 'nokey' | 'down' (why the last load failed)
+export const failReason = (key) => why.get(key) || 'down';
+
+/* 1.11.1: the last good bars of a key stay on the device (max 8 keys × 150 bars) – the fallback chart starts from them */
+const LAST = 'barsLast';
+function keepLast(d) {
+  try {
+    const all = store.get(LAST, {}) || {};
+    all[d.key] = { at: Date.now(), tf: d.tf, range: d.range, ms: d.ms, src: d.src, delayed: d.delayed, bars: d.bars.slice(-150).map((b) => [b.t, b.o, b.h, b.l, b.c]) };
+    const ks = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0)).slice(0, 8);
+    store.set(LAST, Object.fromEntries(ks.map((k) => [k, all[k]])));
+  } catch { /* storage full or blocked: no saved chart, the fallback uses prices only */ }
+}
+function lastGood(key) {
+  try {
+    const x = (store.get(LAST, {}) || {})[key];
+    if (!x || !Array.isArray(x.bars) || x.bars.length < 2) return null;
+    return { key, tf: x.tf, range: x.range, ms: x.ms || 300000, src: x.src || '', delayed: !!x.delayed, saved: x.at, bars: x.bars.map((b) => ({ t: b[0], o: b[1], h: b[2], l: b[3], c: b[4], v: 0 })) };
+  } catch { return null; }
+}
+/* candles from loose price points [{t, p}] (signal price_path, prices collected on the device):
+   the smallest of 1 / 5 / 15 min, 1 h, 1 day that gives at most 90 candles */
+export function pointCandles(points) {
+  const pts = points.map((x) => ({ t: typeof x.t === 'number' ? x.t : Date.parse(x.t), p: +x.p })).filter((x) => x.t > 0 && x.p > 0).sort((a, b) => a.t - b.t);
+  if (pts.length < 2) return null;
+  const spanMs = pts[pts.length - 1].t - pts[0].t;
+  const ms = [60000, 300000, 900000, 3600000, 86400000].find((m) => spanMs / m <= 90) || 86400000;
+  const out = [];
+  pts.forEach((x) => {
+    const b = Math.floor(x.t / ms) * ms;
+    const last = out[out.length - 1];
+    if (last && last.t === b) { last.h = Math.max(last.h, x.p); last.l = Math.min(last.l, x.p); last.c = x.p; } else out.push({ t: b, o: last ? last.c : x.p, h: Math.max(x.p, last ? last.c : x.p), l: Math.min(x.p, last ? last.c : x.p), c: x.p, v: 0 });
+  });
+  /* fewer than 5 candles say nothing about the market -> only the last-price block */
+  return out.length >= 5 ? { ms, bars: out.slice(-120) } : null;
+}
 
 export const curTf = (k = 'barsTf') => { const v = store.get(k, '1D'); return TFS.some((x) => x.id === v) ? v : '1D'; };
 export const curType = () => (store.get('barsType', 'candle') === 'line' ? 'line' : 'candle');
@@ -28,8 +65,9 @@ export async function fetchBars(key, tfId) {
   const T = TFS.find((x) => x.id === tfId) || TFS[0];
   const k = `${key}|${T.tf}|${T.range}`;
   const c = cache.get(k);
-  if (c && Date.now() - c.at < (c.data ? TTL_OK : TTL_FAIL)) return c.data;
-  if (dead && Date.now() - dead < TTL_FAIL) return null;
+  if (c && Date.now() - c.at < (c.data ? TTL_OK : c.nokey ? TTL_NOKEY : TTL_FAIL)) return c.data;
+  if (dead && Date.now() - dead < TTL_FAIL) { why.set(key, 'down'); return null; }
+  let nokey = false;
   let data = null;
   try {
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -37,6 +75,7 @@ export async function fetchBars(key, tfId) {
     const r = await fetch(`${URL0()}?key=${encodeURIComponent(key)}&tf=${T.tf}&range=${T.range}`, { cache: 'no-store', signal: ctl?.signal });
     if (tm) clearTimeout(tm);
     if (r.status === 404) dead = Date.now();
+    if (r.status === 400) nokey = true;
     /* 400 = the server does not know this key (e.g. single stocks) -> fallback; 503 / other = try again later */
     if (!r.ok && r.status !== 404 && r.status !== 400) data = { retry: true };
     if (r.ok) {
@@ -46,7 +85,8 @@ export async function fetchBars(key, tfId) {
       if (bars.length >= 2) data = { key, tf: T.tf, range: T.range, ms: T.ms, src: j.src || '', delayed: !!j.delayed, stale: !!j.stale, bars };
     }
   } catch { data = { retry: true }; }
-  if (!data?.retry) cache.set(k, { at: Date.now(), data });
+  if (!data?.retry) cache.set(k, { at: Date.now(), data, nokey });
+  if (data && !data.retry) { why.delete(key); keepLast(data); } else why.set(key, nokey ? 'nokey' : 'down');
   return data;
 }
 
@@ -62,18 +102,6 @@ function withLive(d) {
   if (d.ms >= 86400000 && new Date(q.t).toDateString() === new Date(last.t).toDateString()) { last.c = q.p; last.h = Math.max(last.h, q.p); last.l = Math.min(last.l, q.p); return bars; }
   bars.push({ t: Math.max(end, Math.floor(q.t / d.ms) * d.ms), o: last.c, h: Math.max(last.c, q.p), l: Math.min(last.c, q.p), c: q.p, v: 0, live: true });
   return bars;
-}
-
-function tickBars(key) {
-  const out = [];
-  Live.history(key).forEach((p) => {
-    const ts = typeof p.t === 'number' ? p.t : Date.parse(p.t);
-    if (!(ts > 0) || !(p.p > 0)) return;
-    const b = Math.floor(ts / 60000) * 60000;
-    const last = out[out.length - 1];
-    if (last && last.t === b) { last.h = Math.max(last.h, p.p); last.l = Math.min(last.l, p.p); last.c = p.p; } else out.push({ t: b, o: last ? last.c : p.p, h: p.p, l: p.p, c: p.p, v: 0 });
-  });
-  return out.slice(-120);
 }
 
 const tLabel = (ms, d) => (d.ms >= 86400000 ? F.dm(new Date(ms)) : d.range === '1d' ? F.time(new Date(ms)) : `${F.dm(new Date(ms))} ${F.time(new Date(ms))}`);
@@ -124,6 +152,7 @@ export function controls(prefix, { tfKey = 'barsTf', compact = false } = {}) {
   return `<div class="br-ctl"><div class="range-chips br-tfs" role="group" aria-label="${F.esc(t('bars.tf'))}">${TFS.map((x) => `<button type="button" class="range-chip" data-bars-tf="${x.id}" aria-pressed="${x.id === tf}">${t(`bars.tf.${x.id}`)}</button>`).join('')}</div>
     ${compact ? '' : `<div class="br-type" role="group" aria-label="${F.esc(t('bars.type'))}"><button type="button" class="range-chip" data-bars-type="candle" aria-pressed="${ty === 'candle'}">${t('bars.candle')}</button><button type="button" class="range-chip" data-bars-type="line" aria-pressed="${ty === 'line'}">${t('bars.line')}</button></div>`}</div>
     <div class="pchart-box br-box" id="${prefix}-box"><p class="pchart-empty">${t('common.loading')}</p></div>
+    <div class="br-fb${compact ? ' is-compact' : ''}" id="${prefix}-fb" hidden></div>
     <p class="br-src" id="${prefix}-src"></p>`;
 }
 
@@ -134,37 +163,76 @@ function srcLine(d) {
   return `${s ? t('bars.src', { s }) : ''}${d.delayed ? ` · <b class="br-delay">${t('bars.delayed')}</b>` : ''}${d.stale ? ` · <b class="br-delay">${t('bars.stale')}</b>` : ''}`;
 }
 
-/* Mount: loads the bars for the current timeframe; onFail() when the endpoint is not there (caller falls back).
-   Returns { refresh() – live tick, destroy() }. */
-export function mount(root, prefix, key, { levels = [], fmt, onFail, tfKey = 'barsTf', type = null, ticks = false } = {}) {
-  let d = null, gone = false, seq = 0, tickMode = false;
+/* 1.11.1: the last-price block shown whenever the chart cannot load: big last price + today's change +
+   "poslední cena z HH:MM (zdroj)" + one calm sentence. Never an empty or broken box. */
+function lastPx(key, d, fmt) {
+  const q = Live.quote(key);
+  const lb = d?.bars?.[d.bars.length - 1];
+  const p = q?.p > 0 ? q.p : lb?.c, at = q?.t > 0 ? q.t : lb?.t;
+  if (!(p > 0)) return null;
+  const m = Live.meta(key) || {};
+  const raw = m.src || (q ? '' : d?.src) || '';
+  const k = String(raw).toLowerCase();
+  const src = SRC[k] || SRC[Object.keys(SRC).find((x) => k.startsWith(x)) || ''] || raw;
+  const ch = Live.dayChange(key);
+  const when = at ? (new Date(at).toDateString() === new Date().toDateString() ? F.time(new Date(at)) : F.dmTime(new Date(at))) : '';
+  return { p: fmt(p), ch, when, src, delayed: !!m.delayed };
+}
+function fbHtml(key, d, fmt, reason, compact) {
+  if (compact) return `<p class="br-fb-note">${F.esc(t('bars.fb.short'))}</p>`;
+  const x = lastPx(key, d, fmt);
+  const note = t(reason === 'nokey' ? 'bars.fb.nokey' : 'bars.fb.note');
+  if (!x) return `<p class="br-fb-note">${F.esc(t('bars.fb.none'))}</p>`;
+  const s = x.src ? x.src + (x.delayed ? `, ${t('bars.delayed')}` : '') : '';
+  const at = x.when ? t(s ? 'bars.fb.atSrc' : 'bars.fb.at', { t: x.when, s }) : '';
+  return `<p class="br-fb-px"><b class="num">${F.esc(x.p)}</b>${x.ch != null ? `<span class="num ${x.ch > 0 ? 'up' : x.ch < 0 ? 'down' : ''}">${F.spct(x.ch, 2)} ${t('bars.fb.today')}</span>` : ''}</p>
+    ${at ? `<p class="br-fb-at">${F.esc(at)}</p>` : ''}<p class="br-fb-note">${F.esc(note)}</p>`;
+}
+
+/* Mount: loads the bars for the current timeframe (candles by default). When /api/bars fails (404, 400, 5xx, network)
+   the chart never goes blank: candles from the last bars saved on this device, else built from the signal's price_path
+   and the prices collected since the app opened, plus the last-price block; a new try every 30 s.
+   Returns { refresh() – live tick, reload(), destroy(), ok() }. onFail() is called once on the first failure. */
+export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v), onFail, tfKey = 'barsTf', type = null, path = null } = {}) {
+  let d = null, gone = false, seq = 0, fb = false, retryT = null, failed = false;
   const box = () => root.querySelector(`#${prefix}-box`);
+  const fbEl = () => root.querySelector(`#${prefix}-fb`);
+  const srcEl = () => root.querySelector(`#${prefix}-src`);
+  const compact = () => !!fbEl()?.classList.contains('is-compact');
+  const fbData = () => {
+    const saved = lastGood(key);
+    if (saved) return saved;
+    const pts = (typeof path === 'function' ? path() || [] : []).concat(Live.history(key));
+    const c = pointCandles(pts);
+    return c ? { key, tf: 'pts', range: 'pts', ms: c.ms, src: '', delayed: false, bars: c.bars, built: true } : null;
+  };
   const paint = () => {
     if (gone || !box()) return;
-    if (tickMode) {
-      /* endpoint missing: 1-minute candles from the prices that arrived since the app opened */
-      const bars = tickBars(key);
-      if (bars.length < 2) { box().innerHTML = `<p class="pchart-empty">${t('bars.ticksWait')}</p>`; return; }
-      d = { key, tf: '1m', range: 'live', ms: 60000, src: '', delayed: false, bars };
+    if (fb) {
+      const fd = fbData();
+      if (fd) { box().hidden = false; draw(box(), fd, { type: type || curType(), levels, fmt }); } else box().hidden = true;
+      const f = fbEl(); if (f) { f.hidden = false; f.innerHTML = fbHtml(key, fd, fmt, failReason(key), compact()); }
+      const s = srcEl(); if (s) s.textContent = fd ? (fd.built ? t('bars.fb.built') : t('bars.fb.saved', { t: F.dmTime(new Date(fd.saved)) })) : '';
+      return;
     }
     if (d) draw(box(), d, { type: type || curType(), levels, fmt });
   };
   const load = async () => {
     const my = ++seq;
+    clearTimeout(retryT);
     const r = await fetchBars(key, curTf(tfKey));
     if (gone || my !== seq) return;
-    if (r && r.retry) {
-      if (box()) box().innerHTML = `<p class="pchart-empty">${t('bars.retry')}</p>`;
-      setTimeout(() => { if (!gone && my === seq) load(); }, 30000);
+    if (!r || r.retry) {
+      fb = true; paint();
+      if (!failed) { failed = true; onFail && onFail(); }
+      retryT = setTimeout(() => { if (!root.isConnected) { stop(); return; } if (!gone && my === seq) load(); }, 30000);
       return;
     }
-    if (!r) {
-      if (ticks) { tickMode = true; root.querySelectorAll('.br-tfs').forEach((x) => { x.style.display = 'none'; }); const s = root.querySelector(`#${prefix}-src`); if (s) s.textContent = t('bars.ticksSrc'); paint(); }
-      onFail && onFail();
-      return;
-    }
-    d = r; paint();
-    const s = root.querySelector(`#${prefix}-src`); if (s) s.innerHTML = srcLine(d);
+    d = r; fb = false;
+    if (box()) box().hidden = false;
+    const f = fbEl(); if (f) { f.hidden = true; f.innerHTML = ''; }
+    paint();
+    const s = srcEl(); if (s) s.innerHTML = srcLine(d);
   };
   const click = (ev) => {
     const a = ev.target.closest('[data-bars-tf]'); const b = ev.target.closest('[data-bars-type]');
@@ -174,6 +242,8 @@ export function mount(root, prefix, key, { levels = [], fmt, onFail, tfKey = 'ba
   root.addEventListener('click', click);
   load();
   /* the server's bars move on (new candles); live ticks fill the gap in between (refresh) */
-  const timer = setInterval(() => { if (!gone && !tickMode && document.visibilityState === 'visible') load(); }, 60000);
-  return { refresh: paint, reload: load, destroy() { gone = true; clearInterval(timer); root.removeEventListener('click', click); }, ok: () => !!d };
+  /* a chart whose element left the page (closed detail, re-rendered view) stops by itself */
+  const timer = setInterval(() => { if (!root.isConnected) { stop(); return; } if (!gone && !fb && document.visibilityState === 'visible') load(); }, 60000);
+  function stop() { gone = true; clearInterval(timer); clearTimeout(retryT); root.removeEventListener('click', click); }
+  return { refresh: paint, reload: load, destroy: stop, ok: () => !!d && !fb };
 }

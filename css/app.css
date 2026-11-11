@@ -2543,3 +2543,46 @@ html.has-onb, html.has-onb body { overflow: hidden; }
 .str-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--raise-4); border: 1px solid var(--line-2); }
 .str-dots i.on { background: var(--gold); border-color: var(--gold); }
 .d-robot .le-light, .hs-row .le-light { flex: none; }
+
+/* 1.11.1 money block: test average, best/worst, leverage profiles (card, detail, invest sheet) */
+.mb-main { display: none; }
+.mb-main.is-on { display: block; }
+.mb-avg b { font-size: 18px; }
+.mb-avg b small { display: block; text-align: right; font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+.mb-win { font-size: 12.5px; color: var(--ink-2); margin: -2px 0 4px; }
+.mb-range { font-size: 12px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
+.mb-lev { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.mb-lev > .mb-rl:only-child { display: none; }
+.mb-rl, .mb-col { display: grid; grid-template-rows: 32px 20px 28px; align-items: center; font-size: 12px; }
+.mb-rl { color: var(--ink-3); padding: 5px 4px 5px 0; border: 1px solid transparent; }
+.mb-rl-h { align-self: center; }
+.mb-col { text-align: center; padding: 5px 3px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); min-width: 0; cursor: pointer; font: inherit; font-size: 12px; }
+.mb-col.is-on { border-color: var(--gold-line); background: var(--gold-soft); color: var(--ink); }
+.mb-pn { display: block; font-weight: 640; font-size: 11.5px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mb-pl { display: block; font-size: 10.5px; color: var(--ink-3); line-height: 1.1; }
+.mb-pv { color: color-mix(in srgb, var(--up) 80%, var(--ink-3)); white-space: nowrap; }
+.mb-pw { color: color-mix(in srgb, var(--down) 75%, var(--ink-3)); white-space: nowrap; }
+.mb-pw small { display: block; font-size: 9.5px; line-height: 1; color: var(--down); font-weight: 640; }
+.mb-pw.is-all { line-height: 1.05; }
+.mb-col.is-on .mb-pv { color: var(--up); } .mb-col.is-on .mb-pw { color: var(--down); }
+.mb-note { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+.mb-test { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: color-mix(in srgb, var(--gold) 80%, var(--ink-3)); line-height: 1.35; }
+.mb-test .icon { flex: none; } .mb-test .qm { flex: none; }
+.tk-out .mb p.mb-win, .tk-out .mb p.mb-range, .tk-out .mb p.mb-note, .tk-out .mb p.sc-note { display: block; }
+.tk-out .mb .sc-m b.up { color: var(--up); } .tk-out .mb .sc-m b.down { color: var(--down); }
+.onb-levp .chip { height: auto; padding: 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.onb-levp .chip small { font-size: 10.5px; font-weight: 500; opacity: .75; }
+
+/* 1.11.1 chart fallback: last price + calm note under the candles */
+.br-fb { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--raise-2); border: 1px solid var(--line); }
+.br-fb-px { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.br-fb-px b { font-size: 22px; font-weight: 700; color: var(--ink); }
+.br-fb-px span { font-size: 13.5px; font-weight: 600; color: var(--ink-2); } .br-fb-px span.up { color: var(--up); } .br-fb-px span.down { color: var(--down); }
+.br-fb-at { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.br-fb-note { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.4; }
+.br-fb.is-compact { padding: 4px 0 0; background: none; border: 0; margin-top: 2px; }
+.br-fb.is-compact .br-fb-note { font-size: 11px; color: var(--ink-3); margin: 0; }
+.tk-out .mb p.mb-win { font-size: 12.5px; } .tk-out .mb p.mb-range { font-size: 12px; color: var(--ink-3); }
+.tk-out .mb p.mb-note, .tk-out .mb p.sc-note { font-size: 11.5px; color: var(--ink-3); }
+.mb-lev, .mb-note { max-width: 480px; }
+.mb-col { padding: 5px 2px; } .mb-pv, .mb-pw { font-size: 11.5px; letter-spacing: -0.01em; } .mb-pn { font-size: 11px; }
