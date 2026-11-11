@@ -6,6 +6,7 @@ import * as P from '../pwa.js';
 import { LESSONS } from '../lessons.js';
 import { icon, seg, segMove, toast, openSheet, closeTopSheet } from '../ui.js';
 import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
+import * as Live from '../live.js';
 
 export const MORE_ITEMS = [
   { group: 'more.g.you', items: [
@@ -75,6 +76,8 @@ export function renderSettings(ctx) {
   const instMsg = inst === 'installed' ? 'set.installed' : inst === 'ios' ? 'set.installIos' : inst === 'prompt' ? 'set.installPrompt' : 'set.installOther';
   return `<header class="page-head"><div><h1 class="page-title">${t('set.title')}</h1></div></header>
   <div class="info-layout"><div>
+    ${Live.usesProxy() ? `<h2 class="section-title">${t('live.key.t')}</h2>
+    <div class="card"><div class="card-row"><div><p class="card-t">${t('live.key.t')}</p><p class="card-s up">${t('live.proxy.on')}</p></div></div></div>` : ''}
     <h2 class="section-title">${t('set.lang')}</h2>
     <div class="card">${seg({ name: 'lang', small: true, label: t('set.lang'), items: LOCALES.map((l) => ({ id: l.id, label: l.label })), active: lang() })}</div>
     <h2 class="section-title">${t('set.notif')}</h2>
@@ -147,6 +150,7 @@ export const actions = {
     }
   },
   install() { doInstall(); },
+
   lock(el, ev, ctx) { store.del('unlocked'); location.reload(); },
   seg(el, ev, ctx) {
     const n = el.dataset.segName;

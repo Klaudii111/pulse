@@ -14,6 +14,7 @@ import * as X from './views/extra.js';
 import { openDetail } from './views/detail.js';
 import { t, lang } from './i18n/index.js';
 import * as M from './motion.js';
+import * as Live from './live.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -87,6 +88,9 @@ function renderChrome() {
   const badge = mode === 'paper' ? `<span class="demo-badge">${t('badge.paper')}</span>`
     : mode === 'live' ? `<span class="demo-badge is-live">${t('badge.live')}</span>` : '';
   document.querySelectorAll('[data-slot="badge"]').forEach((el) => { el.innerHTML = badge; });
+  const ls = Live.status();
+  const liveHtml = ls === 'off' ? '' : `<span class="live-badge is-${ls}"><i aria-hidden="true"></i>${t(`live.${ls}`)}</span>`;
+  document.querySelectorAll('[data-slot="live"]').forEach((el) => { el.innerHTML = liveHtml; });
   const meta = document.getElementById('side-meta');
   if (meta) meta.textContent = data.signals ? t('chrome.data', { time: F.dmTime(data.signals.generated_at) }) : '';
 }
@@ -159,6 +163,7 @@ async function loadAll() {
   state.fromCache = cached || (!navigator.onLine && !!data.signals);
   state.loading = false;
   state.lastFetch = Date.now();
+  Live.onData();
   rerender({ soft: true });
   maybeOpenDeepLink();
   checkAlerts();
@@ -172,6 +177,7 @@ async function poll() {
     const changed = !data.signals || json.generated_at !== data.signals.generated_at;
     data.signals = json;
     state.fromCache = cached;
+    Live.onData();
     if (changed) {
       checkAlerts();
       if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
@@ -325,6 +331,14 @@ async function boot() {
     ev.preventDefault(); window.__pulseGo(href);
   });
   window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute(); });
+  Live.initLive(() => data);
+  Live.onLive(() => {
+    checkAlerts();
+    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
+    else renderChrome();
+    document.dispatchEvent(new CustomEvent('pulse:live'));
+  });
+  setInterval(() => renderChrome(), 30000);
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {

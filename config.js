@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.1.0',
+  APP_VERSION: '1.2.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -18,6 +18,14 @@ export const CONFIG = {
     const b = remote ? 'https://raw.githubusercontent.com/omylatomasz-bit/ballistic/pulse-data/data/' : './data/';
     return { signals: b + 'signals.json', history: b + 'history.json', performance: b + 'performance.json', calendar: b + 'calendar.json', league: b + 'league.json' };
   })(),
+  /*
+   * Live prices: the app polls our Cloudflare Worker (PROXY_URL), which holds the data-provider key server-side.
+   */
+  LIVE: { PROXY_URL: '', POLL_SEC: 10, RENDER_MS: 1500 },
+
+  /* Horizons hidden in the app until their strategy passes the out-of-sample test (1-day: no edge yet) */
+  HIDDEN_HORIZONS: ['DEN'],
+
   /* Poll signals.json every N minutes while the app is visible */
   POLL_MIN: 5,
   /* Bot publishes new signals at this time (CET) on trading days, used when signals.json has no next_run_at */

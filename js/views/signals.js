@@ -63,7 +63,7 @@ function exitPhrase(s, now) {
 const RES = { target: 'sig.res.target', stop: 'sig.res.stop', time_exit: 'sig.res.time' };
 const HIT = { target: 'sig.hit.target', stop: 'sig.hit.stop', time_exit: 'sig.hit.time' };
 
-export function signalCard(s, { data = null, events = [], now = new Date(), i = 0 } = {}) {
+export function signalCard(s, { data = null, events = [], now = new Date(), i = 0, showHz = false } = {}) {
   const fresh = !seen.has(s.id);
   seen.add(s.id);
   let state = liveState(s);
@@ -77,6 +77,10 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
   const ev = D.eventsFor(s, events);
 
   let sub = '';
+  const hzTag = showHz ? `<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>` : '';
+  const mine = D.journal()[s.id];
+  const myTag = mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 2) })}</span>`
+    : mine?.state === 'in' ? `<span class="my-tag">${t('sig.mine.in')}</span>` : '';
   if (state === 'open' && est) sub = `<span class="dotw is-${est.code}"><i></i>${t(`entry.short.${est.code}`)}</span>`;
   else if (state !== 'open') sub = `<span class="dotw is-${state}"><i></i>${t(HIT[state])}${s.hit_at ? t('sig.hit.at', { time: F.time(s.hit_at) }) : ''}</span>`;
   const flag = prox ? `<span class="flag ${prox.side === 'stop' ? 'down' : 'up'}" title="${F.esc(t(`sig.near.${prox.side}`, { v: F.pct(prox.dist, 1) }))}">${icon('alert', 'icon-xs')}</span>`
@@ -91,7 +95,7 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
       ${monogram(s.symbol, s.name)}
       <div class="sig-id">
         <div class="sig-tl"><span class="ticker">${F.esc(s.symbol)}</span>${pill(s.action)}${flag}</div>
-        <p class="sig-sub">${sub}</p>
+        <p class="sig-sub">${hzTag}${sub}${myTag}</p>
       </div>
       ${right}
     </div>
@@ -121,52 +125,132 @@ function activeHz(data) {
   return hz;
 }
 
+/* Horizons shown in the app: a horizon is hidden until its strategy passes the out-of-sample test */
+export const VISIBLE_HZ = () => D.HORIZONS.filter((h) => !(CONFIG.HIDDEN_HORIZONS || []).includes(h));
+
+function nyOffsetMin(d) {
+  const ny = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+  return Math.round((ny - utc) / 60000);
+}
+
+/* First US regular-session open (9:30 New York) after `from`. Exchange holidays are not modelled. */
+export function nextUsOpen(from) {
+  let d = new Date(from);
+  for (let k = 0; k < 9; k++) {
+    const ny = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const wd = ny.getDay(), mins = ny.getHours() * 60 + ny.getMinutes();
+    if (wd >= 1 && wd <= 5 && (k > 0 || mins < 570)) {
+      const guess = new Date(Date.UTC(ny.getFullYear(), ny.getMonth(), ny.getDate(), 9, 30));
+      return new Date(guess.getTime() - nyOffsetMin(guess) * 60000);
+    }
+    d = new Date(Date.UTC(ny.getFullYear(), ny.getMonth(), ny.getDate() + 1, 12, 0));
+  }
+  return null;
+}
+
+/* "When to buy" line for a fresh signal */
+export function buyWhen(s, now) {
+  const est = D.entryState(s, now);
+  if (!est || est.code === 'late' || est.code === 'expired') return null;
+  const open = nextUsOpen(s.created_at);
+  if (!open) return null;
+  const closeAt = new Date(open.getTime() + 390 * 60000);
+  if (now < open) {
+    const days = F.daysUntil(open, now);
+    const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(open);
+    return { code: 'soon', text: t('buy.at', { day, time: F.time(open), price: F.price(s.entry) }) };
+  }
+  if (now < closeAt) return { code: 'now', text: t('buy.now', { price: F.price(s.entry) }) };
+  return null;
+}
+
+function buyBanner(s, now) {
+  const b = buyWhen(s, now);
+  if (!b) return '';
+  return `<p class="buy-when is-${b.code}">${icon(b.code === 'now' ? 'spark' : 'clock', 'icon-xs')}<span>${F.esc(b.text)}</span></p>`;
+}
+
 export function render(ctx) {
   const { data, state } = ctx;
   const head = `<header class="page-head"><div><h1 class="page-title">${t('sig.title')}</h1>
     <p class="page-sub">${data?.signals ? t('common.updated', { time: F.dmTime(data.signals.generated_at) }) : t('common.loading')}</p></div></header>`;
   if (!data?.signals) {
     if (state.error) return head + errorBlock();
-    return head + `<div class="signals-top"><div class="seg-wrap">${seg({ name: 'hz', label: t('sig.horizon'), items: D.HORIZONS.map((h) => ({ id: h, hz: h, label: F.HZ_LABEL[h] })), active: store.get('hz', 'MESIC') })}</div>
-      <div class="sk" style="height:20px;border-radius:8px;margin-top:16px;width:60%"></div></div>
-      <div class="grid-signals">${skCard()}${skCard()}${skCard()}</div>`;
+    return head + `<div class="grid-signals">${skCard()}${skCard()}${skCard()}</div>`;
   }
   const s = data.signals;
-  const hz = activeHz(data);
-  const items = D.HORIZONS.map((h) => ({ id: h, hz: h, label: F.HZ_LABEL[h], count: (s.tracks[h] || []).length, locked: !D.horizonAllowed(data, h) }));
+  const now = ctx.now();
+  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h));
+  const all = hzs.flatMap((h) => (s.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })));
+  const fresh = all.filter((x) => D.isNew(x, data) && x.status === 'open' && !x.intraday_hit);
+  const events = data.calendar?.events || [];
+  let i = 0;
+  const freshCards = fresh.map((x) => `<div class="sig-wrap">${buyBanner(x, now)}${signalCard(x, { data, events, now, i: i++, showHz: true })}</div>`).join('');
   return head + `
-    <div class="signals-top">
-      <div class="seg-wrap">
-        ${seg({ name: 'hz', label: t('sig.horizon'), items, active: hz })}
-        <p class="horizon-hint" id="hz-hint"><span>${F.HZ_HINT[hz]}</span></p>
-      </div>
-      ${regimeLine(s.regime)}${nextLine(ctx.data, ctx.now())}
-    </div>
+    <div class="signals-top">${nextLine(ctx.data, now)}${regimeLine(s.regime)}</div>
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
-    <div id="sig-list">${list(ctx, hz)}</div>
+    <section aria-labelledby="sec-today">
+      <h2 class="section-title" id="sec-today">${t('sig.todayBuy')}${fresh.length ? `<small>${fresh.length}</small>` : ''}</h2>
+      <p class="section-sub">${t('sig.todayBuy.s')}</p>
+      ${fresh.length ? `<div class="grid-signals">${freshCards}</div>` : emptyState(ctx, null)}
+    </section>
+    <section aria-labelledby="sec-dev" class="dev">
+      <h2 class="section-title" id="sec-dev">${t('sig.dev')}</h2>
+      <p class="section-sub">${t('sig.dev.s')}</p>
+      <div class="seg-wrap">${seg({ name: 'dev', small: true, label: t('sig.dev'), items: [{ id: 'ALL', label: t('sig.filter.all') }, ...hzs.map((h) => ({ id: h, hz: h, label: F.HZ_LABEL[h], count: (s.tracks[h] || []).length }))], active: devFilter(hzs) })}</div>
+      <div id="sig-list">${devList(ctx, devFilter(hzs))}</div>
+    </section>
     ${disclaimer()}`;
 }
 
-function list(ctx, hz) {
+function devFilter(hzs) {
+  const f = store.get('devHz', 'ALL');
+  return f === 'ALL' || hzs.includes(f) ? f : 'ALL';
+}
+
+/* Every signal the robot issued: open ones first (live), then closed ones with their result */
+function devList(ctx, f) {
   const { data } = ctx;
-  if (!D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
-  const arr = data.signals.tracks[hz] || [];
+  const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h));
+  const pick = (h) => f === 'ALL' || h === f;
+  const open = hzs.filter(pick).flatMap((h) => (data.signals.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const closed = (data.history?.signals || []).filter((x) => hzs.includes(x.horizon) && pick(x.horizon))
+    .sort((a, b) => String(b.closed_at || b.created_at).localeCompare(String(a.closed_at || a.created_at)));
+  if (!open.length && !closed.length) return `<p class="empty-line">${t('sig.dev.empty')}</p>`;
   const events = data.calendar?.events || [];
-  const fresh = arr.filter((x) => D.isNew(x, data));
-  const older = arr.filter((x) => !D.isNew(x, data));
   let i = 0;
-  const cards = (l) => `<div class="grid-signals">${l.map((x) => signalCard(x, { data, events, now: ctx.now(), i: i++ })).join('')}</div>`;
-  if (!fresh.length) {
-    return emptyState(ctx, hz) + (older.length ? `<h2 class="section-title">${t('sig.openPositions')}<small>${older.length}</small></h2>${cards(older)}` : '');
-  }
-  return cards(fresh) + (older.length ? `<h2 class="section-title">${t('sig.older')}<small>${older.length}</small></h2>${cards(older)}` : '');
+  const rows = (l) => `<div class="dev-list">${l.map((x) => devRow(x, ctx.now(), i++)).join('')}</div>`;
+  return (open.length ? `<h3 class="sub-title">${t('sig.dev.open')}<small>${open.length}</small></h3>${rows(open)}` : '')
+    + (closed.length ? `<h3 class="sub-title">${t('sig.dev.closed')}<small>${closed.length}</small></h3>${rows(closed)}` : '');
+}
+
+/* Compact live row: where the price is between stop and target, P&L, status */
+function devRow(s, now, i) {
+  let state = liveState(s);
+  if (state === 'open' && D.isTimeExit(s, now)) state = 'time_exit';
+  const pnl = state === 'open' || s.status === 'open' ? s.pnl_pct_position : (s.result_pct ?? s.pnl_pct_position);
+  const up = (pnl ?? 0) >= 0;
+  const lo = Math.min(s.stop, s.target ?? s.entry), hi = Math.max(s.stop, s.target ?? s.entry);
+  const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / ((hi - lo) || 1)) * 100));
+  const cur = s.last_price ?? D.exitPrice(s) ?? s.entry;
+  const mine = D.journal()[s.id];
+  const status = state === 'open' ? t('sig.dev.running') : t(RES[state] || 'sig.dev.closed');
+  return `<button class="dev-row is-${state}" style="--i:${Math.min(i, 10)}" type="button" data-action="open-signal" data-id="${F.esc(s.id)}" data-live-id="${F.esc(s.id)}" data-pnl="${pnl ?? ''}">
+    ${monogram(s.symbol, s.name)}
+    <div class="dev-id"><p class="dev-t"><span class="ticker">${F.esc(s.symbol)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 1) })}</span>` : ''}</p>
+      <p class="dev-s num">${t('sig.dev.since', { date: F.dm(s.created_at) })}</p></div>
+    <div class="dev-bar" aria-hidden="true"><i class="dev-entry" style="left:${pos(s.entry)}%"></i><i class="dev-now ${up ? 'up' : 'down'}" style="left:${pos(cur)}%"></i></div>
+    <div class="dev-r"><p class="sig-pnl num ${up ? 'up' : 'down'}">${pnl != null ? F.spct(pnl, 2) : '–'}</p><p class="dev-st is-${state}">${F.esc(status)}</p></div>
+  </button>`;
 }
 
 export function emptyState(ctx, hz) {
   return `<section class="calm" aria-live="polite">
     ${calmArt()}
     <div><h3 class="calm-t">${t('empty.t')}</h3>
-    <p class="calm-s">${F.esc(D.emptyReason(ctx.data, hz))}</p>
+    <p class="calm-s">${F.esc(hz ? D.emptyReason(ctx.data, hz) : t('sig.noneToday.s'))}</p>
     <p class="calm-next">${icon('clock', 'icon-xs')}${t('empty.next', { when: F.esc(D.nextRunLabel(ctx.data, ctx.now())) })}</p></div>
   </section>`;
 }
@@ -178,6 +262,20 @@ export function errorBlock() {
 
 export const actions = {
   seg(el, ev, ctx) {
+    if (el.dataset.segName === 'dev') {
+      const f = el.dataset.id;
+      haptic();
+      store.set('devHz', f);
+      const root = document.getElementById('view');
+      segMove(root, 'dev', f);
+      const l = root.querySelector('#sig-list');
+      if (l) {
+        l.innerHTML = devList(ctx, f);
+        l.classList.remove('is-enter'); void l.offsetWidth; l.classList.add('is-enter');
+        ctx.afterRender && ctx.afterRender(l, true);
+      }
+      return true;
+    }
     if (el.dataset.segName !== 'hz') return false;
     const hz = el.dataset.id;
     haptic();
@@ -188,7 +286,7 @@ export const actions = {
     if (hint) hint.textContent = F.HZ_HINT[hz];
     const l = root.querySelector('#sig-list');
     if (l) {
-      l.innerHTML = list(ctx, hz);
+      l.innerHTML = devList(ctx, "ALL");
       l.classList.remove('is-enter'); void l.offsetWidth; l.classList.add('is-enter');
       ctx.afterRender && ctx.afterRender(l, true);
     }

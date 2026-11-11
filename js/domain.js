@@ -117,6 +117,17 @@ export function exitPrice(s) {
   return s.last_price ?? null;
 }
 
+/* The user's own result for a journal entry: closed early (own exit price) or still running (live price) */
+export function myResult(s, e) {
+  if (!e || !(e.entry > 0)) return null;
+  const ex = e.state === 'closed' ? e.exit : exitPrice(s);
+  if (ex == null) return null;
+  const dir = s.action === 'BUY' ? 1 : -1;
+  const pct = ((ex - e.entry) / e.entry) * 100 * dir;
+  const risk = Math.abs(s.entry - s.stop);
+  return { pct, r: risk > 0 ? ((ex - e.entry) * dir) / risk : null, money: e.size ? (e.size * pct) / 100 : null, exit: ex };
+}
+
 export function journalRows(data) {
   const j = journal();
   return Object.entries(j).map(([id, e]) => {
@@ -124,9 +135,11 @@ export function journalRows(data) {
     if (!s) return null;
     const ex = exitPrice(s);
     const dir = s.action === 'BUY' ? 1 : -1;
-    const closed = s.status !== 'open' || !!s.intraday_hit;
+    const closed = s.status !== 'open' || !!s.intraday_hit || e.state === 'closed';
     let my = null;
-    if (e.state === 'in' && ex != null && e.entry > 0) {
+    if (e.state === 'closed') {
+      my = myResult(s, e);
+    } else if (e.state === 'in' && ex != null && e.entry > 0) {
       const pct = ((ex - e.entry) / e.entry) * 100 * dir;
       const r = ((ex - e.entry) * dir) / Math.abs(s.entry - s.stop);
       my = { pct, r, money: e.size ? (e.size * pct) / 100 : null };

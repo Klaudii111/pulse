@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-10T21:47:08+00:00",
+ "generated_at": "2026-11-11T11:38:39+00:00",
  "mode": "paper",
  "regime": {
   "state": "risk_on",
@@ -8,8 +8,142 @@
  },
  "tracks": {
   "DEN": [],
-  "DNY": [],
-  "TYDEN": [],
+  "DNY": [
+   {
+    "id": "DNY-2026-11-10-WDAY-10",
+    "symbol": "WDAY",
+    "name": "Workday, Inc.",
+    "asset_class": "stock",
+    "horizon": "DNY",
+    "action": "BUY",
+    "created_at": "2026-11-11T11:38:35+00:00",
+    "entry": 188.89,
+    "stop": 165.7964,
+    "target": 235.0771,
+    "exit_date": "2026-11-17",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Přeprodaný odraz",
+      "en": "Oversold bounce"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: silná akcie v rostoucím trendu prudce spadla (RSI(2) < 10) ve chvíli zvýšeného strachu na trhu (VIX nad 18); bot prodá, jakmile cena odrazí nad 5denní průměr. Neplatí, pokud cena klesne na stop 165.80 nebo do 2026-11-17 nedosáhne cíle (pak se pozice zavře).",
+     "en": "Why: a strong stock in an uptrend dropped hard (RSI(2) < 10) while market fear is elevated (VIX above 18); the bot sells as soon as the price bounces above its 5-day average. Invalidated if the price falls to the stop 165.80, or if the target is not reached by 2026-11-17 (the position is then closed)."
+    },
+    "last_price": 188.89,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.0,
+    "pnl_r": 0.0,
+    "progress": 0.0,
+    "price_path": [
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 188.89
+     }
+    ]
+   },
+   {
+    "id": "DNY-2026-11-10-XOM-11",
+    "symbol": "XOM",
+    "name": "ExxonMobil",
+    "asset_class": "stock",
+    "horizon": "DNY",
+    "action": "BUY",
+    "created_at": "2026-11-11T11:38:35+00:00",
+    "entry": 164.47,
+    "stop": 148.9943,
+    "target": 195.4214,
+    "exit_date": "2026-11-17",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Přeprodaný odraz",
+      "en": "Oversold bounce"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: silná akcie v rostoucím trendu prudce spadla (RSI(2) < 10) ve chvíli zvýšeného strachu na trhu (VIX nad 18); bot prodá, jakmile cena odrazí nad 5denní průměr. Neplatí, pokud cena klesne na stop 148.99 nebo do 2026-11-17 nedosáhne cíle (pak se pozice zavře).",
+     "en": "Why: a strong stock in an uptrend dropped hard (RSI(2) < 10) while market fear is elevated (VIX above 18); the bot sells as soon as the price bounces above its 5-day average. Invalidated if the price falls to the stop 148.99, or if the target is not reached by 2026-11-17 (the position is then closed)."
+    },
+    "last_price": 164.47,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.0,
+    "pnl_r": 0.0,
+    "progress": 0.0,
+    "price_path": [
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 164.47
+     }
+    ]
+   }
+  ],
+  "TYDEN": [
+   {
+    "id": "TYDEN-2026-11-10-PM-12",
+    "symbol": "PM",
+    "name": "Philip Morris International",
+    "asset_class": "stock",
+    "horizon": "TYDEN",
+    "action": "BUY",
+    "created_at": "2026-11-11T11:38:35+00:00",
+    "entry": 194.25,
+    "stop": 178.455,
+    "target": 225.84,
+    "exit_date": "2026-11-17",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Hluboký pokles, týden",
+      "en": "Deep pullback, one week"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena spadla o více než 3 denní rozpětí (ATR) pod 5denní maximum v rostoucím trendu a při zvýšeném strachu (VIX nad 18); drží se celý týden. Neplatí, pokud cena klesne na stop 178.46 nebo do 2026-11-17 nedosáhne cíle (pak se pozice zavře).",
+     "en": "Why: the price fell more than 3 daily ranges (ATR) below its 5-day high in an uptrend while fear is elevated (VIX above 18); held for the full week. Invalidated if the price falls to the stop 178.46, or if the target is not reached by 2026-11-17 (the position is then closed)."
+    },
+    "last_price": 194.25,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.0,
+    "pnl_r": 0.0,
+    "progress": 0.0,
+    "price_path": [
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 194.25
+     }
+    ]
+   }
+  ],
   "MESIC": [
    {
     "id": "MESIC-2026-11-09-XLE-1",

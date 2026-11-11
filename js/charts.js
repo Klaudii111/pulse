@@ -152,5 +152,5 @@ export function priceChart(box, s) {
   redraw();
   const ro = new ResizeObserver(redraw);
   ro.observe(box);
-  return { destroy: () => ro.disconnect() };
+  return { destroy: () => ro.disconnect(), refresh: () => { size = ''; redraw(); } };
 }

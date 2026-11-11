@@ -4,10 +4,42 @@ import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
 import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
 import { priceChart } from '../charts.js';
-import { rTip, entryChip } from './signals.js';
+import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 
 let chartRef = null;
+let liveOff = null;
+
+/* Live price ticks update the open detail sheet in place (price, P&L, chart, ladder). */
+function onLiveDetail(el, ctx, s) {
+  const KEYS = ['last_price', 'last_price_at', 'pnl_pct_position', 'pnl_r', 'progress', 'price_path', 'intraday_hit', 'hit_at'];
+  const fn = () => {
+    const f = D.findSignal(ctx.data, s.id);
+    if (!f || !el.isConnected) return;
+    KEYS.forEach((k) => { s[k] = f[k]; });
+    const lp = el.querySelector('.live-price');
+    if (lp && s.last_price != null) {
+      const old = parseFloat(lp.dataset.v);
+      lp.textContent = F.price(s.last_price); lp.dataset.v = s.last_price;
+      if (Number.isFinite(old) && old !== s.last_price) {
+        lp.classList.remove('tick-up', 'tick-down'); void lp.offsetWidth;
+        lp.classList.add(s.last_price > old ? 'tick-up' : 'tick-down');
+      }
+    }
+    const ago = el.querySelector('.live-ago'); if (ago) ago.textContent = F.ago(s.last_price_at, ctx.now());
+    const pnl = el.querySelector('.live-row .pnl');
+    if (pnl) {
+      pnl.classList.toggle('up', (s.pnl_r ?? 0) >= 0); pnl.classList.toggle('down', (s.pnl_r ?? 0) < 0);
+      const pp = pnl.querySelector('.pnl-pct'); if (pp) pp.textContent = F.spct(s.pnl_pct_position, 2);
+      const pr = pnl.querySelector('.pnl-r'); if (pr && D.showR(ctx.data)) pr.innerHTML = rTip(s.pnl_r);
+    }
+    const lad = el.querySelector('[data-vt="ladder"]'); if (lad) lad.innerHTML = ladder(s, { large: true });
+    const cb = el.querySelector('[data-j="close"]'); if (cb && s.last_price != null) cb.textContent = t('j.closeAt', { price: F.price(s.last_price) });
+    chartRef && chartRef.refresh && chartRef.refresh();
+  };
+  document.addEventListener('pulse:live', fn);
+  return () => document.removeEventListener('pulse:live', fn);
+}
 
 export function openDetail(ctx, id, sourceEl = null) {
   const s = D.findSignal(ctx.data, id);
@@ -34,7 +66,7 @@ export function openDetail(ctx, id, sourceEl = null) {
   let status = '';
   if (isOpen && state === 'open' && s.last_price != null) {
     status = `<div class="live-row">
-      <div><p class="kv-l">${t('det.price')}</p><p class="live-price num">${F.price(s.last_price)}</p><p class="kv-l">${F.ago(s.last_price_at, now)}</p></div>
+      <div><p class="kv-l">${t('det.price')}</p><p class="live-price num" data-v="${s.last_price}">${F.price(s.last_price)}</p><p class="kv-l live-ago">${F.ago(s.last_price_at, now)}</p></div>
       <div class="pnl ${up ? 'up' : 'down'}"><p class="kv-l">${t('det.robotFromEntry')}</p><div class="pnl-pct num">${F.spct(s.pnl_pct_position, 2)}</div>${showR ? `<div class="pnl-r num">${R(s.pnl_r)}</div>` : ''}</div>
     </div>`;
   } else if (isOpen) {
@@ -100,6 +132,7 @@ export function openDetail(ctx, id, sourceEl = null) {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
     if (box) setTimeout(() => { chartRef = priceChart(box, s); }, 30);
+    liveOff = onLiveDetail(el, ctx, s);
     el.querySelector('[data-close-nav]')?.addEventListener('click', (ev) => {
       ev.preventDefault();
       const href = ev.currentTarget.getAttribute('href');
@@ -115,7 +148,7 @@ export function openDetail(ctx, id, sourceEl = null) {
       }
     });
   };
-  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
+  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { liveOff && liveOff(); liveOff = null; chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
 
   // Shared-element morph: card ticker + ladder -> sheet (View Transitions API)
   const srcTicker = sourceEl?.querySelector?.('.ticker');
@@ -141,6 +174,16 @@ export function openDetail(ctx, id, sourceEl = null) {
 
 function journalForm(s, j) {
   const st = j?.state || null;
+  if (st === 'closed') {
+    const r = D.myResult(s, j);
+    const up = (r?.pct ?? 0) >= 0;
+    return `<div class="jclosed ${up ? 'up' : 'down'}">
+        <div><p class="kv-l">${t('j.closedAt', { date: F.dmTime(j.closedAt), price: F.price(j.exit) })}</p>
+        <p class="big num">${F.spct(r?.pct ?? 0, 2)}${r?.money != null ? ` <small>${F.money(r.money, j.ccy)}</small>` : ''}</p></div>
+        <button type="button" class="btn btn-secondary btn-small" data-j="reopen">${t('j.reopen')}</button>
+      </div>
+      <p class="jnote">${t('j.closedNote')}</p>`;
+  }
   return `<div class="jchoice" role="radiogroup" aria-label="${t('det.journal')}">
       <button type="button" class="jbtn" role="radio" aria-checked="${st === 'in'}" data-j="in">${icon('check', 'icon-sm')}${t('j.in')}</button>
       <button type="button" class="jbtn" role="radio" aria-checked="${st === 'out'}" data-j="out">${icon('close', 'icon-sm')}${t('j.out')}</button>
@@ -149,6 +192,10 @@ function journalForm(s, j) {
       <label><span>${t('j.myEntry')}</span><input class="jin num" inputmode="decimal" id="j-entry" value="${F.esc(F.num(j.entry || s.entry, 2).replace(/−/, '-'))}"></label>
       <label><span>${t('j.size', { ccy: D.calcState().ccy })}</span><input class="jin num" inputmode="decimal" id="j-size" value="${F.esc(j.size ? String(Math.round(j.size)) : '')}" placeholder="${t('j.sizePh')}"></label>
       <button type="button" class="btn btn-secondary btn-small" data-j="save">${t('common.save')}</button>
+    </div>` : ''}
+    ${st !== 'out' && s.status === 'open' && !s.intraday_hit && s.last_price != null && new Date() >= (nextUsOpen(s.created_at) || 0) ? `<div class="jclose">
+      <div><p class="card-t">${t('j.closeEarly')}</p><p class="card-s">${t('j.closeEarly.s')}</p></div>
+      <button type="button" class="btn btn-primary btn-small" data-j="close">${t('j.closeAt', { price: F.price(s.last_price) })}</button>
     </div>` : ''}
     <p class="jnote">${t('j.local')}</p>`;
 }
@@ -160,6 +207,14 @@ function onJournal(el, s, what) {
     D.setJournal(s.id, { state: 'in', entry: cur?.entry || s.entry, size: cur?.size || null, ccy: D.calcState().ccy });
   } else if (what === 'out') {
     if (cur?.state === 'out') D.setJournal(s.id, null); else D.setJournal(s.id, { state: 'out' });
+  } else if (what === 'close') {
+    if (!(s.last_price > 0)) return;
+    D.setJournal(s.id, { ...(cur || {}), state: 'closed', entry: cur?.entry || s.entry, exit: s.last_price, closedAt: Date.now(), ccy: cur?.ccy || D.calcState().ccy });
+    const r = D.myResult(s, D.journal()[s.id]);
+    toast(t('j.closedToast', { v: F.spct(r?.pct ?? 0, 2) }));
+  } else if (what === 'reopen') {
+    const e = { ...(cur || {}) }; delete e.exit; delete e.closedAt;
+    D.setJournal(s.id, { ...e, state: 'in' });
   } else if (what === 'save') {
     const entry = F.parseNum(el.querySelector('#j-entry').value);
     const size = F.parseNum(el.querySelector('#j-size').value);
