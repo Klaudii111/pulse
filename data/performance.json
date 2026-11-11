@@ -1,0 +1,57 @@
+{
+ "as_of": "2026-11-10",
+ "equity": [
+  {
+   "date": "2026-11-09",
+   "bot": 100.0,
+   "spy": 100.0
+  },
+  {
+   "date": "2026-11-10",
+   "bot": 100.393,
+   "spy": 99.632
+  }
+ ],
+ "by_horizon": {
+  "DEN": {
+   "trades": 0,
+   "win_rate": 0.0,
+   "avg_r": 0.0,
+   "expectancy_r": 0.0,
+   "max_dd_pct": 0.0,
+   "return_pct": 0.0
+  },
+  "DNY": {
+   "trades": 0,
+   "win_rate": 0.0,
+   "avg_r": 0.0,
+   "expectancy_r": 0.0,
+   "max_dd_pct": 0.0,
+   "return_pct": 0.0
+  },
+  "TYDEN": {
+   "trades": 0,
+   "win_rate": 0.0,
+   "avg_r": 0.0,
+   "expectancy_r": 0.0,
+   "max_dd_pct": 0.0,
+   "return_pct": 0.0
+  },
+  "MESIC": {
+   "trades": 0,
+   "win_rate": 0.0,
+   "avg_r": 0.0,
+   "expectancy_r": 0.0,
+   "max_dd_pct": 0.0,
+   "return_pct": 0.39
+  },
+  "ALL": {
+   "trades": 0,
+   "win_rate": 0.0,
+   "avg_r": 0.0,
+   "expectancy_r": 0.0,
+   "max_dd_pct": 0.0,
+   "return_pct": 0.39
+  }
+ }
+}

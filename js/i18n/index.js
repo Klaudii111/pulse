@@ -1,0 +1,76 @@
+// Tiny i18n layer. Add a language: create js/i18n/<id>.js with the same keys as cs.js,
+// import it below and add it to LOCALES. Missing keys fall back to Czech.
+import * as store from '../store.js';
+import cs from './cs.js';
+import en from './en.js';
+
+export const LOCALES = [
+  { id: 'cs', label: 'Čeština', tag: 'cs-CZ' },
+  { id: 'en', label: 'English', tag: 'en-GB' },
+];
+const DICTS = { cs, en };
+const FALLBACK = 'cs';
+
+function detect() {
+  const saved = store.get('lang');
+  if (saved && DICTS[saved]) return saved;
+  const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'cs']).map((l) => String(l).toLowerCase());
+  for (const l of langs) {
+    const base = l.split('-')[0];
+    if (base === 'sk') return 'cs'; // Slovak readers default to Czech until sk.js exists
+    if (DICTS[base]) return base;
+  }
+  return 'en';
+}
+
+let cur = detect();
+const plurals = new Map();
+
+export const lang = () => cur;
+export const tag = () => (LOCALES.find((l) => l.id === cur) || LOCALES[0]).tag;
+
+export function setLang(id) {
+  if (!DICTS[id]) return;
+  cur = id;
+  store.set('lang', id);
+  document.documentElement.lang = id;
+}
+document.documentElement.lang = cur;
+
+function lookup(dict, key) {
+  if (Object.prototype.hasOwnProperty.call(dict, key)) return dict[key];
+  return undefined;
+}
+
+function pluralForm(n) {
+  if (!plurals.has(cur)) plurals.set(cur, new Intl.PluralRules(tag()));
+  return plurals.get(cur).select(n);
+}
+
+/** Translate. Values may be strings with {param}, plural objects {one, few, many, other} keyed by params.n, or functions. */
+export function t(key, params = {}) {
+  let v = lookup(DICTS[cur], key);
+  if (v === undefined) v = lookup(DICTS[FALLBACK], key);
+  if (v === undefined) return key;
+  if (typeof v === 'function') return v(params);
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const n = Math.abs(Number(params.n ?? 0));
+    v = v[pluralForm(n)] ?? v.other ?? v.many ?? Object.values(v)[0];
+  }
+  if (typeof v !== 'string') return v;
+  return v.replace(/\{(\w+)\}/g, (m, k) => (params[k] !== undefined ? String(params[k]) : m));
+}
+
+/** Raw value (arrays/objects such as lessons). */
+export function tr(key) {
+  const v = lookup(DICTS[cur], key);
+  return v === undefined ? lookup(DICTS[FALLBACK], key) : v;
+}
+
+/** Localize a value coming from the bot: plain string or {cs: "...", en: "..."}. */
+export function L(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') return v[cur] ?? v[FALLBACK] ?? v.en ?? Object.values(v)[0] ?? '';
+  return String(v);
+}

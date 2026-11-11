@@ -1,0 +1,224 @@
+{
+ "generated_at": "2026-11-10T21:47:08+00:00",
+ "mode": "paper",
+ "regime": {
+  "state": "risk_on",
+  "spy_vs_sma200_pct": 2.97,
+  "note": "Risk-on: SPY nad 200denním průměrem."
+ },
+ "tracks": {
+  "DEN": [],
+  "DNY": [],
+  "TYDEN": [],
+  "MESIC": [
+   {
+    "id": "MESIC-2026-11-09-XLE-1",
+    "symbol": "XLE",
+    "name": "Energy Select Sector SPDR",
+    "asset_class": "etf",
+    "horizon": "MESIC",
+    "action": "BUY",
+    "created_at": "2026-11-10T12:02:11+00:00",
+    "entry": 61.94,
+    "stop": 57.3846,
+    "target": 71.0507,
+    "exit_date": "2026-12-09",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Trend (12 měsíců)",
+      "en": "Trend (12 months)"
+     },
+     {
+      "cs": "Momentum (top 10 %)",
+      "en": "Momentum (top 10%)"
+     },
+     {
+      "cs": "Rotace sektorů",
+      "en": "Sector rotation"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; patří mezi nejsilnější tituly za posledních 12 měsíců; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 57.38 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
+     "en": "Why: the price has risen over the past year and holds above its 200-day average; it is among the strongest names over the last 12 months; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 57.38, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
+    },
+    "last_price": 62.21,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.436,
+    "pnl_r": 0.059,
+    "progress": 0.03,
+    "price_path": [
+     {
+      "t": "2026-11-09T16:00:00-05:00",
+      "p": 61.94
+     },
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 62.21
+     }
+    ]
+   },
+   {
+    "id": "MESIC-2026-11-09-XLV-2",
+    "symbol": "XLV",
+    "name": "Health Care Select Sector SPDR",
+    "asset_class": "etf",
+    "horizon": "MESIC",
+    "action": "BUY",
+    "created_at": "2026-11-10T12:02:11+00:00",
+    "entry": 188.33,
+    "stop": 178.905,
+    "target": 207.18,
+    "exit_date": "2026-12-09",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Trend (12 měsíců)",
+      "en": "Trend (12 months)"
+     },
+     {
+      "cs": "Rotace sektorů",
+      "en": "Sector rotation"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 178.91 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
+     "en": "Why: the price has risen over the past year and holds above its 200-day average; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 178.91, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
+    },
+    "last_price": 188.88,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.292,
+    "pnl_r": 0.058,
+    "progress": 0.029,
+    "price_path": [
+     {
+      "t": "2026-11-09T16:00:00-05:00",
+      "p": 188.33
+     },
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 188.88
+     }
+    ]
+   },
+   {
+    "id": "MESIC-2026-11-09-XLP-3",
+    "symbol": "XLP",
+    "name": "Consumer Staples Select Sector SPDR",
+    "asset_class": "etf",
+    "horizon": "MESIC",
+    "action": "BUY",
+    "created_at": "2026-11-10T12:02:11+00:00",
+    "entry": 90.89,
+    "stop": 86.4186,
+    "target": 99.8329,
+    "exit_date": "2026-12-09",
+    "risk_pct_account": 1.0,
+    "target_pct_account": 2.0,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Trend (12 měsíců)",
+      "en": "Trend (12 months)"
+     },
+     {
+      "cs": "Rotace sektorů",
+      "en": "Sector rotation"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; sektor je mezi 3 nejsilnějšími a nad 200denním průměrem. Neplatí, pokud cena klesne na stop 86.42 nebo do 2026-12-09 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
+     "en": "Why: the price has risen over the past year and holds above its 200-day average; the sector is among the 3 strongest and above its 200-day average. Invalidated if the price falls to the stop 86.42, or if the target is not reached by 2026-12-09 (the position is then closed, or extended if the signal still holds)."
+    },
+    "last_price": 91.03,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.154,
+    "pnl_r": 0.031,
+    "progress": 0.016,
+    "price_path": [
+     {
+      "t": "2026-11-09T16:00:00-05:00",
+      "p": 90.89
+     },
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 91.03
+     }
+    ]
+   },
+   {
+    "id": "MESIC-2026-11-10-MRNA-8",
+    "symbol": "MRNA",
+    "name": "Moderna",
+    "asset_class": "stock",
+    "horizon": "MESIC",
+    "action": "BUY",
+    "created_at": "2026-11-10T21:47:06+00:00",
+    "entry": 250.83,
+    "stop": 190.3164,
+    "target": 371.8571,
+    "exit_date": "2026-12-10",
+    "risk_pct_account": 0.255,
+    "target_pct_account": 0.51,
+    "rr": 2.0,
+    "max_leverage": 1.0,
+    "reasons": [
+     {
+      "cs": "Trend (12 měsíců)",
+      "en": "Trend (12 months)"
+     },
+     {
+      "cs": "Momentum (top 10 %)",
+      "en": "Momentum (top 10%)"
+     }
+    ],
+    "status": "open",
+    "result_r": null,
+    "result_pct": null,
+    "closed_at": null,
+    "intraday_hit": null,
+    "hit_at": null,
+    "explanation": {
+     "cs": "Proč: cena roste déle než rok a drží se nad 200denním průměrem; patří mezi nejsilnější tituly za posledních 12 měsíců. Neplatí, pokud cena klesne na stop 190.32 nebo do 2026-12-10 nedosáhne cíle (pak se pozice zavře, nebo prodlouží, pokud signál stále platí).",
+     "en": "Why: the price has risen over the past year and holds above its 200-day average; it is among the strongest names over the last 12 months. Invalidated if the price falls to the stop 190.32, or if the target is not reached by 2026-12-10 (the position is then closed, or extended if the signal still holds)."
+    },
+    "last_price": 250.83,
+    "last_price_at": "2026-11-10T16:00:00-05:00",
+    "pnl_pct_position": 0.0,
+    "pnl_r": 0.0,
+    "progress": 0.0,
+    "price_path": [
+     {
+      "t": "2026-11-10T16:00:00-05:00",
+      "p": 250.83
+     }
+    ]
+   }
+  ]
+ }
+}
