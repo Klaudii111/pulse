@@ -13,9 +13,13 @@ const G = {
   R: { re: /./, cs: 'R – jednotka rizika: 1 R = kolik ztratíte, když cena dojde na stop. +2 R = vyděláte dvojnásobek toho, co riskujete.', en: 'R – a unit of risk: 1 R = what you lose if the price hits the stop. +2 R = you earn twice what you risk.' },
   STOP: { re: /./, cs: 'Stop (stop-loss) – cena, kde se obchod automaticky zavře se ztrátou, aby nebyla větší.', en: 'Stop (stop-loss) – the price where the trade closes automatically at a loss, so it cannot grow.' },
   CIL: { re: /./, cs: 'Cíl (take-profit) – cena, kde se obchod zavře se ziskem.', en: 'Target (take-profit) – the price where the trade closes in profit.' },
-  LIMIT: { re: /./, cs: 'Limitní příkaz – koupíte jen za uvedenou cenu nebo levněji, nikdy dráž.', en: 'Limit order – you buy only at the given price or cheaper, never higher.' },
+  LIMIT: { re: /./, cs: 'Limitní příkaz – koupíte jen za uvedenou cenu nebo levněji, nikdy dráž (prodáte jen za ni nebo dráž). Příkaz čeká, dokud cena k limitu nedojde; když nedojde, obchod nevznikne a peníze se vrátí.', en: 'Limit order – you buy only at the given price or cheaper, never higher (you sell only at it or higher). The order waits until the price reaches the limit; if it never does, no trade happens and the money comes back.' },
+  PLATNOST: { re: /./, cs: 'Platnost příkazu – jak dlouho limitní příkaz čeká. „Do konce dne“ = do zavření burzy v USA (obvykle 22:00 našeho času), „do zrušení“ = nejdéle 30 dní, „do konce signálu“ = dokud platí signál robota.', en: 'Order validity – how long a limit order waits. “Until end of day” = until the US market closes (4 pm New York), “until cancelled” = at most 30 days, “until the signal ends” = as long as the robot’s signal is valid.' },
   PAKA: { re: /./, cs: 'Páka – obchodujete s větší částkou, než máte na účtu. Zisk i ztráta se násobí.', en: 'Leverage – you trade a bigger amount than your account. Profit and loss are multiplied.' },
 };
+
+/* One glossary entry in the current language (1.8.0: the order ticket explains a limit order) */
+export const gloss = (k) => (G[k] ? (lang() === 'cs' ? G[k].cs : G[k].en) : '');
 
 /* What the instrument is, in the current language (null when unknown). */
 export function instrumentText(sym) {
@@ -29,5 +33,5 @@ export function glossaryFor(s, texts = []) {
   const blob = texts.join(' ');
   const keys = ['RSI', 'ATR', 'SMA', 'VIX', 'ETF'].filter((k) => G[k].re.test(blob) || (k === 'ETF' && INSTR[s.symbol]?.k === 'etf'));
   const cs = lang() === 'cs';
-  return ['ACCT', 'STAV'].concat(keys, ['STOP', 'CIL', 'LIMIT', 'PAKA']).map((k) => cs ? G[k].cs : G[k].en);
+  return ['ACCT', 'STAV'].concat(keys, ['STOP', 'CIL', 'LIMIT', 'PLATNOST', 'PAKA']).map((k) => cs ? G[k].cs : G[k].en);
 }

@@ -1,5 +1,5 @@
 // "Moje" (1.7.0): my Obchodní platforma positions + the signals I follow, with one total live result in my currency.
-// Reachable from a card on Dnes and from Více (#/moje). Status words = the shared vocabulary (domain.liveStatus, terminal.posStatus).
+// Reachable from a card on Dnes and from Více (#/moje). 1.8.0: pending limit orders + the latest order events. Status words = the shared vocabulary (domain.liveStatus, terminal.posStatus).
 import * as F from '../format.js';
 import * as D from '../domain.js';
 import * as W from '../wallet.js';
@@ -7,7 +7,9 @@ import * as store from '../store.js';
 import { t } from '../i18n/index.js';
 import { icon, monogram } from '../ui.js';
 import { signalRow } from './signals.js';
-import { posStatus } from './terminal.js';
+import { posStatus, orderRow } from './terminal.js';
+import { describe } from './events.js';
+import * as Feed from '../feed.js';
 
 const sm = (v, ccy) => (v > 0.5 ? '+' : v < -0.5 ? '' : '±') + F.money(Math.abs(v) < 0.5 ? 0 : v, ccy, 0);
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
@@ -77,10 +79,16 @@ export function render(ctx) {
   const fol = m.sigs.length
     ? `<div class="srow-list">${m.sigs.map((x, i) => signalRow(x.s, now, i)).join('')}</div>`
     : `<div class="moje-hint">${icon('star')}<p>${t('moje.fol.none')}</p><a class="btn btn-secondary btn-small" href="#/signaly">${t('moje.fol.go')}</a></div>`;
+  /* 1.8.0: my limit orders - waiting ones, then what happened to them lately (same texts as "Co se děje") */
+  const pend = m.smw ? m.smw.w.orders : [];
+  const oev = Feed.events().filter((e) => String(e.k).startsWith('ord-')).slice(0, 5);
+  const ords = (pend.length ? `<h3 class="moje-h3">${t('moje.ord')}<small class="num">${pend.length}</small></h3><div class="tp-list">${pend.map((o) => `<a class="moje-ord" href="#/terminal">${orderRow(o, ctx.data, { buttons: false })}</a>`).join('')}</div>` : '')
+    + (oev.length ? `<h3 class="moje-h3">${t('moje.ordEv')}</h3><div class="alert-list moje-oev">${oev.map((e) => { const d = describe(e); return d ? `<a class="alert-row ev-row" href="#/terminal"><span class="alert-ic ${d.tn}">${icon(d.ic, 'icon-sm')}</span><span class="alert-main"><span class="alert-t">${d.title}</span><span class="alert-s">${F.esc(d.sub)} · ${F.esc(F.ago(e.t || e.at))}</span></span></a>` : ''; }).join('')}</div>` : '');
   return head + hero + `
   <p class="honest">${icon('info', 'icon-xs')} ${t('moje.note', { a: F.money(D.calcState().account, m.ccy, 0), r: F.num(D.profilePct()?.pct ?? 1, 0) })}</p>
   <h2 class="section-title">${t('moje.plat')}<small>${m.rows.length}</small></h2>
   ${plat}
+  ${ords}
   <a class="link moje-link" href="#/terminal">${icon('chart', 'icon-xs')}${t('moje.plat.open')}</a>
   <h2 class="section-title">${t('moje.fol')}<small>${m.sigs.length}</small></h2>
   ${fol}

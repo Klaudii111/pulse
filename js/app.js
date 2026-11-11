@@ -209,10 +209,14 @@ async function pollPaper() {
 
 /* fictional positions of the Obchodní platforma: auto close on stop-loss / take-profit / signal close */
 function walletCheck() {
+  /* 1.8.0: pending limit orders first (a fill becomes a position that the stop / target check below watches) */
+  const ord = W.checkOrders(data);
+  ord.filled.forEach((p) => toast(t(p.reopen ? 'term.auto.fillReopen' : 'term.auto.fill', { sym: p.sym, side: F.SIDE[p.side], v: F.price(p.entry) }), { timeout: 7000 }));
+  ord.expired.forEach((o) => toast(t('term.auto.expired', { sym: o.sym, v: F.price(o.limit) }), { timeout: 6000 }));
   const done = W.check(data);
   if (store.get('wallet', null)?.positions?.length) W.summary(data); // takes today's starting point as early as possible
   done.forEach((r) => toast(t(`term.auto.${['tp', 'sl', 'out'].includes(r.why) ? r.why : 'sig'}`, { sym: r.sym, v: (r.pnl > 0 ? '+' : '') + F.money(r.pnl, W.get().ccy, 0) }), { timeout: 6000 }));
-  return done.length > 0;
+  return done.length > 0 || ord.filled.length > 0 || ord.expired.length > 0;
 }
 
 async function poll() {

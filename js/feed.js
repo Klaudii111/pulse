@@ -1,7 +1,7 @@
 // "Co se děje" (1.7.0): an event feed derived on this device by diffing data snapshots.
 // Snapshots + events live in store.js (localStorage with in-memory fallback). The very first time a source is seen
 // it is only recorded (no flood of old events). Sources: signals.json + history.json, paper.json (robot), the wallet
-// of the Obchodní platforma. Texts are built at display time (language switch works), events keep only data.
+// of the Obchodní platforma, and (1.8.0) its limit orders. Texts are built at display time (language switch works), events keep only data.
 import { CONFIG } from '../config.js';
 import * as store from './store.js';
 import { HORIZONS } from './domain.js';
@@ -89,11 +89,22 @@ export function update(data) {
     const wc = wcl.map((x) => `${x.id}@${x.closedAt}`);
     if (snap.wal) {
       const pp = new Set(snap.wal.pos), pc = new Set(snap.wal.cl);
-      wpos.forEach((x, i) => { if (!pp.has(wp[i])) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt }); });
+      /* a position from a filled limit order is told by the order's own "vyplněn" event below */
+      wpos.forEach((x, i) => { if (!pp.has(wp[i]) && !x.order) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt }); });
       wcl.forEach((x, i) => { if (!pc.has(wc[i])) ev.push({ k: 'my-close', sym: x.sym, side: x.side, v: x.pnl, ccy: w.ccy, why: x.why, sid: x.sigId || null, t: x.closedAt }); });
     }
     const nw = { pos: wp, cl: wc.slice(0, 200) };
     if (JSON.stringify(nw) !== JSON.stringify(snap.wal || null)) { snap.wal = nw; dirty = true; }
+
+    /* ---- my limit orders (1.8.0, wallet.olog: placed / filled / cancelled / expired) ---- */
+    const olog = Array.isArray(w?.olog) ? w.olog : [];
+    const oids = olog.map((x) => x.id);
+    /* the order log is new in 1.8.0: everything in it is new for a device that already had a wallet snapshot */
+    if (snap.ol || snap.wal) {
+      const seen = new Set(snap.ol || []);
+      olog.filter((x) => !seen.has(x.id)).reverse().forEach((x) => ev.push({ k: `ord-${x.k}`, sym: x.sym, side: x.side, lim: x.limit, v: x.amount, ccy: w.ccy, sid: x.sigId || null, reopen: !!x.reopen, why: x.why || null, t: x.k === 'filled' ? x.fillT || x.at : x.at }));
+    }
+    if (JSON.stringify(oids) !== JSON.stringify(snap.ol || null)) { snap.ol = oids; dirty = true; }
 
     if (dirty) store.set(SNAP, snap);
     if (ev.length) {
