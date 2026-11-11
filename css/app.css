@@ -1410,3 +1410,12 @@ html.is-hidden .aurora i, html.is-hidden .regime-dot::after { animation-play-sta
 .gloss { margin: 14px 0 4px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
 .gloss summary { cursor: pointer; font-weight: 600; color: var(--gold); }
 .gloss ul { margin: 10px 0 2px; padding-left: 18px; display: grid; gap: 8px; color: var(--ink-2); font-size: 14px; line-height: 1.45; }
+.levtab table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 14px; }
+.levtab th { text-align: left; font-weight: 560; color: var(--ink-3); padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.levtab td { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+.levtab tr.is-over td { opacity: .55; }
+.levtab td:last-child { font-size: 12px; color: var(--ink-3); }
+.why-s { color: var(--ink-3); font-size: 13px; line-height: 1.45; margin: 4px 0; }
+.levtab td small { display: block; font-size: 11.5px; opacity: .75; }
+.tv-open { margin-top: 10px; }
+.tv-box { height: 420px; margin-top: 10px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }

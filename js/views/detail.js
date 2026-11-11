@@ -1,7 +1,7 @@
 import { CONFIG } from '../../config.js';
 import * as F from '../format.js';
 import * as D from '../domain.js';
-import { t, L } from '../i18n/index.js';
+import { t, L, lang } from '../i18n/index.js';
 import { icon, ladder, pill, openSheet, closeTopSheet, toast, copyText, liveState, ring, monogram } from '../ui.js';
 import { priceChart, defaultPriceMode, hasToday } from '../charts.js';
 import { instrumentText, glossaryFor } from '../explain.js';
@@ -10,6 +10,50 @@ import { vtSupported } from '../motion.js';
 
 let chartRef = null;
 let liveOff = null;
+
+/* TradingView symbol for the live candlestick chart (free official widget). */
+const TV = { US500: 'FOREXCOM:SPXUSD', US100: 'FOREXCOM:NSXUSD', US30: 'FOREXCOM:DJI', DE40: 'XETR:DAX', UK100: 'FOREXCOM:UKXGBP',
+  JP225: 'FOREXCOM:JP225', EURUSD: 'FX:EURUSD', GBPUSD: 'FX:GBPUSD', USDJPY: 'FX:USDJPY', XAUUSD: 'OANDA:XAUUSD' };
+const tvSymbol = (sym) => TV[sym] || sym.replace('-', '.');
+function mountTV(box, sym) {
+  box.hidden = false;
+  box.innerHTML = '<div class="tradingview-widget-container" style="height:100%;width:100%"><div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div></div>';
+  const sc = document.createElement('script');
+  sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  sc.async = true;
+  sc.text = JSON.stringify({ autosize: true, symbol: sym, interval: '5', timezone: 'Europe/Prague', theme: 'dark', style: '1',
+    locale: lang() === 'cs' ? 'cs' : 'en', allow_symbol_change: false, hide_side_toolbar: true, withdateranges: true, calendar: false,
+    support_host: 'https://www.tradingview.com' });
+  box.firstChild.appendChild(sc);
+}
+
+/* What the deposited money does at different leverage: price move to target / stop times the leverage. */
+const LEVS = [1, 2, 5, 10, 20, 30];
+function levTable(s, lev) {
+  if (!(s.entry > 0) || s.stop == null) return '';
+  const up = s.target != null ? Math.abs(s.target - s.entry) / s.entry * 100 : null;
+  const dn = Math.abs(s.entry - s.stop) / s.entry * 100;
+  /* ESMA retail caps (EU): shares and ETFs 1:5, major indices and gold 1:20, major currency pairs 1:30 */
+  const IDX = ['US500', 'US100', 'US30', 'DE40', 'UK100', 'JP225', 'XAUUSD'];
+  const FX = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD'];
+  const legal = FX.includes(s.symbol) ? 30 : IDX.includes(s.symbol) ? 20 : 5;
+  /* example deposit (margin) the user puts into the trade, in money */
+  const cs = lang() === 'cs';
+  const dep = cs ? 10000 : 500, ccy = cs ? 'CZK' : 'USD';
+  const rows = LEVS.map((L) => {
+    const loss = Math.min(100, dn * L);
+    const gainM = up == null ? null : dep * up * L / 100, lossM = dep * loss / 100;
+    const over = legal && L > legal;
+    return `<tr class="${over ? 'is-over' : ''}"><td class="num">1:${L}</td>
+      <td class="num up">${up == null ? '–' : `+${F.money(gainM, ccy, 0)}<small>${F.spct(up * L, 1)}</small>`}</td>
+      <td class="num down">−${F.money(lossM, ccy, 0)}<small>${loss >= 100 ? t('lev.all') : F.spct(-loss, 1)}</small></td>
+      <td>${over ? t('lev.overLegal') : ''}</td></tr>`;
+  }).join('');
+  return `<section class="levtab" aria-label="${t('lev.title')}"><h3 class="sheet-label">${t('lev.title')}</h3>
+    <p class="why-s">${t('lev.sub', { up: up == null ? '–' : F.pct(up, 1), dn: F.pct(dn, 1), dep: F.money(dep, ccy, 0) })}</p>
+    <table><thead><tr><th>${t('lev.col')}</th><th>${t('lev.colTarget')}</th><th>${t('lev.colStop')}</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="why-s">${t('lev.note')}</p></section>`;
+}
 
 /* Live price ticks update the open detail sheet in place (price, P&L, chart, ladder). */
 function onLiveDetail(el, ctx, s) {
@@ -96,6 +140,8 @@ export function openDetail(ctx, id, sourceEl = null) {
           <button type="button" class="range-chip" data-pmode="today" aria-pressed="${pmode === 'today'}">${t('det.chartToday')}</button>
           <button type="button" class="range-chip" data-pmode="all" aria-pressed="${pmode === 'all'}">${t('det.chartAll')}</button></div>` : ''}
         <div class="pchart-box" id="pchart"></div>
+        <button type="button" class="btn btn-block tv-open" data-tv="${F.esc(tvSymbol(s.symbol))}">${t('det.tvOpen')}</button>
+        <div class="tv-box" id="tvbox" hidden></div>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>
       ${isOpen && state === 'open' ? `<section class="howto" aria-label="${t('det.howto.aria')}">
@@ -109,6 +155,7 @@ export function openDetail(ctx, id, sourceEl = null) {
         <div class="kv-item"><p class="kv-l">${t('det.rr')}</p><p class="kv-v num">${F.rr(s.rr)}</p><p class="kv-s">${t('det.rrS', { v: F.num(s.rr, 1) })}</p></div>
         <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
       </div>
+      ${levTable(s, lev)}
       ${isOpen && state === 'open' ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
         <div class="timeline-row"><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div></div>
@@ -141,6 +188,9 @@ export function openDetail(ctx, id, sourceEl = null) {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
     const box = el.querySelector('#pchart');
     if (box) setTimeout(() => { chartRef = priceChart(box, s, { mode: () => pmode }); }, 30);
+    el.querySelector('.tv-open')?.addEventListener('click', (ev) => {
+      const b = ev.currentTarget; b.hidden = true; mountTV(el.querySelector('#tvbox'), b.dataset.tv);
+    });
     el.querySelectorAll('[data-pmode]').forEach((b) => b.addEventListener('click', () => {
       pmode = b.dataset.pmode;
       el.querySelectorAll('[data-pmode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pmode === pmode)));
