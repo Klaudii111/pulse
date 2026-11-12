@@ -187,7 +187,11 @@ function closeInternal(entry) {
   setTimeout(done, 520);
   if (!stack.length) document.documentElement.classList.remove('has-sheet');
   entry.onClose && entry.onClose();
+  /* 1.15.0: focus goes back to where it was; when that element is gone (the sheet below was repainted), to the sheet that is
+     now on top - so the keyboard (Esc, Tab) keeps working layer by layer */
+  const top = stack[stack.length - 1];
   if (entry.prevFocus && document.contains(entry.prevFocus)) entry.prevFocus.focus({ preventScroll: true });
+  else if (top) top.el.focus({ preventScroll: true });
 }
 
 export function closeTopSheet() {
@@ -205,6 +209,16 @@ export function closeAllSheets() {
 }
 
 export const sheetOpen = () => stack.length > 0;
+
+/* 1.15.0: Esc closes the top sheet also when the focus is not inside it (after the layer above was closed the focus could
+   be on the page) - one press = one layer, like Back */
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || !stack.length || ev.defaultPrevented) return;
+  const top = stack[stack.length - 1];
+  if (top.el.contains(ev.target)) return; /* the sheet's own handler took it */
+  if (top.el.classList.contains('is-closing')) return;
+  closeTopSheet();
+});
 
 /* 1.15.0 (A7): every open layer = exactly one history entry; Back closes only the top layer and the route handler in
    app.js skips that popstate (consumePop) - it used to close every sheet below too, leaving dead Back presses. */
