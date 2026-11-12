@@ -30,7 +30,8 @@ const cmode = 'bars';
 let barsRef = null, barsDead = false; // 1.10.0: real history from /api/bars; dead = endpoint missing -> old ticks chart
 
 const money = (v, ccy, dec = 0) => F.money(v, ccy, dec);
-const smoney = (v, ccy, dec = 0) => (v > 0.5 ? '+' : '') + F.money(v, ccy, dec);
+/* 1.15.0: an amount that rounds to zero is "±0 Kč", never "−0 Kč" (a 1 Kč trade) */
+const smoney = (v, ccy, dec = 0) => (dec === 0 && Number.isFinite(v) && Math.abs(v) < 0.5 ? `±${F.money(0, ccy, 0)}` : (v > 0.5 ? '+' : '') + F.money(v, ccy, dec));
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 /* price in the instrument's own decimals (EUR/USD 1,10940; US500 7 633,70) */
 export const pxOf = (sym, v) => F.price(v, M.get(sym) ? M.decimals(sym, v) : null);
