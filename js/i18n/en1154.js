@@ -46,4 +46,8 @@ export default {
   'hi.cmMore': 'Compare with others (optional)',
   'hi.sub': 'My closed trades',
   'pd.moreOpts': 'More options',
+  /* lead, after the fix round: one word for the main action (Buy) also in the Portfolio texts; 'a Equifax' fixed */
+  'po.open0': 'No trade yet. Start with Buy on a signal, or pick a market yourself.',
+  'pd.rs': 'Why buy',
+  'ev.myOpen': 'You opened a trade: {sym} ({side})',
 };

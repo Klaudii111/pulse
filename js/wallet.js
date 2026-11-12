@@ -178,12 +178,15 @@ export function summary(data) {
   if (rows.every((r) => r.live) && snapDue(w, equity)) dirty = true;
   if (dirty) save(w);
   const today = realized + openChg + fees;
+  /* 1.15.0: `free` = what a new trade (or a withdrawal) may take = the money outside trades (`cash`, the "Volné" every screen
+     shows), lowered by an open LOSS. An open PROFIT is not spendable until the trade is closed - it used to be, so with
+     "Volné 50 Kč" one could still buy for 684 Kč. */
   /* false while at least one open trade has no price on this device yet – the screens show "Dnes …" instead of a number */
   const todayReady = rows.every((r) => r.today != null);
   const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
   /* margin level (%): equity / money held in open trades; null without open trades */
   const level = used > 0 ? (equity / used) * 100 : null;
-  return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayReady, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
+  return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: Math.min(w.balance, equity) - used - reserved, today, todayReady, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
     totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
 /* ---------- 1.15.0 Portfolio: daily equity snapshots (w.eqd = { 'YYYY-MM-DD': { eq, at, putIn } }) ----------

@@ -37,4 +37,7 @@ export default {
   'hi.cmMore': 'Porovnat s ostatními (nepovinné)',
   'hi.sub': 'Moje uzavřené obchody',
   'pd.moreOpts': 'Další možnosti',
+  /* lead, after the fix round: one word for the main action (Koupit) also in the Portfolio texts */
+  'po.open0': 'Zatím nemáš žádný obchod. Začni u signálu tlačítkem Koupit, nebo si vyber trh sám.',
+  'pd.rs': 'Proč koupit',
 };
