@@ -37,13 +37,17 @@ import cs1151 from './cs1151.js';
 import en1151 from './en1151.js';
 import cs1152 from './cs1152.js';
 import en1152 from './en1152.js';
+import cs1153 from './cs1153.js';
+import en1153 from './en1153.js';
+import cs1154 from './cs1154.js';
+import en1154 from './en1154.js';
 
 export const LOCALES = [
   { id: 'cs', label: 'Čeština', tag: 'cs-CZ' },
   { id: 'en', label: 'English', tag: 'en-GB' },
 ];
 /* 1.9.0 texts live in cs19.js / en19.js and win over older keys of the same name (e.g. nav.terminalShort) */
-const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111, ...cs112, ...cs113, ...cs114, ...cs115, ...cs116, ...cs117, ...cs118, ...cs119, ...cs120, ...cs121, ...cs1139, ...cs1150, ...cs1151, ...cs1152 }, en: { ...en, ...en19, ...en110, ...en111, ...en112, ...en113, ...en114, ...en115, ...en116, ...en117, ...en118, ...en119, ...en120, ...en121, ...en1139, ...en1150, ...en1151, ...en1152 } };
+const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111, ...cs112, ...cs113, ...cs114, ...cs115, ...cs116, ...cs117, ...cs118, ...cs119, ...cs120, ...cs121, ...cs1139, ...cs1150, ...cs1151, ...cs1152, ...cs1153, ...cs1154 }, en: { ...en, ...en19, ...en110, ...en111, ...en112, ...en113, ...en114, ...en115, ...en116, ...en117, ...en118, ...en119, ...en120, ...en121, ...en1139, ...en1150, ...en1151, ...en1152, ...en1153, ...en1154 } };
 const FALLBACK = 'cs';
 
 function detect() {
