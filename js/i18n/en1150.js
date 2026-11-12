@@ -66,7 +66,7 @@ export default {
   'pd.a.share': 'Share',
   'pd.st.holds0': 'The robot still holds this trade on its account. Nothing to do – we watch the stop and target.',
   'pd.st.own': 'Your own trade – you decide. We watch the stop and target even with the app closed.',
-  'pd.st.holds': 'The robot still holds this trade – the signal is valid until {d}. Nothing to do.',
+  'pd.st.holds': 'The robot still holds this trade and the signal is valid until {d} – nothing to do.',
   'pd.st.open': 'The signal is still valid (until {d}). Nothing to do, we watch the stop and target.',
   'pd.st.robotOut': 'The robot has already closed its trade. Yours runs on until the stop, the target or the end of the signal.',
   'pd.st.ended': 'The signal ended ({why}). Your trade closes too, at the same price as the robot’s.',

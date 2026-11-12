@@ -67,7 +67,7 @@ export default {
   'pd.a.share': 'Sdílet',
   'pd.st.holds0': 'Robot tenhle obchod pořád drží na svém účtu. Nemusíš nic dělat – stop a cíl hlídáme.',
   'pd.st.own': 'Vlastní obchod – rozhoduješ ty. Stop a cíl hlídáme i se zavřenou aplikací.',
-  'pd.st.holds': 'Robot tenhle obchod pořád drží – signál platí do {d}. Nemusíš nic dělat.',
+  'pd.st.holds': 'Robot tenhle obchod pořád drží a signál platí do {d} – nemusíš nic dělat.',
   'pd.st.open': 'Signál pořád platí (do {d}). Nemusíš nic dělat, stop a cíl hlídáme.',
   'pd.st.robotOut': 'Robot svůj obchod už ukončil. Ten tvůj běží dál, dokud nedojde na stop, cíl nebo konec signálu.',
   'pd.st.ended': 'Signál skončil ({why}). Tvůj obchod se zavře také, za stejnou cenu jako u robota.',
