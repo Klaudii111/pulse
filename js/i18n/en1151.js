@@ -122,4 +122,7 @@ export default {
   'lang.k': 'Language · Jazyk',
   'scan.den': 'One-day signals did not pass the test, so they are not among the tested ones. The experimental daily robot is shown separately on Today.',
   'rs.all': 'Show all {n}',
+  'tour.n1.t': 'How much I have', 'tour.n1.s': 'Your account value (play money) and today’s result. Tap it to open Portfolio.',
+  'tour.n3.t': "Today's signal", 'tour.n3.s': 'When the robot sent it and until when the entry is valid. Below: where you stand – you can buy, you bought it, or the entry is over.',
+  'tour.n4.t': 'One button', 'tour.n4.s': 'Buy opens a play-money purchase prefilled from the signal. When you already have it, it shows how it is doing.',
 };

@@ -14,8 +14,9 @@ const TAB = (id) => `#tabbar a[href="#/${id}"], #side-nav a[href="#/${id}"]`;
 /* 1.13.0: max 4 steps, all on Dnes + the tab bar: Peněženka · a signal (money line + profiles) · Zainvestovat · Zainvestováno */
 const TOUR = [
   { route: 'dnes', sel: '#acc-card', k: 'tour.n1' },
-  { route: 'dnes', sel: '.cc .cc-money', k: 'tour.n3' },
-  { route: 'dnes', sel: '.cc .cc-go', k: 'tour.n4' },
+  /* 1.15.1: Dnes = Kolik mám · Dnešní signály (sent / valid until / my state) · one button */
+  { route: 'dnes', sel: '.ts-card .ts-when', k: 'tour.n3' },
+  { route: 'dnes', sel: '.ts-card .ts-btn', k: 'tour.n4' },
   { route: 'dnes', sel: TAB('portfolio'), k: 'tour.n5' },
 ];
 const HINT = [

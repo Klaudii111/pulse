@@ -122,4 +122,7 @@ export default {
   'lang.k': 'Jazyk · Language',
   'scan.den': 'Jednodenní signály testem neprošly, mezi otestovanými nejsou. Zkušební denní robot je zvlášť na Dnes.',
   'rs.all': 'Zobrazit všech {n}',
+  'tour.n1.t': 'Kolik mám', 'tour.n1.s': 'Hodnota tvého účtu (fiktivní peníze) a dnešní výsledek. Klepnutím otevřeš Portfolio.',
+  'tour.n3.t': 'Dnešní signál', 'tour.n3.s': 'Kdy ho robot poslal a do kdy platí vstup. Pod tím vidíš, jak jsi na tom ty: můžeš koupit, máš koupeno, nebo vstup skončil.',
+  'tour.n4.t': 'Jedno tlačítko', 'tour.n4.s': 'Koupit otevře nákup fiktivními penězi předvyplněný podle signálu. Když už ho máš, ukáže, jak se ti daří.',
 };

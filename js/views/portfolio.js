@@ -138,8 +138,9 @@ function closedRow(p, c) {
 /* every signal the robot sent (tested horizons only – the experimental daily robot never appears here) */
 function robotSignals(data, now) {
   const vis = VISIBLE_HZ();
-  const open = D.allOpen(data).filter((s) => vis.includes(s.horizon) && !D.closedSignals(data, now).some((x) => x.id === s.id));
   const closed = D.closedSignals(data, now);
+  const done = new Set(closed.map((x) => x.id));
+  const open = D.allOpen(data).filter((s) => vis.includes(s.horizon) && !done.has(s.id));
   const buyable = new Set(buyableList(data, now).map((x) => x.id));
   return {
     open: open.filter((s) => D.sigPhase(s, now) !== 'closed'),
