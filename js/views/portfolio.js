@@ -467,7 +467,7 @@ function kolikHtml(p, sm) {
   const rows = [
     kvRow(t('pd.k.dep'), F.money(p.margin, c, 0), { hint: t('pd.k.depS'), key: 'dep' }),
     kvRow(t('pd.k.lev'), F.esc(levTxt(p.lev)), { hint: p.lev > 1 ? t('pd.k.levS', { v: p.lev }) : t('pd.k.lev1S'), key: 'lev' }),
-    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>` : ''}`, { key: 'size' }),
+    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.ccyWrap(F.num(f.fx, f.fx >= 10 ? 1 : f.fx >= 1 ? 2 : 4), c) })}</small>` : ''}` : ''}`, { key: 'size' }),
     kvRow(t(p.side === 'SELL' ? 'pd.k.sellPx' : 'pd.k.buyPx'), pxC(p.sym, p.entry), { key: 'entry' }),
     f.closed ? kvRow(t(p.side === 'SELL' ? 'pd.k.buyBack' : 'pd.k.exitPx'), pxC(p.sym, p.exit), { key: 'exit' }) : kvRow(t('pd.k.px'), pxC(p.sym, f.px), { key: 'px' }),
     kvRow(t(f.closed ? 'pd.k.valEnd' : 'pd.k.val'), F.money(f.value, c, 0), { key: 'value', cls: 'is-strong' }),
@@ -476,7 +476,11 @@ function kolikHtml(p, sm) {
     kvRow(t('pd.k.fees'), `${t('pd.k.feesV', { s: F.money(f.spread, c, f.spread < 10 && c === 'CZK' ? 0 : f.spread < 10 ? 2 : 0), n: F.money(f.swap, c, f.swap > 0 && f.swap < 10 ? 2 : 0) })}${f.closed && p.fee > 0.5 ? `<small class="pd-q">${t('term.convFee', { v: F.money(p.fee, c, 0) })}</small>` : ''}`, { hint: t(p.lev > 1 ? 'pd.k.feesS' : 'pd.k.feesS1'), key: 'fees' }),
   ];
   if (!f.closed) {
-    rows.push(kvRow(t('pd.k.atStop', { v: p.sl > 0 ? pxOf(p.sym, p.sl) : '–' }), p.sl > 0 ? `<span class="${tone(f.atStop)}">${sg(f.atStop, c)}</span>` : `<span class="pd-none">${t('pd.k.noStop')}</span>`, { key: 'atStop' }));
+    if (f.endPx != null) {
+      /* B3: leverage ends the trade before the stop – this row replaces "Při stopu"; the stop stays as a quiet line */
+      rows.push(kvRow(`${t('pd.k.atEnd', { v: pxOf(p.sym, f.endPx) })}${B.qh('LEVEND')}`, `<span class="down">${sg(f.atEnd, c)}</span>`, { hint: t('pd.k.atEndS', { m: F.num(100 / p.lev, 100 / p.lev >= 10 ? 0 : 1) }), key: 'atEnd', cls: 'is-end' }));
+      if (p.sl > 0) rows.push(`<p class="pd-stop2 num" data-k="stop2">${t('pd.k.stop2', { v: pxOf(p.sym, p.sl) })}</p>`);
+    } else rows.push(kvRow(t('pd.k.atStop', { v: p.sl > 0 ? pxOf(p.sym, p.sl) : '–' }), p.sl > 0 ? `<span class="${tone(f.atStop)}">${sg(f.atStop, c)}</span>` : `<span class="pd-none">${t('pd.k.noStop')}</span>`, { key: 'atStop' }));
     rows.push(kvRow(t('pd.k.atTarget', { v: p.tp > 0 ? pxOf(p.sym, p.tp) : '–' }), p.tp > 0 ? `<span class="${tone(f.atTarget)}">${sg(f.atTarget, c)}</span>` : `<span class="pd-none">${t('pd.k.noTarget')}</span>`, { key: 'atTarget' }));
   } else {
     rows.push(kvRow(t('pd.k.why'), F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`)), { key: 'why' }));
@@ -490,6 +494,8 @@ function sigSentence(ctx, p, s) {
   const f = P.sourceOf(p, W.get());
   if (f.kind === 'own') return t('pd.st.own');
   const rb = P.robotState(ctx.data, p);
+  /* B5: the robot already left -> never "nemusíš nic dělat" (the block at the top says what to decide) */
+  if (rb?.k === 'closed') return t('pd.st.robotOut');
   if (!s) return t(rb?.k === 'holds' ? 'pd.st.holds0' : 'pd.st.noSig');
   const ended = s.status !== 'open' || (s.intraday_hit && !s.live_hit);
   if (ended) return t('pd.st.ended', { why: t(`pd.end.${['target', 'stop'].includes(s.status) ? s.status : s.intraday_hit === 'target' || s.intraday_hit === 'stop' ? s.intraday_hit : 'time'}`) });
@@ -523,11 +529,14 @@ function dnesHtml(ctx, p, sm) {
     out.push(`<div class="pd-range"><p class="pd-sub">${t(dr.today ? 'pd.d.range' : 'pd.d.rangeLast', { d: F.dm(new Date(dr.day)) })}</p>
       <div class="pd-rrow num"><span>${pxOf(p.sym, dr.lo)}</span>${bar(dr.lo, dr.hi, Math.max(dr.lo, Math.min(dr.hi, f.px)), { cls: 'is-range' })}<span>${pxOf(p.sym, dr.hi)}</span></div></div>`);
   }
-  if (p.sl > 0 || p.tp > 0) {
-    const way = p.sl > 0 && p.tp > 0;
-    out.push(`<div class="pd-way"><p class="pd-sub">${t('pd.d.way')}</p>
-      ${way ? `<div class="pd-rrow num"><span class="down">${t('lad.stop')}</span>${bar(p.sl, p.tp, f.px, { entry: p.entry, cls: 'is-way' })}<span class="up">${t('lad.target')}</span></div>` : ''}
-      <p class="pd-dist num">${p.tp > 0 ? `<span class="up">${t('pd.d.toTarget', { v: F.pct(f.toTarget, 1), m: sg(f.atTarget - p.pnl, c) })}</span>` : ''}${p.sl > 0 ? `<span class="down">${t('pd.d.toStop', { v: F.pct(f.toStop, 1), m: sg(f.atStop - p.pnl, c) })}</span>` : ''}</p></div>`);
+  /* B3 / B4: the lower end is the leverage end when it comes first; only distances in % from the price now here – the money
+     sits once in "Kolik mám" (Při cíli / Při stopu = the whole result since I bought) */
+  if (f.low > 0 || p.tp > 0) {
+    const end = f.endPx != null;
+    const way = f.low > 0 && p.tp > 0;
+    out.push(`<div class="pd-way"><p class="pd-sub">${t(end ? 'pd.d.wayEnd' : 'pd.d.way')}</p>
+      ${way ? `<div class="pd-rrow num"><span class="down">${t(end ? 'pd.lv.end' : 'lad.stop')}</span>${bar(f.low, p.tp, f.px, { entry: p.entry, cls: 'is-way' })}<span class="up">${t('lad.target')}</span></div>` : ''}
+      <p class="pd-dist num">${p.tp > 0 ? `<span class="up">${t('pd.d.toTarget', { v: F.pct(f.toTarget, 1) })}</span>` : ''}${end ? `<span class="down">${t('pd.d.toEnd', { v: F.pct(f.toEnd, 1) })}</span>` : p.sl > 0 ? `<span class="down">${t('pd.d.toStop', { v: F.pct(f.toStop, 1) })}</span>` : ''}</p></div>`);
   }
   out.push(kvRow(t('pd.d.held'), F.esc(dur(f.held)), { key: 'held' }));
   if (s?.exit_date && f.src.kind !== 'own') out.push(kvRow(t('pd.d.exit'), F.esc(`${F.weekday(s.exit_date)} ${F.dm(s.exit_date)}`), { hint: t('pd.d.exitS'), key: 'exit' }));
@@ -596,6 +605,20 @@ function sideList(sm, id) {
   return `<aside class="pd-side" aria-label="${F.esc(t('zi.open'))}"><p class="d-h">${t('zi.open')}<span class="num"> · ${rows.length}</span></p>
     <div class="pf-list">${rows.map((p) => row(p, sm, { compact: true, sel: p.id === id })).join('')}</div>
     <a class="hs-row" href="#/portfolio">${icon('wallet', 'icon-xs')}<span>${t('pd.toPortfolio')}</span>${icon('chev-right', 'icon-xs')}</a></aside>`;
+}
+
+/* B5: the robot ended its own trade of this signal and mine still runs -> say it at the top, with "Ukončit taky" /
+   "Nechat běžet" (the choice is remembered per trade: then one small grey line). Never "nemusíš nic dělat" for such a trade. */
+function robotLeftHtml(ctx, p, sm) {
+  const x = P.robotExits(ctx.data, sm.w).find((e) => e.pos.id === p.id);
+  if (!x) return '';
+  const c = sm.w.ccy;
+  const when = x.at ? whenText(x.at) : '';
+  const how = [x.exit ? t('pd.rb.at', { v: pxC(p.sym, x.exit) }) : '', x.pnlPct != null ? `(${F.spct(x.pnlPct, 1)})` : ''].filter(Boolean).join(' ');
+  const head = t('pd.rb.head', { d: when, how: how ? ` ${how}` : '' });
+  if (P.isFollowOff(p.id)) return `<p class="pd-rb-line" id="pd-rb">${icon('robot', 'icon-xs')}<span>${F.esc(t('pd.rb.kept', { h: head }))}</span></p>`;
+  return `<section class="pd-rb card" id="pd-rb" aria-live="polite"><p class="pd-rb-t">${icon('robot', 'icon-sm')}<span>${F.esc(head)} <b class="num ${tone(p.pnl)}" data-d="rbMine">${F.esc(t('pd.rb.mine', { v: sg(p.pnl, c) }))}</b></span></p>
+    <div class="pd-rb-b"><button type="button" class="btn btn-primary" data-action="pos-close" data-id="${F.esc(p.id)}">${t('pd.rb.close')}</button><button type="button" class="btn btn-ghost" data-action="pd-follow-off" data-id="${F.esc(p.id)}">${t('pd.rb.keep')}</button></div></section>`;
 }
 
 function topHtml(p, sm, closed) {
@@ -672,6 +695,7 @@ export function renderTrade(ctx) {
   return `<header class="page-head pd-head"><div>${backLink(ctx)}<div class="pd-title">${monogram(p.sym, w.name)}<div><h1 class="page-title pd-name">${F.esc(w.name)}</h1>
     <p class="page-sub">${F.esc(sub)}</p><p class="pd-when">${F.esc(t(p.side === 'SELL' ? 'po.soldAt' : 'po.boughtAt', { d: whenText(p.openedAt) }))}${closed ? ` · ${F.esc(t('pd.endedAt', { d: whenText(p.closedAt) }))}` : ''}</p></div></div></div></header>
   <div class="pd-grid">${closed ? '' : sideList(sm, p.id)}<div class="pd-main" data-pd="${F.esc(p.id)}">
+    ${closed ? '' : robotLeftHtml(ctx, p, sm)}
     ${topHtml(p, sm, closed)}
     ${chartHtml(p, closed, ctx.data)}
     <section class="pd-sec card" id="pd-kolik"><h2 class="d-h">${t(closed ? 'pd.kolikEnd' : 'pd.kolik')}</h2><div data-d="kolik">${kolikHtml(p, sm)}</div></section>
@@ -705,6 +729,8 @@ export function mountTrade(el, ctx) {
     if (x.tp > 0) lv.push({ v: x.tp, label: t('lad.target'), cls: 'up' });
     lv.push({ v: x.entry, label: t(f.order ? 'pd.lv.limit' : 'pd.lv.entry'), cls: 'ent' });
     if (x.sl > 0) lv.push({ v: x.sl, label: t('lad.stop'), cls: 'down' });
+    /* B3: where leverage ends the trade (before the stop) – the same level as in "Kolik mám" */
+    if (!closed && !f.order) { const e = W.endLevel(x); if (e > 0 && (!(x.sl > 0) || (x.side === 'SELL' ? -1 : 1) * (e - x.sl) > 0)) lv.push({ v: e, label: t('pd.lv.end'), cls: 'down' }); }
     if (closed && x.exit > 0) lv.push({ v: x.exit, label: t('pd.lv.exit'), cls: 'ext' });
     return lv;
   };
@@ -840,6 +866,7 @@ export const actions = {
   'pd-more'(el, ev, ctx) { const g = P.find(ctx.data, el.dataset.id); if (g?.open) buyMore(ctx, g.row); },
   'pd-term'(el) { store.set('termSym', el.dataset.sym); store.set('termView', 'one'); window.__pulseGo(`#/terminal?k=${encodeURIComponent(el.dataset.sym)}`); },
   'pd-share'(el, ev, ctx) { share(ctx, el.dataset.id); },
+  'pd-follow-off'(el, ev, ctx) { P.followOff(el.dataset.id); haptic(); ctx.rerender({ soft: true }); },
   'pf-jump'(el, ev, ctx) {
     /* "Otevřené obchody" tile: show my open trades (switch / tab / filter reset when needed), then scroll to them */
     const go = () => { const n = document.getElementById('pf-open'); if (n) n.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); };

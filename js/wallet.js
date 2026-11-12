@@ -79,6 +79,9 @@ export function priceOf(sym, data) {
 /* a buy is closed at the bid, a sell at the ask (mid price px -+ half spread) */
 export const exitPx = (pos, px) => px - dirOf(pos.side) * (pos.half || 0);
 export const pnlAt = (pos, px) => pos.notional * dirOf(pos.side) * (exitPx(pos, px) - pos.entry) / pos.entry;
+/* 1.15.0 (B3) the mid price at which leverage ends the trade (the whole deposit gone): check() closes at
+   pnlAt(pos, px) <= -margin  <=>  px = entry * (1 - dir / lev) + dir * half.  null without leverage. */
+export const endLevel = (pos) => ((pos.lev || 1) > 1 && pos.entry > 0 ? pos.entry * (1 - dirOf(pos.side) / pos.lev) + dirOf(pos.side) * (pos.half || 0) : null);
 /* What happens at the stop-loss / take-profit (shown before the user confirms) */
 export function outcome({ side, entry, amount, lev, sl, tp }) {
   const notional = amount * lev;
@@ -126,6 +129,7 @@ function closedToday(w, c, t0) {
   if (q && q.t < t0 && Live.loaded()) return c.pnl - capped(c, c.mid ?? c.exit);
   return c.pnl;
 }
+export const lastDataOf = () => lastData;
 const dayStart = (ms = Date.now()) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
 export function summary(data) {
   if (data) lastData = data; else data = lastData;
@@ -601,10 +605,26 @@ export function autoOpen(data, sig, mode, onSince = 0) {
   const w2 = get();
   w2.copied = [sig.id, ...(Array.isArray(w2.copied) ? w2.copied : [])].slice(0, 400);
   const p = r.pos || r.order;
-  const qty = p.notional ? p.notional / (p.entry * 1) : null;
+  /* 1.15.0 (B2): real units = size in the wallet currency / (price x rate of the instrument currency); unknown rate -> null */
+  const fxr = p.notional ? unitRate(M.ccy(sig.symbol), w2.ccy, data) : null;
+  const qty = p.notional && fxr ? p.notional / ((p.entry || p.limit) * fxr) : null;
   w2.olog.unshift({ id: `${sig.id}:auto:${Date.now()}`, k: r.pos ? 'auto' : 'autoLim', oid: p.id, sym: sig.symbol, side: sig.action, limit: r.pos ? p.entry : p.limit, amount, sigId: sig.id, at: Date.now(), reopen });
   save(w2);
   return { ok: true, pos: r.pos || null, order: r.order || null, amount, reopen, qty };
+}
+
+/* 1.15.0 (B2) how many units of the wallet currency one unit of the instrument currency is (1 $ ≈ 22,9 Kč) – the same FX the
+   app shows the robot's dollars with (D.fxRates: live USDCZK / EURUSD, else signals.json fx). null when no trustworthy rate
+   exists for that currency (only the config fallback) – then no units are shown */
+const FX_PAIR = { JPY: 'USDJPY', CHF: 'USDCHF', CAD: 'USDCAD', ZAR: 'USDZAR', GBP: 'GBPUSD', AUD: 'AUDUSD', TRY: 'EURTRY' };
+export function unitRate(from, to, data = lastData) {
+  if (!from || !to) return null;
+  if (from === to) return 1;
+  const fx = D.fxRates(data);
+  if (fx.source === 'config') return null;
+  const okC = (c) => ['USD', 'EUR', 'CZK'].includes(c) || (fx.source === 'live' && FX_PAIR[c] && Live.quote(FX_PAIR[c])?.p > 0);
+  if (!okC(from) || !okC(to) || !(fx[from] > 0) || !(fx[to] > 0)) return null;
+  return fx[to] / fx[from];
 }
 
 /* the robot-for-me's deposit per signal: D.stakeFor (risk % at the stop, max 10 / 20 % of the wallet), never more than free */

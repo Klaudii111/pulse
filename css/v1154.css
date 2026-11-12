@@ -1,3 +1,14 @@
 /* 1.15.0 release round (B): Portfolio, trade page, Obchodovat, Peněženka, Historie, Více – fixes after the client's-eyes review. Skin tokens only (no hard colours). */
 /* B1: "dnes" not known yet (prices still loading) – quiet grey placeholder */
 .pf-td.is-unk, .pd-kvs .is-unk, .pd-res .is-unk, .pf-chg .is-unk, .pf-sum-v .is-unk, .pf-cnote .is-unk { color: var(--ink-3); font-weight: 500; }
+/* B2: the exchange rate under the units, small */
+.pd-q.pd-fx { display: block; color: var(--ink-3); font-weight: 500; }
+/* B3: the signal's stop as a quiet second line when leverage ends the trade first */
+.pd-stop2 { margin: 2px 0 6px; font-size: 12.5px; color: var(--ink-3); }
+/* B5: the robot left – a clear block at the top of the trade page */
+.pd-rb { border: 1px solid var(--sk-edge); }
+.pd-rb-t { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; line-height: 1.4; }
+.pd-rb-t b { white-space: nowrap; }
+.pd-rb-b { display: flex; gap: 8px; flex-wrap: wrap; }
+.pd-rb-b .btn { flex: 1 1 140px; }
+.pd-rb-line { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12.5px; color: var(--ink-3); }

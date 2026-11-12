@@ -50,7 +50,10 @@ export function facts(row, sm, now = Date.now()) {
   const px = closed ? row.mid ?? row.exit : row.px;
   const pnl = row.pnl;
   const value = row.margin + pnl;
-  const qty = row.entry > 0 ? row.notional / row.entry : null; // in units of the instrument (the wallet's money model)
+  /* 1.15.0 (B2): real units = size (wallet currency) / (entry price x rate of the instrument currency to the wallet currency);
+     no trustworthy rate -> no units (null) */
+  const fx = W.unitRate(row.ccy || M.ccy(row.sym), w.ccy);
+  const qty = row.entry > 0 && fx > 0 ? row.notional / (row.entry * fx) : null;
   const spread = row.entry > 0 ? row.notional * 2 * (row.half || 0) / row.entry : 0; // paid in (ask) + out (bid)
   const swap = row.swap || 0;
   const conv = row.ccy && row.ccy !== w.ccy;
@@ -58,12 +61,18 @@ export function facts(row, sm, now = Date.now()) {
   const atStop = row.sl > 0 ? resultAt(row, row.sl, w, true) : null;
   const atTarget = row.tp > 0 ? resultAt(row, row.tp, w) : null;
   const dist = (lvl) => (lvl > 0 && px > 0 ? Math.abs(lvl - px) / px * 100 : null);
-  /* the way from the stop to the target, where the price is now (0 = stop, 1 = target) */
-  const way = row.sl > 0 && row.tp > 0 && px > 0 ? Math.max(0, Math.min(1, (px - row.sl) / (row.tp - row.sl))) : null;
-  const entryWay = row.sl > 0 && row.tp > 0 ? Math.max(0, Math.min(1, (row.entry - row.sl) / (row.tp - row.sl))) : null;
+  /* 1.15.0 (B3): with leverage the trade ends where the whole deposit is gone (W.endLevel = the wallet's own close rule) –
+     when that level comes before the stop (or there is no stop), it is the real lower end: distances and the way use it */
+  const lvEnd = closed ? null : W.endLevel(row);
+  const endFirst = lvEnd != null && lvEnd > 0 && (!(row.sl > 0) || dirOf(row.side) * (lvEnd - row.sl) > 0);
+  const endPx = endFirst ? lvEnd : null;
+  const low = endPx ?? (row.sl > 0 ? row.sl : null);
+  /* the way from the stop (or the leverage end) to the target, where the price is now (0 = stop, 1 = target) */
+  const way = low > 0 && row.tp > 0 && px > 0 ? Math.max(0, Math.min(1, (px - low) / (row.tp - low))) : null;
+  const entryWay = low > 0 && row.tp > 0 ? Math.max(0, Math.min(1, (row.entry - low) / (row.tp - low))) : null;
   const held = (closed ? row.closedAt : now) - (row.openedAt || now);
-  return { closed, px, pnl, pnlPct: row.pnlPct, today: closed ? null : row.today ?? null, value, qty, spread, swap, conv,
-    atStop, atTarget, toStop: dist(row.sl), toTarget: dist(row.tp), way, entryWay, held, src: sourceOf(row, w) };
+  return { closed, px, pnl, pnlPct: row.pnlPct, today: closed ? null : row.today ?? null, value, qty, fx, fxFrom: row.ccy || M.ccy(row.sym), spread, swap, conv,
+    atStop, atTarget, toStop: dist(row.sl), toTarget: dist(row.tp), way, entryWay, endPx, atEnd: endPx != null ? -row.margin : null, toEnd: dist(endPx), low, held, src: sourceOf(row, w) };
 }
 
 /* the trade by id: open (with the live numbers of W.summary) or closed (read-only); null when it is gone */
