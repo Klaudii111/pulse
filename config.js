@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.13.8',
+  APP_VERSION: '1.14.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -121,7 +121,7 @@ export const CONFIG = {
     RISK_PROFILES: [
       { id: 'cons', pct: 1, lev: 1, cap: 0.1 },
       { id: 'bal', pct: 2, lev: 2, cap: 0.1 },
-      { id: 'aggr', pct: 5, lev: 'max', cap: 0.1 },
+      { id: 'aggr', pct: 5, lev: 20, cap: 0.1 }, // 1.13.9: 1:20 on every market (demo); the deposit shrinks so the stop stays ~5 %
     ],
     LEVERAGE_MIN: 1,
     /* fallback max leverage when an instrument has no max_leverage (instruments.json) */

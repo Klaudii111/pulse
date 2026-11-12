@@ -46,6 +46,8 @@ export function get() {
   return norm(w);
 }
 const save = (w) => store.set(KEY, w);
+/* 1.14.0: ids carry this install's tag (w12k3m) so two devices of one account never make the same id */
+const nid = (w, p) => `${p}${w.seq++}${store.devTag()}`;
 
 export function reset(ccy = D.calcState().ccy) {
   const w = fresh(ccy);
@@ -151,7 +153,7 @@ export const equityNow = () => summary(lastData).equity;
 
 /* ---------- Fictional money: load / withdraw (1.9.0) ---------- */
 function cashRow(w, k, amount, extra = {}) {
-  w.cash.unshift({ id: `c${w.seq++}`, k, amount, at: Date.now(), ...extra });
+  w.cash.unshift({ id: nid(w, 'c'), k, amount, at: Date.now(), ...extra });
   w.cash = w.cash.slice(0, 300);
 }
 export function deposit(amount) {
@@ -186,7 +188,7 @@ const clampLev = (lev, sym) => Math.max(CONFIG.CALC.LEVERAGE_MIN, Math.min(M.max
 
 /* The position itself (shared by "Hned" and a filled limit order) */
 function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId, order = null, half = 0, mid = null, auto = false }) {
-  const pos = { id: `w${w.seq++}`, sym, name, side, entry, entryT, lev, margin: amount, notional: amount * lev, sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, openedAt: Date.now(), sigId,
+  const pos = { id: nid(w, 'w'), sym, name, side, entry, entryT, lev, margin: amount, notional: amount * lev, sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, openedAt: Date.now(), sigId,
     half, mid: mid ?? entry, ccy: M.ccy(sym), swap: 0, swapAt: Date.now() };
   if (order) pos.order = order;
   if (auto) pos.auto = true; // the robot-for-me logs its own bell event (feed.js skips "my-open")
@@ -281,7 +283,7 @@ export function placeOrder(data, { sym, name = '', side, limit, amount, lev = 1,
   if (bad) return { ok: false, reason: bad };
   const now = Date.now();
   const v = valid === 'sig' && !sigId ? 'gtc' : valid;
-  const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now, sym) };
+  const o = { id: nid(w, 'o'), sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now, sym) };
   if (now0) o.atOpen = true;
   w.orders.push(o);
   if (!quiet) logOrder(w, 'placed', o);
@@ -414,6 +416,7 @@ function prague23(x) {
   const off = p - u;
   return Date.UTC(p.getFullYear(), p.getMonth(), p.getDate(), 23, 0) - off;
 }
+const lastPrague23 = (x) => { const c = prague23(x); return c <= x ? c : c - 86400000; };
 export function nightsBetween(a, b) {
   let c = prague23(a), n = 0;
   if (c <= a) c += 86400000;
@@ -432,7 +435,8 @@ function chargeSwaps(w, now = Date.now()) {
     pos.swap = (pos.swap || 0) + fee;
     pos.swapAt = now;
     any = true;
-    if (fee > 0) { w.balance -= fee; cashRow(w, 'swap', -fee, { sym: pos.sym, n }); }
+    /* pos + upTo (1.14.0): the same night of the same trade charged on two devices of one account counts once (merge) */
+    if (fee > 0) { w.balance -= fee; cashRow(w, 'swap', -fee, { sym: pos.sym, n, pos: pos.id, upTo: lastPrague23(now) }); }
   });
   return any;
 }
@@ -534,6 +538,52 @@ export function autoAmount(data, sig, s = null) {
 let levFn = () => 1;
 export const setAutoLev = (fn) => { levFn = fn; };
 const autoLev = (sym) => { const v = +levFn(sym); return v >= 1 ? v : 1; };
+
+/* ---------- 1.14.0 "Můj účet na všech zařízeních": one wallet from two devices (sync.js) ----------
+   older / newer = the two copies by their save time. Nothing is lost or doubled:
+   positions, closed trades, orders, money rows and the order log are joined by id (the newer copy's record wins);
+   a trade closed on either device is closed; an order filled / cancelled on either device is gone;
+   the robot-for-me copying the same signal on both devices keeps one trade;
+   balance = the newer copy's balance + what only the older copy added (results of trades only it closed,
+   money rows only it has; the same overnight fee of the same night counts once).
+   A wallet started again ("Začít znovu" = another createdAt) is not mixed: the newer one wins. */
+export function merge(older, newer) {
+  if (!newer || newer.v !== 1) return older;
+  if (!older || older.v !== 1) return newer;
+  if (older.createdAt !== newer.createdAt) return newer;
+  const o = norm(JSON.parse(JSON.stringify(older)));
+  const n = norm(JSON.parse(JSON.stringify(newer)));
+  const ids = (l) => new Set((l || []).map((x) => x && x.id));
+  const join = (a, b) => { const m = new Map(); (a || []).concat(b || []).forEach((x) => { if (x && x.id != null && !m.has(x.id)) m.set(x.id, x); }); return [...m.values()]; };
+  const nClosed = ids(n.closed), nCash = ids(n.cash);
+  const swapKey = (c) => (c.k === 'swap' && c.pos && c.upTo ? `${c.pos}@${c.upTo}` : null);
+  const nSwap = new Set(n.cash.map(swapKey).filter(Boolean));
+  /* a full list drops its oldest rows: a row older than the newer copy's oldest kept row is history, not news */
+  const floor = (l, cap, k) => (l.length >= cap ? Math.min(...l.map((x) => x[k] || 0)) : -Infinity);
+  const fC = floor(n.closed, 200, 'closedAt'), fM = floor(n.cash, 300, 'at');
+  const oClosedOnly = o.closed.filter((c) => !nClosed.has(c.id) && (c.closedAt || 0) >= fC);
+  const oCashOnly = o.cash.filter((c) => !nCash.has(c.id) && !(swapKey(c) && nSwap.has(swapKey(c))) && (c.at || 0) >= fM);
+  const w = { ...o, ...n };
+  w.closed = join(n.closed, oClosedOnly).sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0)).slice(0, 200);
+  const closedIds = ids(w.closed);
+  const autoSig = new Set();
+  w.positions = join(n.positions, o.positions).filter((p) => {
+    if (closedIds.has(p.id)) return false;
+    if (p.auto && p.sigId) { if (autoSig.has(p.sigId)) return false; autoSig.add(p.sigId); }
+    return true;
+  });
+  w.ordEnded = join(n.ordEnded, o.ordEnded).sort((a, b) => (b.endAt || 0) - (a.endAt || 0)).slice(0, 100);
+  const ended = ids(w.ordEnded);
+  w.orders = join(n.orders, o.orders).filter((x) => !ended.has(x.id));
+  w.cash = join(n.cash, oCashOnly).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
+  w.olog = join(n.olog, o.olog).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 200);
+  w.copied = [...new Set([...(n.copied || []), ...(o.copied || [])])].slice(0, 400);
+  w.dayOpen = { ...(o.dayOpen || {}), ...(n.dayOpen || {}) };
+  w.seq = Math.max(o.seq || 1, n.seq || 1);
+  const add = oClosedOnly.reduce((a, c) => a + (+c.pnl || 0), 0) + oCashOnly.reduce((a, c) => a + (+c.amount || 0), 0);
+  w.balance = Math.max(0, (+n.balance || 0) + add);
+  return w;
+}
 
 /* Symbols the terminal wants live prices for (positions + the chosen symbol) */
 export function watched() {

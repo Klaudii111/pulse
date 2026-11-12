@@ -3380,3 +3380,252 @@ body::after {
 @supports not (grid-template-rows: subgrid) {
   .mb-rl, .mb-col { grid-template-rows: 58px 20px 28px; }
 }
+
+/* =====================================================================================================
+   2.0 – BROKER-GRADE DESIGN SYSTEM (owner 12. 11.: "tlačítka a všechno profesionálněji")
+   References: Revolut, Trading 212, Robinhood, XTB, eToro. Rules:
+   · calm graphite surfaces, no aurora / grid / glows, depth by 1 px borders + 3 surface steps
+   · ONE accent (champagne gold, flat) – primary CTA, active tab, focus, selected outline only
+   · buttons: primary = solid accent · secondary = tonal grey · tertiary = text; buy/sell = solid flat broker colours
+   · radii 6–8 (tags) / 10–12 (controls, buttons) / 16 (cards) / 20 (sheets) · spacing 4 / 8 / 12 / 16 / 24
+   · tabular numerals everywhere (prices never jump) · 44 px minimum taps · AA contrast
+   ===================================================================================================== */
+:root, :root:not([data-theme='light']) {
+  --bg: #0b0c0e; --bg-sunk: #08090b;
+  --raise: #131519; --raise-2: #1a1d22; --raise-3: #22262c; --raise-4: #2d3239;
+  --line: rgba(255, 255, 255, 0.06); --line-2: rgba(255, 255, 255, 0.095); --line-3: rgba(255, 255, 255, 0.16);
+  --ink: #f4f5f7; --ink-2: #a9aeb6; --ink-3: #9197a0; --ink-4: #50565f;
+  --gold: #e2c07f; --gold-hi: #ecd09a; --gold-ink: #17110a;
+  --gold-soft: rgba(226, 192, 127, 0.10); --gold-line: rgba(226, 192, 127, 0.34);
+  --up: #2fc983; --up-soft: rgba(47, 201, 131, 0.10); --up-line: rgba(47, 201, 131, 0.32);
+  --down: #f26b61; --down-soft: rgba(242, 107, 97, 0.10); --down-line: rgba(242, 107, 97, 0.32);
+  --buy: #2fc983; --buy-hi: #45d593; --buy-ink: #03140b;
+  --sell: #f26b61; --sell-hi: #f47d74; --sell-ink: #1d0604;
+  --card-grad: var(--raise);
+  --glass: rgba(11, 12, 14, 0.86);
+  --scrim: rgba(0, 0, 0, 0.64);
+  --r-sheet: 20px; --r-card: 16px; --r-tile: 14px; --r-ctrl: 12px; --r-chip: 8px;
+  --tint: transparent;
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--gold);
+}
+:root[data-theme='light'] {
+  --bg: #f5f6f8; --bg-sunk: #eceef1;
+  --raise: #ffffff; --raise-2: #f3f4f6; --raise-3: #e9ebee; --raise-4: #dde0e4;
+  --line: rgba(15, 20, 30, 0.07); --line-2: rgba(15, 20, 30, 0.11); --line-3: rgba(15, 20, 30, 0.2);
+  --ink: #12151a; --ink-2: #4c525b; --ink-3: #5d636c; --ink-4: #a8adb4;
+  --gold: #7d5f24; --gold-hi: #6c511d; --gold-ink: #ffffff;
+  --gold-soft: rgba(125, 95, 36, 0.09); --gold-line: rgba(125, 95, 36, 0.32);
+  --up: #11804d; --up-soft: rgba(17, 128, 77, 0.08); --up-line: rgba(17, 128, 77, 0.3);
+  --down: #c0392b; --down-soft: rgba(192, 57, 43, 0.08); --down-line: rgba(192, 57, 43, 0.3);
+  --buy: #11804d; --buy-hi: #0f7244; --buy-ink: #ffffff;
+  --sell: #c63a2c; --sell-hi: #b03325; --sell-ink: #ffffff;
+  --card-grad: #ffffff; --glass: rgba(245, 246, 248, 0.88);
+  --scrim: rgba(15, 20, 30, 0.36);
+}
+
+/* background: one calm surface – no aurora, no grid, no per-tab tint */
+html, :root[data-theme='light'] { background: var(--bg); }
+body { background: var(--bg); font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+body::before, body::after, :root[data-theme='light'] body::before, :root[data-theme='light'] body::after { content: none; display: none; background: none; }
+.aurora { display: none !important; }
+
+/* type: tighter, more confident headings */
+.page-title { font-size: 28px; font-weight: 700; font-stretch: 100%; letter-spacing: -0.025em; line-height: 1.1; }
+@media (min-width: 700px) { .page-title { font-size: 30px; } }
+.headline { background: none !important; -webkit-text-fill-color: currentColor; color: var(--ink); }
+
+/* top bar + tab bar: solid glass, hairline, no glow */
+.topbar { background: var(--glass); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.tabbar { background: var(--glass); border-top: 1px solid var(--line-2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.tab { color: var(--ink-3); font-weight: 560; }
+.tab[aria-current='page'] { color: var(--ink); font-weight: 650; }
+.tab[aria-current='page'] .icon { color: var(--gold); }
+@media (min-width: 1024px) { :root:not([data-theme='light']) .sidebar, .sidebar { background: var(--bg-sunk); -webkit-backdrop-filter: none; backdrop-filter: none; border-right: 1px solid var(--line); } }
+.bal-pill { background: var(--raise-2); border: 1px solid var(--line-2); box-shadow: none; color: var(--ink); }
+.bal-pill .icon { color: var(--ink-2); }
+.bal-pill small { color: var(--gold); background: var(--gold-soft); padding: 2px 5px; border-radius: 5px; letter-spacing: .05em; }
+.icon-btn, .bell { background: var(--raise-2); border: 1px solid var(--line); box-shadow: none; }
+
+/* ---------- buttons: primary solid · secondary tonal · tertiary text ---------- */
+.btn { border-radius: var(--r-ctrl); font-weight: 650; letter-spacing: 0; min-height: 44px; box-shadow: none; transition: background-color .15s, color .15s, transform .12s var(--ease); }
+.btn-primary, .btn-invest, .cc-go, .sc-go { background: var(--gold); color: var(--gold-ink); box-shadow: none; border: 0; filter: none; text-shadow: none; }
+@media (hover: hover) { .btn-primary:hover, .btn-invest:hover { background: var(--gold-hi); filter: none; } }
+.btn-primary:active, .btn-invest:active { background: color-mix(in srgb, var(--gold) 86%, #000); }
+.btn-secondary { background: var(--raise-3); color: var(--ink); box-shadow: none; border: 1px solid var(--line-2); -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (hover: hover) { .btn-secondary:hover { background: var(--raise-4); } }
+:root[data-theme='light'] .btn-secondary { background: var(--raise); border-color: var(--line-3); box-shadow: none; }
+.btn-ghost { border-radius: 10px; }
+.btn-small { border-radius: 10px; font-weight: 620; }
+.btn-primary[disabled], .btn-primary[aria-disabled='true'] { background: var(--raise-3); color: var(--ink-3); box-shadow: none; }
+.btn-danger { color: #fff; background: #d0433a; box-shadow: none; }
+.btn:active, .trade-btn:active, .mb-col:active, .mb-own-b:active { transform: scale(0.985); }
+.btn:focus-visible, .trade-btn:focus-visible, .lev-chip:focus-visible, .mb-col:focus-visible, .range-chip:focus-visible, .seg-btn:focus-visible, .pf-sw-b:focus-visible, .cc-chip:focus-visible, .tab:focus-visible, .gtile:focus-visible {
+  outline: none; box-shadow: var(--focus);
+}
+.btn-invest { box-shadow: none; }
+
+/* buy / sell: solid, flat, high contrast – like at a broker */
+.trade-btn { border-radius: var(--r-ctrl); min-height: 60px; letter-spacing: .04em; font-weight: 750; box-shadow: none; border: 0; transition: background-color .15s, transform .12s var(--ease); }
+.trade-btn.buy { background: var(--buy); color: var(--buy-ink); box-shadow: none; }
+.trade-btn.sell { background: var(--sell); color: var(--sell-ink); box-shadow: none; }
+@media (hover: hover) { .trade-btn.buy:hover { background: var(--buy-hi); } .trade-btn.sell:hover { background: var(--sell-hi); } }
+.trade-btn b { opacity: 1; font-weight: 650; }
+.trade-btn .tpx-l { opacity: .8; }
+
+/* ---------- selection controls: neutral fill, the accent only as a hairline ---------- */
+.seg { border-radius: var(--r-ctrl); background: var(--raise-2); border: 1px solid var(--line); box-shadow: none; }
+.seg-ind { border-radius: 9px; background: var(--raise-4); box-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+.seg-btn { border-radius: 9px; font-weight: 600; }
+.seg-btn[aria-selected='true'] .seg-count { color: var(--bg); background: var(--ink); }
+:root[data-theme='light'] .seg-ind { background: #fff; box-shadow: 0 1px 2px rgba(15, 20, 30, .14), 0 0 0 1px var(--line); }
+.range-chip { border-radius: 8px; font-weight: 600; color: var(--ink-3); }
+.range-chip[aria-pressed='true'], :root[data-theme='light'] .range-chip[aria-pressed='true'] { color: var(--ink); background: var(--raise-4); box-shadow: none; }
+:root[data-theme='light'] .range-chip[aria-pressed='true'] { background: var(--raise-3); }
+.pf-sw-g { border-radius: var(--r-ctrl); background: var(--raise-2); border: 1px solid var(--line); }
+.pf-sw-b { border-radius: 9px; height: 34px; }
+.pf-sw-b[aria-checked='true'] { color: var(--ink); background: var(--raise-4); box-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+:root[data-theme='light'] .pf-sw-b[aria-checked='true'] { background: #fff; box-shadow: 0 1px 2px rgba(15, 20, 30, .14), 0 0 0 1px var(--line); }
+.lev-chip { border-radius: 10px; }
+.lev-chip[aria-checked='true'], :root[data-theme='light'] .lev-chip[aria-checked='true'] { color: var(--bg); background: var(--ink); border-color: transparent; box-shadow: none; }
+.cc-chip[aria-checked='true'] { color: var(--ink); background: var(--raise-3); border-color: var(--gold-line); }
+.mb-col { border-radius: 12px; }
+.mb-col.is-on { border-color: var(--gold); background: var(--raise-3); box-shadow: none; }
+:root[data-theme='light'] .mb-col.is-on { background: var(--raise-2); }
+.chip { border-radius: 8px; }
+.sg-sel { border-radius: 10px; background: var(--raise-2); border: 1px solid var(--line-2); }
+.sg-sel-pf select { color: var(--ink); }
+
+/* ---------- surfaces: flat cards, hairline borders, one radius ---------- */
+.card, .sc, .wc, .hero, .acc-card, .d-acc, .d-hero, .how-card, .big-acc, .wal-card, .gtile, .next-card, .pcta, .path, .hi-card, .tile, .field, .sc.is-new {
+  background: var(--raise); border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: none;
+}
+:root[data-theme='light'] .card, :root[data-theme='light'] .sc, :root[data-theme='light'] .wc, :root[data-theme='light'] .hero, :root[data-theme='light'] .acc-card,
+:root[data-theme='light'] .d-acc, :root[data-theme='light'] .d-hero, :root[data-theme='light'] .how-card, :root[data-theme='light'] .big-acc, :root[data-theme='light'] .wal-card,
+:root[data-theme='light'] .gtile, :root[data-theme='light'] .next-card, :root[data-theme='light'] .pcta, :root[data-theme='light'] .path, :root[data-theme='light'] .hi-card,
+:root[data-theme='light'] .tile, :root[data-theme='light'] .field, :root[data-theme='light'] .sc.is-new {
+  background: #fff; border: 1px solid var(--line-2); box-shadow: 0 1px 2px rgba(15, 20, 30, .04);
+}
+.sc.is-late, .sc.is-done { background: transparent; box-shadow: none; }
+.sc::before { content: none; display: none; }
+.sc-money, .sc-res > div { background: var(--raise-2); border-color: var(--line); }
+.sheet .sc { background: var(--raise-2); }
+.next-card.is-live { background: var(--raise); border-color: var(--up-line); }
+.gtile-ic, .pcta-ic { background: var(--raise-3); color: var(--gold); border-radius: 10px; }
+@media (hover: hover) { .gtile:hover, .sc.is-tile:hover { border-color: var(--line-3); } }
+.hw-chip { background: var(--raise-2); border: 1px solid var(--line-2); border-radius: var(--r-ctrl); }
+.hw-auto.is-on { border-color: var(--gold-line); }
+.cc-pill { border-radius: 6px; background: var(--raise-3); font-weight: 560; }
+.sc-entry { border-radius: 10px; }
+.acct-note { background: var(--raise-2); border-color: var(--line-2); }
+
+/* key money: big, bold, tabular; labels quiet */
+.d-hero-v, .big-acc-v, .d-acc-v b, .wal-v, .tile-v { font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.big-acc-k { color: var(--ink-3); }
+.big-acc-k .icon, .wal-k .icon { color: var(--ink-2); }
+
+/* sheets & inputs */
+.sheet { border-radius: var(--r-sheet) var(--r-sheet) 0 0; background: var(--raise); box-shadow: 0 -1px 0 var(--line-2), 0 -12px 40px rgba(0, 0, 0, .45); }
+.sheet-cta { background: var(--raise); }
+.money-input input, .gate input, .jin, .select, .onb-money { background: var(--bg-sunk); border: 1px solid var(--line-2); border-radius: var(--r-ctrl); }
+.money-input input:focus, .gate input:focus, .jin:focus, .select:focus, .onb-money:focus-within, .sg-sel:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); outline: none; }
+:root[data-theme='light'] .money-input input, :root[data-theme='light'] .gate input, :root[data-theme='light'] .onb-money { background: #fff; }
+
+/* charts: quiet grid, readable tabular axis, solid price tag */
+.br-grid { stroke: var(--line); }
+.ck-ax { fill: var(--ink-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.ck-lab { font-variant-numeric: tabular-nums; font-weight: 700; }
+.br-now { opacity: 1; }
+.br-nowt { fill: var(--buy-ink); }
+.br-now.down + .br-nowt { fill: var(--sell-ink); }
+.ck-last { stroke: var(--ink-4); }
+.br-area { opacity: 0.08; }
+
+
+/* 2.0 – selections: chips = solid neutral (inverted), option cards = gold hairline on a raised surface; no gradients */
+.tk-chips .chip[aria-pressed='true'], .onb-ccy .chip[aria-checked='true'], .uf-chip[aria-pressed='true'], .onb-yn .chip[aria-checked='true'], .pick-tab[aria-selected='true'] {
+  color: var(--bg); background: var(--ink); border-color: transparent; box-shadow: none;
+}
+.broker[aria-pressed='true'], .profile[aria-checked='true'], .jbtn[aria-checked='true'], .tk-type-b[aria-checked='true'], .mb-own-b.is-on, .mp-opt[aria-checked='true'], .lx-row.is-on, .onb-r[aria-checked='true'], .onb-pc[aria-checked='true'] {
+  border-color: var(--gold); background: var(--raise-3); box-shadow: none;
+}
+:root[data-theme='light'] .broker[aria-pressed='true'], :root[data-theme='light'] .profile[aria-checked='true'], :root[data-theme='light'] .jbtn[aria-checked='true'],
+:root[data-theme='light'] .tk-type-b[aria-checked='true'], :root[data-theme='light'] .mb-own-b.is-on, :root[data-theme='light'] .mp-opt[aria-checked='true'],
+:root[data-theme='light'] .lx-row.is-on, :root[data-theme='light'] .onb-r[aria-checked='true'], :root[data-theme='light'] .onb-pc[aria-checked='true'] { background: var(--raise-2); }
+.lx-tab tbody tr.is-on th, .lx-tab tbody tr.is-on td { background: var(--raise-3); }
+.stp-n, .how-n { background: var(--gold); box-shadow: none; }
+.bell-n { background: var(--gold); box-shadow: 0 0 0 2px var(--bg); }
+.invest-btn { background: var(--raise-2); border: 1px solid var(--line-2); color: var(--ink); }
+.invest-btn .icon { color: var(--gold); }
+.hs-big, .path-ic, .path-auto.is-on, .ev-row.is-new, .result-card { background-image: none; }
+.hs-big { background-color: var(--raise); }
+.path-ic { background: var(--raise-3); color: var(--gold); }
+.path-auto.is-on { background: var(--raise); border-color: var(--up-line); }
+.onb-t { background: none; -webkit-text-fill-color: currentColor; color: var(--ink); }
+.gate, .onb { background: var(--bg); }
+
+/* section headings: sentence case, bold, ink (Revolut / T212) instead of spaced capitals */
+.d-h, .sub-title, .hz-group { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; text-transform: none; color: var(--ink); }
+.d-h .icon, .sub-title .icon { color: var(--ink-3); }
+.d-k, .big-acc-k { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+
+/* 2.0 – "Můj účet na všech zařízeních" card (sync.js): own spacing, calm title, two equal buttons */
+.sync-card { display: grid; gap: 6px; margin: 14px 0; }
+.sync-card .sheet-title { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.sync-card .wl-inplay { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.sync-card [data-sync-state='err'] { color: var(--down); }
+.sync-card .wl-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.sync-card .wl-btns .btn { height: auto; min-height: 44px; padding: 8px 10px; white-space: normal; line-height: 1.2; }
+
+/* 2.0 – tap targets ≥ 44 px: small controls keep their look, an invisible hit area grows around them */
+.bal-pill, .bell, .help-btn, .icon-btn, .qm, .back, .verify-link, .chip, .range-chip, .seg-sm .seg-btn, .cc-no, .pf-sw-b, .term-gloss summary { position: relative; }
+.bal-pill::after, .bell::after, .help-btn::after, .icon-btn::after, .qm::after, .back::after, .verify-link::after, .chip::after, .range-chip::after, .seg-sm .seg-btn::after, .cc-no::after, .pf-sw-b::after {
+  content: ''; position: absolute; z-index: 1; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+}
+.bell::after, .help-btn::after, .icon-btn::after { width: 44px; height: 44px; border-radius: 50%; }
+.cc-act .cc-go, .sc-btns .sc-go { min-height: 44px; height: 44px; }
+.pf-sw-b { height: 38px; }
+.sg-sel { height: 44px; }
+.sg-sel select { height: 42px; }
+.hs-row { min-height: 44px; }
+/* the scrolling chart-control row clips overflow: give it 7 px of invisible room above / below so the chips' hit areas fit */
+.term-main .br-ctl { padding-block: 7px; margin-block: -1px -7px; }
+
+/* 2.0 – robot scan status line (signals.js scanLine, Dnes + Signály): one quiet line + a small note */
+.scan-st { display: grid; gap: 4px; margin: 0 2px 12px; }
+.scan-l { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.scan-l > .icon, .scan-l > .live-dot { flex: none; margin-top: 3px; color: var(--ink-3); }
+.scan-st.is-open .scan-l { color: var(--ink); }
+.scan-den { margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+
+/* 1.13.9 – Obchodovat: one status line per watched chart, open markets offered when the chosen one is closed */
+.wc-st { display: flex; margin: 2px 0 8px; white-space: normal; line-height: 1.35; }
+.mkt-closed b { color: var(--ink); font-weight: 600; }
+.mk-open { display: grid; gap: 6px; margin-top: 10px; }
+.mk-open-l { margin: 0; font-size: 12px; color: var(--ink-3); }
+.mk-open .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mk-open .chip { height: 32px; padding: 0 12px; gap: 7px; font-size: 13px; color: var(--ink); background: var(--raise-2); border-color: var(--line-2); }
+.mk-dot { flex: none; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); }
+/* Agresivněji 1:20: the honest note under the profile switch (lists, invest sheet, Signály) */
+.pf-eu { margin: 6px 2px 12px; font-size: 12px; line-height: 1.45; color: var(--ink-3); }
+.tk-out .pf-eu { margin: 2px 0 10px; }
+/* a running / ended signal: a neutral chip instead of the green "↑ Koupit" */
+.cc-dir.is-held { color: var(--ink-2); background: var(--raise-3); border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 7px; font-size: 12px; font-weight: 600; }
+/* Kalkulačka: three profile cards fit 390 px – no radio dot on a phone (the gold border shows the choice) */
+.profile { min-width: 0; }
+.profile-t { gap: 6px; min-width: 0; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+@media (max-width: 599px) {
+  .profile { padding: 12px 8px; }
+  .profile-t { font-size: 12px; letter-spacing: -0.01em; }
+  .profile-t .radio-dot { display: none; }
+  .profile-v { font-size: 22px; }
+}
+/* robot plan tiles: five days fit a 390 px phone in English too */
+.next-plan li { flex: 1 1 0; min-width: 0; padding: 8px 4px; }
+.next-plan li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* onboarding Ano / Ne chips: a real tap size, never clipped */
+.onb-yn .chip { height: 36px; min-width: 64px; padding: 0 14px; justify-content: center; overflow: visible; }
+/* a sheet opened over another sheet (Zainvestovat over the detail panel): its scrim dims the panel underneath */
+.sheet ~ .sheet-scrim { z-index: 82; }
+.sheet ~ .sheet-scrim ~ .sheet { z-index: 83; }
+.sheet ~ .sheet ~ .sheet-scrim { z-index: 84; }
+.sheet ~ .sheet ~ .sheet-scrim ~ .sheet { z-index: 85; }

@@ -33,6 +33,7 @@ import * as Learn from './views/learn.js';
 import * as Wal from './views/penezenka.js';
 import * as Comm from './community.js';
 import * as H from './health.js';
+import * as Sync from './sync.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -660,6 +661,7 @@ async function boot() {
   P.initSW();
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
+  Sync.init(() => { if (!sheetOpen()) rerender({ soft: true }); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
   W.setAutoLev((sym) => B.selLev(sym));

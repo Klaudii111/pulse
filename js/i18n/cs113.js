@@ -1,7 +1,7 @@
 // 1.12.0 – Peněženka, tři cesty, přesný vstup, Historie, Jak se daří lidem, bez Síly signálu. Klíče musí existovat i v en113.js.
 export default {
   /* Peněženka (dřív Můj účet / Můj fiktivní účet) */
-  'wl.title': 'Peněženka', 'wl.sub': 'Fiktivní peníze na zkoušení – jen v tomto zařízení',
+  'wl.title': 'Peněženka', 'wl.sub': 'Fiktivní peníze na zkoušení – na všech tvých zařízeních',
   'wl.free': 'Volné k investování', 'wl.inTrades': 'V obchodech', 'wl.reserved': 'Čeká na nákup', 'wl.now': 'teď {v}',
   'wl.topup': 'Dobít kredit', 'wl.topupShort': 'Dobít', 'wl.wd': 'Vybrat',
   'wl.soon': 'Zatím jen fiktivně, skutečné vklady připravujeme.',

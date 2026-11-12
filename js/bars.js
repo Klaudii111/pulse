@@ -87,6 +87,8 @@ export async function fetchBars(key, tfId) {
   } catch { data = { retry: true }; }
   if (!data?.retry) cache.set(k, { at: Date.now(), data, nokey });
   if (data && !data.retry) { why.delete(key); keepLast(data); } else why.set(key, nokey ? 'nokey' : 'down');
+  /* 1.13.9: the newest candle is also a price (bar start time = never newer than the truth) */
+  if (data && !data.retry) { const lb = data.bars[data.bars.length - 1]; if (lb && Date.now() - lb.t < 6 * 3600000) Live.offer(key, lb.c, lb.t); }
   return data;
 }
 
@@ -270,6 +272,12 @@ export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v),
     if (b) { store.set('barsType', b.dataset.barsType); root.querySelectorAll('[data-bars-type]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); paint(); }
   };
   root.addEventListener('click', click);
+  /* 1.13.9: first paint at once – the bars saved on this device for the same timeframe are drawn right away (plus the
+     live price) while /api/bars loads; the server's answer replaces them (no "Načítám" box, no blank screen) */
+  const T0 = TFS.find((x) => x.id === curTf(tfKey)) || TFS[0];
+  const sv = lastGood(key);
+  if (sv && box()) { const lb = sv.bars[sv.bars.length - 1]; if (lb && !Live.quote(key)) Live.offer(key, lb.c, lb.t); }
+  if (sv && sv.tf === T0.tf && sv.range === T0.range && box()) { d = sv; paint(); const s = srcEl(); if (s) s.innerHTML = srcLine(sv); }
   load();
   /* the server's bars move on (new candles); live ticks fill the gap in between (refresh) */
   /* a chart whose element left the page (closed detail, re-rendered view) stops by itself */

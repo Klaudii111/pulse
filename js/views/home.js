@@ -9,7 +9,7 @@ import * as store from '../store.js';
 import { orderRow, histList, tradeRow, closeConfirm, pxC } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
-import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ } from './signals.js';
+import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ, scanLine } from './signals.js';
 import { paperHero } from './paper.js';
 import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
@@ -265,6 +265,7 @@ export function render(ctx) {
   ${paths()}
   ${B.statsRow(ctx.data, now)}</div>
   <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
+    ${scanLine(ctx.data, now)}
     ${offLine(ctx.data)}
     ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
   </section>

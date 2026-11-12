@@ -9,6 +9,18 @@ import * as store from './store.js';
 import { t, lang } from './i18n/index.js';
 
 let REG = null; // { updated_at, groups, byKey }
+let fresh = false; // REG came from the network in this session (not only from the device copy)
+const IKEY = 'pulse.instrCache';
+function useReg(j) {
+  if (!j || !Array.isArray(j.groups)) return null;
+  const byKey = {};
+  j.groups.forEach((g) => (g.items || []).forEach((it) => { if (it && it.key) byKey[it.key] = { ...it, group: g.id }; }));
+  REG = { ...j, byKey };
+  return REG;
+}
+/* 1.13.9: the last instruments.json stays on the device -> names, decimals, hours and leverage caps are known at the very
+   first paint (Obchodovat no longer waits for the network); the network copy replaces it as soon as it arrives */
+try { if (CONFIG.DATA.instruments) useReg(JSON.parse(localStorage.getItem(IKEY) || 'null')); } catch { /* storage blocked */ }
 export async function load() {
   const url = CONFIG.DATA.instruments;
   if (!url) return null;
@@ -16,22 +28,26 @@ export async function load() {
     const r = await fetch(url, { cache: 'no-cache' });
     if (!r.ok) return null;
     const j = await r.json();
-    if (!Array.isArray(j.groups)) return null;
-    const byKey = {};
-    j.groups.forEach((g) => (g.items || []).forEach((it) => { if (it && it.key) byKey[it.key] = { ...it, group: g.id }; }));
-    REG = { ...j, byKey };
+    if (!useReg(j)) return null;
+    fresh = true;
+    try { localStorage.setItem(IKEY, JSON.stringify(j)); } catch { /* storage full */ }
     return REG;
   } catch { return null; }
 }
-export const ready = () => !!REG;
+export const ready = () => fresh;
 export const get = (k) => REG?.byKey[k] || null;
 export const groups = () => REG?.groups || [];
 export const name = (k) => { const it = get(k); return it ? (lang() === 'cs' ? it.name_cs : it.name_en) || k : null; };
 
 /* class: index | fx | commodity | crypto | stock | etf */
+/* 1.13.9: the class of the main non-share markets before instruments.json is known (first visit, slow network) –
+   so Bitcoin is never shown as "burza zavřená" for the first seconds */
+const BASE_CLS = { BTCUSD: 'crypto', ETHUSD: 'crypto', SOLUSD: 'crypto', EURUSD: 'fx', GBPUSD: 'fx', USDJPY: 'fx', USDCHF: 'fx', AUDUSD: 'fx', USDCAD: 'fx', NZDUSD: 'fx', USDCZK: 'fx', EURCZK: 'fx',
+  XAUUSD: 'commodity', XAGUSD: 'commodity', US500: 'index', US100: 'index', US30: 'index', DE40: 'index', UK100: 'index', JP225: 'index' };
 export function cls(k) {
   const it = get(k);
   if (it?.class) return it.class;
+  if (BASE_CLS[k]) return BASE_CLS[k];
   const x = INSTR[k];
   return x?.k === 'etf' ? 'etf' : x?.k === 'index' ? 'index' : 'stock';
 }
@@ -57,8 +73,11 @@ export function proLev(k) {
   const v = c === 'commodity' && k === 'XAUUSD' ? PRO_CAPS.gold : PRO_CAPS[c];
   return Math.max(retailLev(k), v || 20);
 }
+/* 1.13.9: this fictional demo allows 1:20 on EVERY market (Agresivněji = 1:20, Tom 12. 11.); the EU retail caps
+   (retailLev) stay as information ("u skutečného brokera v EU …"); Profesionální klient raises the caps above 1:20 */
+export const DEMO_LEV = 20;
 /* the cap that applies to this user now */
-export const maxLev = (k) => (isPro() ? proLev(k) : retailLev(k));
+export const maxLev = (k) => Math.max(DEMO_LEV, isPro() ? proLev(k) : retailLev(k));
 /* 1.11.2 broker-style leverage chips (like MetaTrader brokers); chips above the cap are shown disabled */
 export const LEV_CHIPS = [1, 2, 5, 10, 20, 30, 50, 100];
 export function levSteps(max) {

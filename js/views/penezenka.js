@@ -12,6 +12,7 @@ import * as Comm from '../community.js';
 import { t } from '../i18n/index.js';
 import { icon, skBlock, toast } from '../ui.js';
 import { journalBody } from './extra.js';
+import * as Sync from '../sync.js';
 
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 const sm = (v, c, dec = 0) => (v > 0.5 ? '+' : v < -0.5 ? '−' : '') + F.money(Math.abs(v) < 0.5 ? 0 : Math.abs(v), c, dec);
@@ -74,6 +75,7 @@ export function renderWallet(ctx) {
     <div class="acc-r"><span>${t('wl.wds')}</span><b class="num">${F.money(wds, c, 0)}</b></div>
     <div class="acc-r"><span>${t('wl.result')}</span><b class="num ${tot.tone}">${F.esc(tot.text)}${tot.zero ? '' : ` (${F.mpct(s.totalPct, s.total)})`}</b></div>
   </section>
+  ${Sync.card()}
   <a class="hs-row wl-hist-link" href="#/historie">${icon('history', 'icon-xs')}<span>${t('wl.toHist')}</span>${icon('chev-right', 'icon-xs')}</a>
   <section class="d-block"><h2 class="d-h">${t('wl.hist')}</h2>
     <div class="wl-list">${rows.slice(0, 60).map((r) => ledgerRow(r, c)).join('')}</div></section>

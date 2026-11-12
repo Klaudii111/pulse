@@ -60,6 +60,7 @@ function take(sym, p, ts, pc) {
   if (cur && ts < cur.t) return false; // never let an older price overwrite a newer one
   if (!cur || ts > cur.t || p !== cur.p) {
     prices.set(sym, { p, t: Math.max(ts, cur?.t || 0), pc: metaMap.get(sym)?.pcS || pc || cur?.pc });
+    saveQ();
     const h = hist.get(sym) || []; const last = h[h.length - 1];
     if (!last || Date.parse(last.t) < ts) { h.push({ t: new Date(ts).toISOString(), p }); if (h.length > 1500) h.shift(); hist.set(sym, h); }
     return true;
@@ -67,6 +68,25 @@ function take(sym, p, ts, pc) {
   return false;
 }
 export const history = (sym) => hist.get(sym) || [];
+/* 1.13.9: a newer price from another server source (the last candle of /api/bars) – the price in the head of a chart then
+   matches the chart's own last candle (Alpaca crypto trades can be minutes apart while its bars move every minute) */
+export function offer(sym, p, ts) { if (take(sym, +p, +ts)) { dataAt = Math.max(dataAt, +ts); mark(); } }
+
+/* 1.13.9: the last known prices stay on the device (max 60 keys, saved at most every 10 s) – a screen opened before the
+   first quotes.json / stream answer shows the last price with its real time ("Data z 22:00"), never "–" or a blank */
+const QKEY = 'pulse.lastQ';
+let qSaveT = null;
+function saveQ() {
+  if (qSaveT) return;
+  qSaveT = setTimeout(() => {
+    qSaveT = null;
+    try { localStorage.setItem(QKEY, JSON.stringify([...prices.entries()].sort((a, b) => b[1].t - a[1].t).slice(0, 60).map(([k, q]) => [k, q.p, q.t, q.pc || 0]))); } catch { /* storage full / blocked */ }
+  }, 10000);
+}
+try {
+  const a = JSON.parse(localStorage.getItem(QKEY) || '[]');
+  if (Array.isArray(a)) a.forEach((x) => { if (Array.isArray(x) && x[1] > 0 && x[2] > 0 && Date.now() - x[2] < 14 * 86400000) prices.set(String(x[0]), { p: +x[1], t: +x[2], pc: +x[3] || undefined, cached: true }); });
+} catch { /* storage blocked */ }
 
 /* Honest freshness text for a price time (ms): "živě · před 12 s", "Data z 15:32 (zpožděno)", "Burza zavřená · poslední cena 22:00" */
 export function stamp(ts, now = Date.now(), open = null) {

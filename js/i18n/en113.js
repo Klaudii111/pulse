@@ -1,6 +1,6 @@
 // 1.12.0 – Wallet, three ways, exact entry, History, How people are doing, no signal-strength dots. Same keys as cs113.js.
 export default {
-  'wl.title': 'Wallet', 'wl.sub': 'Play money to practise with – on this device only',
+  'wl.title': 'Wallet', 'wl.sub': 'Play money to practise with – on all your devices',
   'wl.free': 'Free to invest', 'wl.inTrades': 'In trades', 'wl.reserved': 'Waiting to buy', 'wl.now': 'now {v}',
   'wl.topup': 'Top up credit', 'wl.topupShort': 'Top up', 'wl.wd': 'Withdraw',
   'wl.soon': 'Play money for now – real deposits are on the way.',

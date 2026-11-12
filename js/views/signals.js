@@ -30,16 +30,22 @@ function upcoming(data, now, n) {
   return out;
 }
 
-/* Next intraday scan slot (Prague minutes :05/:25/:45) after `now`, while the US market is open; null otherwise */
+/* Next intraday scan slot after `now` while the US market is open (null otherwise) – 1.13.9: from the ONE plan D.nextScanAt */
 export function nextScan(now) {
-  if (!Live.marketOpen(now)) return null;
-  const mins = (CONFIG.SCAN?.MINUTES || [5, 25, 45]);
-  const d = new Date(now); d.setSeconds(0, 0);
-  for (let k = 1; k <= 61; k++) {
-    const x = new Date(d.getTime() + k * 60000);
-    if (mins.includes(x.getMinutes())) return Live.marketOpen(x) ? x : null;
-  }
-  return null;
+  if (!D.usOpenAt(+now)) return null;
+  const x = D.nextScanAt(now);
+  return x && D.usOpenAt(+x) && x - now <= 21 * 60000 ? x : null;
+}
+
+/* 1.13.9 ONE calm status line for Dnes and Signály: is the robot looking now, how many new today, the next check
+   (D.scanStatus = the server timers), + the honest 1-day note */
+export function scanLine(data, now) {
+  const st = D.scanStatus(data, now);
+  const n = st.nToday ? t('scan.n', { n: st.nToday }) : t('scan.n0');
+  const p = { open: st.open ? F.time(st.open) : '15:30', close: st.close ? F.time(st.close) : '22:00', next: st.next ? D.whenLabel(st.next, now) : '–', nextT: st.next ? F.time(st.next) : '–', off: F.time(st.official), n };
+  const live = st.phase === 'open';
+  return `<div class="scan-st is-${st.phase}" data-scan="${st.phase}"><p class="why-s scan-l">${live ? '<span class="live-dot" aria-hidden="true"></span>' : icon('clock', 'icon-xs')}<span>${t(`scan.${st.phase}`, p)}</span></p>
+    <p class="why-s scan-den">${t('scan.den')}</p></div>`;
 }
 
 const dayWord = (d, now) => { const n = F.daysUntil(d, now); return n === 0 ? t('fmt.today') : n === 1 ? t('fmt.tomorrow') : F.weekday(d); };
@@ -266,9 +272,12 @@ function sigBody(ctx) {
   else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const mine = ph === 'open' ? mineOpen(data, now, hz) : [];
   const mineHtml = mine.length ? `<h2 class="hz-group sg-mine">${t('sg.mineH')}<small class="num">${mine.length}</small></h2><div class="sc-list">${mine.map((x, i) => B.compact(x, { data, now, i, chips: false })).join('')}</div>` : '';
-  const off = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
+  /* 1.13.9: the robot's status line belongs to the "Můžeš koupit" tab only (rebody() re-renders it with the tab) */
+  const scan = ph === 'open' ? scanLine(data, now) : '';
+  const offL = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
+  const off = scan + offL;
   if (!list.length) {
-    if (ph === 'open') return (off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`) + mineHtml;
+    if (ph === 'open') return scan + (offL || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`) + mineHtml;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
   const shown = list.slice(0, 60);
@@ -298,11 +307,13 @@ function sgControls(hz) {
   return `<div class="sg-ctl">${hzSel}${pfSel}</div>`;
 }
 
-/* "Další kontrola za X min" (market open) or the next official run */
+/* "za X min" (a scan within the hour) or "dnes 15:45" / "pondělí 15:45" – 1.13.9: the ONE plan D.nextCheck
+   (was: the evening 22:45 run whenever the market was closed, also on the morning before a session) */
 export function nextCheck(data, now) {
-  const scan = nextScan(now);
-  if (scan) return t('u.nextIn', { m: Math.max(1, Math.round((scan - now) / 60000)) });
-  return D.nextRunLabel(data, now);
+  const x = D.nextCheck(data, now).at;
+  const m = Math.round((x - now) / 60000);
+  if (m >= 0 && m < 60) return t('u.nextIn', { m: Math.max(1, m) });
+  return D.whenLabel(x, now);
 }
 
 export function render(ctx) {
@@ -320,6 +331,7 @@ export function render(ctx) {
   return head + `
     <div class="seg-wrap ph-tabs">${seg({ name: 'sph', label: t('sg.tabs'), items, active: ph })}</div>
     ${sgControls(hz)}
+    ${D.profId() === 'aggr' ? B.euNote() : ''}
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
     <div id="sig-body">${sigBody(ctx)}</div>
     <div class="signals-top u-below">${nextLine(ctx.data, now)}${regimeLine(data.signals.regime)}</div>

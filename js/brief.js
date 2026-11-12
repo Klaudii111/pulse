@@ -302,10 +302,10 @@ export function lossView(worst, amount, lev, ccy, { capped = false, deposit = nu
   if (worst == null || !Number.isFinite(+worst)) return null;
   const v = Math.abs(worst);
   const eq = D.sizingBase(null);
-  const p = D.BASE_PROF.pct * Math.max(1, +lev || 1);
+  const p = D.levWorstPct(lev);
   const nominal = eq * p / 100;
   const def = deposit ?? amount;
-  const lim = !capped && eq > 0 && def > 0 && Math.abs(def - amount) < 0.5 && D.stakeLimited(null, amount) && v < nominal * 0.97;
+  const lim = !capped && eq > 0 && def > 0 && Math.abs(def - amount) < 0.5 && D.stakeLimited(null, amount, { lev }) && v < nominal * 0.97;
   const exact = capped || lim;
   /* within 3 % of the profile's risk (the deposit is floored to 100 Kč / 10 €) = the risk itself: "≈ −1 000 Kč", never "≈ −990 Kč" */
   const r = exact ? Math.round(v) : roundLoss(nominal > 0 && Math.abs(v - nominal) <= nominal * 0.03 ? nominal : v);
@@ -314,6 +314,8 @@ export function lossView(worst, amount, lev, ccy, { capped = false, deposit = nu
   const wr = w == null ? null : w < 1 ? Math.round(w * 10) / 10 : Math.round(w);
   return { v: -r, lim, capped, p, w, txt: `${exact ? '' : '≈ '}${sMoney(-r, ccy)}`, pTxt: F.num(p, p % 1 ? 1 : 0), wTxt: wr == null ? null : F.num(wr, wr < 1 ? 1 : 0) };
 }
+/* 1.13.9 the whole deposit with its share of the wallet: "celý vklad ≈ 5 % peněženky" (one wording on every screen) */
+export const allTxt = (lv) => (lv && lv.wTxt != null ? t('mb.allW', { w: lv.wTxt }) : t('mb.all'));
 /* the reason after a capped loss: "≈ 6 % peněženky, vklad je omezený" (fallback without a wallet: "méně než 1 %, …") */
 export const limWhy = (lv) => (lv.wTxt != null ? t('mb.limW', { w: lv.wTxt }) : t('mb.limS', { p: lv.pTxt }));
 /* "max ≈ −1 000 Kč" · "max −913 Kč (≈ 0,9 % peněženky, vklad je omezený)" · "max −7 500 Kč (celý vklad)" */
@@ -321,7 +323,7 @@ export function lossLine(lv) {
   if (!lv) return '';
   /* "max ≈ −1 000 Kč" never breaks inside; the reason may wrap to the next line */
   const head = `<span class="nw">${t('cc.max', { v: lv.txt })}</span>`;
-  if (lv.capped) return `${head} (${t('mb.all')})`;
+  if (lv.capped) return `${head} (${allTxt(lv)})`;
   if (lv.lim) return `${head} (${limWhy(lv)})`;
   return head;
 }
@@ -362,7 +364,7 @@ export function onColId(cols, sel) {
 /* the leverage of the user's profile for this instrument (capped at the cap that applies now) */
 export const selLev = (sym) => D.profLevFor(D.prof(), sym);
 /* "páka 1:2 · nejhůř ~2 %" – the one-line meaning of a profile for one instrument */
-export const profMeta = (c) => `${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })} · ${t('pf.worst', { v: F.num(D.BASE_PROF.pct * c.lev, 0) })}`;
+export const profMeta = (c) => `${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })} · ${t('pf.worst', { v: F.num(D.levWorstPct(c.lev), 0) })}`;
 /* 1.13.4 "bez páky" wherever the leverage is 1:1 (chips, positions, tables, history) */
 export const levTxt = (lev) => (+lev > 1 ? t('mb.lev', { v: +lev }) : t('mb.noLev'));
 /* 1.13.4 the profile's fixed meaning; Agresivněji names the real caps ("páka 1:5 u akcií, 1:20 u indexů") */
@@ -407,7 +409,7 @@ export function levWhy(sym, v) {
   let kind = M.levKind(sym);
   if (kind === 'fxMajor' || kind === 'fx') kind = M.retailLev(sym) >= 30 ? 'fxMajor' : 'fx';
   if (!['stock', 'index', 'gold', 'fxMajor', 'fx', 'commodity', 'crypto'].includes(kind)) kind = 'stock';
-  let x = `${t(`lv.why.${kind}`, { v: M.retailLev(sym) })} ${t('lv.whyMt')}`;
+  let x = `${t('lv.demo', { v: M.maxLev(sym) })} ${t(`lv.why.${kind}`, { v: M.retailLev(sym) })} ${t('lv.whyMt')}`;
   if (M.isPro()) x += ` ${t('lv.whyProMax', { v: M.proLev(sym) })}`;
   else if (v <= M.proLev(sym)) x += ` ${t('lv.whyPro', { v: M.proLev(sym) })}`;
   return x;
@@ -443,7 +445,7 @@ export function moneyBlock(m) {
   const wf = ok ? winFrac(bt.win_rate) : null;
   const lvOf = (n, a) => lossView(n.worst, a, n.lev, m.ccy, { capped: n.capped, deposit: m.ticket ? (m.deposit ?? null) : a });
   /* 1.13.8: the reason goes UNDER the amount (own line), so the label "Maximální možná ztráta" keeps its width on a phone */
-  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${t('mb.all')}</small>` : lv.lim ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${limWhy(lv)}</small>` : lv.txt; };
+  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${allTxt(lv)}</small>` : lv.lim ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${limWhy(lv)}</small>` : lv.txt; };
   const wCls = (n, a) => { const lv = lvOf(n, a); return lv && (lv.capped || lv.lim) ? ' has-why' : ''; };
   const main = (key, a, lev, on, pid) => {
     const n = levNums({ ...arg, amount: a, lev });
@@ -456,7 +458,7 @@ export function moneyBlock(m) {
         <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
     }
     return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
-      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
+      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('cc.avgNa', { l: lev })}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
       <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down${wCls(n, a)}" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p></div>`;
   };
@@ -548,20 +550,23 @@ export function tkMoneyLine(m) {
   const x = levNums({ side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, lev: m.lev, bt: ok ? bt : null });
   const sm = (v) => sMoney(v, m.ccy);
   const nw = (v) => `<span class="nw">${v}</span>`;
-  const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa')) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
+  const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa', { l: m.lev })) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
   const lv = lossView(x.worst, m.amount, m.lev, m.ccy, { capped: x.capped, deposit: m.deposit ?? null });
   const loss = lossLine(lv);
-  return `<p class="cc-ml tk-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+  return `<p class="cc-ml tk-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> → <span class="${ok && x.avg == null ? 'mb-na' : 'up'}">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
 }
+/* 1.13.9 one short honest line where 1:20 can be chosen: a real EU broker gives 1:20 on shares only to professional clients */
+export const euNote = (sym = null) => `<p class="why-s pf-eu">${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })}${!sym || ['stock', 'crypto'].includes(M.levKind(sym)) ? ` ${t(sym && M.levKind(sym) === 'crypto' ? 'pf.euCrypto' : 'pf.eu')}` : ''}</p>`;
 export function tkProfSwitch(sym, prof, lev) {
   const cols = profCols(sym);
-  return `<div class="pf-sw tk-pf" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${cols.map((c) => `<button type="button" class="pf-sw-b tk-pf-b" role="radio" aria-checked="${c.id === prof && c.lev === lev}" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}</button>`).join('')}</div></div>`;
+  return `<div class="pf-sw tk-pf" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${cols.map((c) => `<button type="button" class="pf-sw-b tk-pf-b" role="radio" aria-checked="${c.id === prof && c.lev === lev}" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}</button>`).join('')}</div></div>${lev >= 20 ? euNote(sym) : ''}`;
 }
 /* card / detail: the block for the deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {
   const n = D.offerNums(s, data, { now });
   /* 1.13.5: ONE deposit for all profile columns (D.stakeFor = the Konzervativně stake); the profile changes the leverage */
-  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target }) };
+  /* 1.13.9: each profile column with ITS deposit (1:20 = a quarter of the stake, D.stakeFor) */
+  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, amountFor: (c) => D.stakeFor(s, { lev: c.lev, px: n.base }), depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target }) };
 }
 /* the motivating but true line, once per strategy: the whole robot account in the test */
 export function testLine(s, data) {
@@ -588,6 +593,7 @@ export function syncLev() {
   /* compact cards: one money line per profile, the chosen one is shown */
   document.querySelectorAll('.cc-money [data-p]').forEach((x) => { x.hidden = x.dataset.p !== pid; });
   document.querySelectorAll('.cc-chip, .pf-sw-b:not(.tk-pf-b)').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.prof === pid)));
+  document.querySelectorAll('[data-pfeu]').forEach((x) => { x.hidden = pid !== 'aggr'; });
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
     mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', x.dataset.p === pid));
@@ -598,7 +604,7 @@ export function syncLev() {
 /* 1.13.5 ONE profile switch above a list of signal cards (Dnes "Můžeš koupit", Signály, the new-signal sheet) */
 export function profSwitch() {
   const pid = levProfile().id;
-  return `<div class="pf-sw" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${D.PROFILES.map((p) => `<button type="button" class="pf-sw-b" role="radio" aria-checked="${p.id === pid}" data-action="lev-prof" data-prof="${p.id}">${t(`mb.p.${p.id}`)}</button>`).join('')}</div></div>`;
+  return `<div class="pf-sw" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${D.PROFILES.map((p) => `<button type="button" class="pf-sw-b" role="radio" aria-checked="${p.id === pid}" data-action="lev-prof" data-prof="${p.id}">${t(`mb.p.${p.id}`)}</button>`).join('')}</div></div><p class="why-s pf-eu" data-pfeu${pid === 'aggr' ? '' : ' hidden'}>${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })} ${t('pf.eu')}</p>`;
 }
 /* "Vlastní páka ▾" opens / closes the chip list of its block */
 export function toggleOwn(el) {
@@ -679,7 +685,8 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
   }
   /* 1.12.0: the exact entry line (when + at what price) instead of the general sentence; same cardState */
   const en = cs.code === 'mine' || ph === 'closed' ? null : D.entryLine(s, data, now, cs);
-  const when = cs.code === 'mine' || ph === 'closed' ? '' : en ? entryHtml(en) : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`;
+  const when = (cs.code === 'mine' || ph === 'closed' ? '' : en ? entryHtml(en) : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`)
+    + (ph === 'open' && ['buy', 'soon', 'wait'].includes(cs.code) && D.entryWindowEnd(s) ? entryHtml({ code: 'soon', text: D.entryUntilText(s, now) }) : '');
   /* 1.10.0: the whole card is one tappable tile -> the detail (inner buttons keep their own action) */
   return `<article class="sc is-${cs.code} ph-${ph} hz-${F.esc(s.horizon || '')}${isNew ? ' is-new' : ''} is-tile" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">
@@ -709,22 +716,32 @@ export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true
   const sm = (v) => sMoney(v, n.ccy);
   /* 1.13.5: each line = the ONE deposit (D.stakeFor) with that profile's leverage – the same deposit as the detail, the sheet and the robot */
   const line = (c) => {
-    const a = n.amount;
+    /* 1.13.9: the deposit of THIS profile (the same D.stakeFor as the sheet and the robot) */
+    const a = D.stakeFor(s, { lev: c.lev, px: n.base });
     const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev: c.lev, bt: ok ? bt : null });
     const nw = (v) => `<span class="nw">${v}</span>`;
-    const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa')) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
+    const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa', { l: c.lev })) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
     const lv = lossView(x.worst, a, c.lev, n.ccy, { capped: x.capped });
     const loss = lossLine(lv);
-    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(a, n.ccy, 0)}</b> → <span class="${ok && x.avg == null ? 'mb-na' : 'up'}">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
   };
   /* the three profile chips only on the first card of a list (and in the detail / sheet) */
   const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · ${c.lev > 1 ? `1:${c.lev}` : t('mb.noLev')}</small></button>`).join('')}</div>` : '';
   return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${cols.map(line).join('')}</div>`, chips, n };
 }
+/* 1.13.9: the pill also says until when the entry is valid (D.entryWindowEnd): "Vstup dnes 15:30–22:00" ·
+   "Vstup teď do 22:00" · "Vstup při ceně do 364,80 $ · platí do dnes 22:00" */
 function enShort(s, en, now) {
-  if (en.code === 'now') return t('cp.now', { c: F.time(new Date(nyCloseAfterMs(+now))) });
-  if (en.code === 'soon') { const o = nextUsOpen(now); const days = o ? F.daysUntil(o, now) : 1; return t('cp.soon', { day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o), time: o ? F.time(o) : '15:30' }); }
-  if (en.code === 'wait') return t(s.action === 'SELL' ? 'cp.waitSell' : 'cp.wait', { v: D.spx(s, D.maxEntry(s)) });
+  const end = D.entryWindowEnd(s);
+  const sameDay = (a, b) => a && b && new Date(a).toDateString() === new Date(b).toDateString();
+  const until = end ? t('cp.until', { d: D.whenLabel(new Date(end), now) }) : '';
+  if (en.code === 'now') return end && !sameDay(end, now) ? `${t('cp.now', { c: '' }).trim()} · ${until}` : t('cp.nowTo', { e: F.time(new Date(end || nyCloseAfterMs(+now))) });
+  if (en.code === 'soon') {
+    const o = nextUsOpen(now); const days = o ? F.daysUntil(o, now) : 1;
+    const p = { day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o), time: o ? F.time(o) : '15:30' };
+    return end && sameDay(end, o) ? t('cp.soonTo', { ...p, e: F.time(new Date(end)) }) : `${t('cp.soon', p)}${until ? ` · ${until}` : ''}`;
+  }
+  if (en.code === 'wait') return `${t(s.action === 'SELL' ? 'cp.waitSell' : 'cp.wait', { v: D.spx(s, D.maxEntry(s)) })}${until ? ` · ${until}` : ''}`;
   if (en.code === 'order') return t('cp.order');
   return '';
 }
@@ -756,7 +773,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
     mid = ccMoneyLines(s, data, now, { chips: false }).html;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);
-    mid = `<p class="cc-ml">${t('u.do.late')}${mv != null ? ` · <span class="num">${t('cc.move', { v: F.spct(mv, 1) })}</span>` : ''}</p>`;
+    mid = `<p class="cc-ml">${cs.est?.code === 'expired' ? t('ew.do') : t('u.do.late')}${mv != null ? ` · <span class="num">${t('cc.move', { v: F.spct(mv, 1) })}</span>` : ''}</p>`;
   }
   if (!foot && cs.cta) {
     const lim = cs.cta === 'limit';
@@ -765,7 +782,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   return `<article class="cc sc is-${cs.code} ph-${ph}${isNew ? ' is-new' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="cc-head sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">
       ${monogram(s.symbol, s.name)}
-      <span class="cc-id"><span class="cc-t"><b class="cc-name">${F.esc(w.name)}</b><span class="cc-dir ${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(`c.side.${sell ? 'SELL' : 'BUY'}`)}</span></span>
+      <span class="cc-id"><span class="cc-t"><b class="cc-name">${F.esc(w.name)}</b>${ph === 'open' || cs.code === 'mine' || cs.code === 'order' ? `<span class="cc-dir ${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(`c.side.${sell ? 'SELL' : 'BUY'}`)}</span>` : `<span class="cc-dir is-held">${t(ph === 'closed' ? 'u.chip.done' : 'c.held')}</span>`}</span>
         <span class="cc-pills">${pills}</span></span>
       ${icon('chev-right', 'icon-xs cc-chev')}
     </div>

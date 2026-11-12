@@ -10,6 +10,7 @@ import * as Live from '../live.js';
 import * as Mkt from '../market.js';
 import * as B from '../brief.js';
 import * as W from '../wallet.js';
+import * as Sync from '../sync.js';
 
 /* 1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
 /* 1.13.3: Více in three groups – the main five on top (Peněženka, Historie, Robot, Jak to funguje, Nastavení),
@@ -55,6 +56,7 @@ export function pushCta() {
 export function renderMore(ctx) {
   return `<header class="page-head"><div><h1 class="page-title">${t('more.title')}</h1><p class="page-sub">${t('more.sub')}</p></div></header>
   ${pushCta()}
+  ${Sync.card({ compact: true })}
   ${MORE_ITEMS.map((g) => `<h2 class="group-l">${t(g.group)}</h2><nav class="tile-grid" aria-label="${t(g.group)}">${g.items.map((it, i) => `<${it.action ? `button type="button" data-action="${it.id}"` : `a href="#/${it.id}"`} class="gtile" style="--i:${i}">
     <span class="gtile-ic">${icon(it.icon)}</span>
     <span class="gtile-t">${t(`more.${it.id}`)}</span>

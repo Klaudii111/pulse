@@ -37,7 +37,8 @@ export const pxOf = (sym, v) => F.price(v, M.get(sym) ? M.decimals(sym, v) : nul
 export const pxC = (sym, v) => F.ccyWrap(pxOf(sym, v), M.ccy(sym));
 const sidePx = (sym, mid, side) => mid + (side === 'SELL' ? -1 : 1) * M.spread(sym, mid) / 2;
 
-function openSigs(data) { return D.allOpen(data).filter((s) => s.status === 'open' && !s.intraday_hit); }
+/* 1.13.9: only signals whose entry window is still open (D.entryOpen) are offered here (chips, quick buy, the ticket) */
+function openSigs(data) { return D.allOpen(data).filter((s) => D.entryOpen(s)); }
 
 function currentSym(ctx) {
   const sid = ctx.params.get('s');
@@ -47,8 +48,9 @@ function currentSym(ctx) {
   if (k && /^[A-Z0-9.-]{1,12}$/.test(k)) store.set('termSym', k);
   let sym = store.get('termSym', null);
   const sigs = openSigs(ctx.data);
-  /* default without a signal: the S&P 500 (US500) when the server knows it, else the first signal / SPY */
-  if (!sym) sym = M.get('US500') ? 'US500' : sigs[0]?.symbol || 'SPY';
+  /* default without a signal: the S&P 500 (US500); 1.13.9: while the US market is closed a market that moves now
+     (Bitcoin, 24/7) – the screen never opens on a frozen chart */
+  if (!sym) sym = M.isOpen('US500') ? 'US500' : 'BTCUSD';
   return { sym, sig: sigs.find((x) => x.symbol === sym) || null };
 }
 
@@ -238,9 +240,22 @@ function priceBlock(sym, data) {
 ` };
 }
 
-function closedNote(sym) {
+/* 1.13.9: markets that move right now (crypto 24/7, currencies + gold Mon–Fri) – offered when the chosen one is closed */
+export const OPEN_PICKS = ['BTCUSD', 'ETHUSD', 'XAUUSD', 'EURUSD', 'DE40'];
+function closedNote(sym, data) {
   if (M.isOpen(sym)) return '';
-  return `<p class="mkt-closed" id="t-closed">${icon('clock', 'icon-xs')}<span>${t('term.closedNow', { h: F.esc(M.hours(sym)) })}</span></p>`;
+  const o = M.nextOpen(sym);
+  const alt = OPEN_PICKS.filter((k) => k !== sym && M.isOpen(k)).slice(0, 3);
+  return `<div class="mkt-closed" id="t-closed">${icon('clock', 'icon-xs')}<span><b>${t('mk.closedOpens', { d: o ? openWhen(o) : F.esc(M.hours(sym)) })}</b> ${t('mk.closedHow')}</span></div>
+    ${alt.length ? `<div class="mk-open"><span class="why-s mk-open-l">${t('mk.openNow')}</span><div class="chips">${alt.map((k) => `<button type="button" class="chip" data-action="t-sym" data-sym="${F.esc(k)}"><i class="mk-dot" aria-hidden="true"></i>${F.esc(whatOf(k, data).name)}</button>`).join('')}</div></div>` : ''}`;
+}
+/* one honest status line per chart: "● živě · před 3 s" · "zpožděné ceny (~1 min)" · "Burza zavřená · otevře dnes 15:30" */
+export function mktStamp(sym, data) {
+  const q = W.priceOf(sym, data);
+  if (!M.isOpen(sym)) { const o = M.nextOpen(sym); return { code: 'closed', text: t('mk.closedOpens', { d: o ? openWhen(o) : M.hours(sym) }) }; }
+  let st = Live.stamp(q?.t || 0, Date.now(), true);
+  if (st.code === 'live' && M.delayed(sym)) st = { code: 'stale', text: t('term.delayedLive', { s: Math.max(0, Math.round((Date.now() - q.t) / 1000)) }) };
+  return st;
 }
 
 /* small "?" next to a trading word (opens one plain sentence + example) */
@@ -271,15 +286,17 @@ function watchCard(sym, data, i) {
     <div class="wc-head"><button type="button" class="wc-open" data-action="w-open" data-sym="${F.esc(sym)}">${monogram(sym, w.name)}<span class="wc-id"><b>${F.esc(w.name)}</b><span class="ticker">${F.esc(sym)}</span></span></button>
       <span class="wc-px"><b class="num" data-wpx>${q ? pxOf(sym, q.p) : '–'}</b><small class="num ${ch == null ? '' : ch >= 0 ? 'up' : 'down'}" data-wch>${ch == null ? '' : F.spct(ch, 2)}</small></span>
       <button type="button" class="icon-btn wc-x" data-action="w-watch" data-sym="${F.esc(sym)}" aria-label="${F.esc(t('watch.remove'))}">${icon('close', 'icon-xs')}</button></div>
+    ${(() => { const st = mktStamp(sym, data); return `<p class="live-stamp wc-st is-${st.code}" data-wst><i aria-hidden="true"></i>${F.esc(st.text)}</p>`; })()}
     <div class="wc-chart" id="wc${i}">${Bars.controls(`wcb${i}`, { tfKey: `barsTf.w.${sym}`, compact: true })}</div>
   </article>`;
 }
 function watchView(ctx) {
   const l = watchList();
-  /* 1.13.3: a phone (< 600 px) shows the charts as one vertical list (up to 4) – the 1 / 2 / 4 layout chips are desktop only */
+  /* 1.13.3: a phone (< 600 px) shows the charts as one vertical list – the 1 / 2 / 4 layout chips are desktop only.
+     1.13.9: EVERY watched chart is on the screen at once (no "klepni = dát nahoru"); the chips only set how many side by side */
   const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 599px)').matches;
   const n = phone ? 4 : watchN();
-  const shown = l.slice(0, n), rest = l.slice(n);
+  const shown = l, rest = [];
   return `<section class="watch">
     <div class="watch-top">${phone ? '' : `<div class="range-chips w-lays" role="group" aria-label="${F.esc(t('watch.layout'))}">${[1, 2, 4].map((k) => `<button type="button" class="range-chip w-lay${k > 1 ? ' w-lay-multi' : ''}" data-action="w-n" data-id="${k}" data-lay="${k}" aria-label="${F.esc(t('watch.layAria', { n: k }))}" aria-pressed="${k === n}">${icon(`lay${k}`, 'icon-xs')}<span aria-hidden="true">${t('watch.n', { n: k })}</span></button>`).join('')}</div>`}
       <button type="button" class="btn btn-secondary btn-small" data-action="w-add">${icon('plus-square', 'icon-sm')}${t('watch.addBtn')}</button></div>
@@ -304,13 +321,25 @@ function refreshWatch(el, ctx) {
     const ch = q ? Live.dayChange(sym) : null;
     const p = card.querySelector('[data-wpx]'); if (p && q) p.textContent = pxOf(sym, q.p);
     const c = card.querySelector('[data-wch]'); if (c) { c.textContent = ch == null ? '' : F.spct(ch, 2); c.className = `num ${ch == null ? '' : ch >= 0 ? 'up' : 'down'}`; }
+    if (p && q && p.dataset.last && p.dataset.last !== String(q.p) && !matchMedia('(prefers-reduced-motion: reduce)').matches) { p.classList.remove('flash-up', 'flash-down'); void p.offsetWidth; p.classList.add(q.p > +p.dataset.last ? 'flash-up' : 'flash-down'); }
+    if (p && q) p.dataset.last = String(q.p);
   });
+  stampWatch(el, ctx);
   watchRefs.forEach((r) => r.refresh());
+}
+
+function stampWatch(el, ctx) {
+  el.querySelectorAll('.wc').forEach((card) => {
+    const s = card.querySelector('[data-wst]'); if (!s) return;
+    const st = mktStamp(card.dataset.wsym, ctx.data);
+    s.className = `live-stamp wc-st is-${st.code}`; s.innerHTML = `<i aria-hidden="true"></i>${F.esc(st.text)}`;
+  });
 }
 
 export function render(ctx) {
   const head = `<header class="page-head"><div><h1 class="page-title">${t('term.title')}</h1><p class="page-sub">${t('term.sub')}</p></div></header>`;
-  if (!ctx.data?.signals) return head;
+  /* 1.13.9: NO waiting for signals.json – the chart, the price (saved on the device) and the wallet paint at once;
+     the signal parts appear when the data arrives (the screen used to stay empty until every data file had loaded) */
   const { sym, sig } = currentSym(ctx);
   const sm = W.summary(ctx.data);
   const pb = priceBlock(sym, ctx.data);
@@ -326,7 +355,7 @@ export function render(ctx) {
         <div class="term-pxbox" id="t-px">${pb.html}</div>
       </div>
       <div class="term-btnrow"><button type="button" class="btn btn-secondary btn-small term-change" data-action="t-pick">${icon('search', 'icon-sm')}${t('term.change')}</button>${watchStar(sym)}</div>
-      ${sig ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t(sig.action === 'SELL' ? 'term.fromSigSell' : 'term.fromSig', { side: F.SIDE[sig.action], e: F.price(D.maxEntry(sig)), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
+      ${sig && D.entryOpen(sig) ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t(sig.action === 'SELL' ? 'term.fromSigSell' : 'term.fromSig', { side: F.SIDE[sig.action], e: F.price(D.maxEntry(sig)), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
       <div class="t-bars" id="t-bars" ${cmode === 'bars' ? '' : 'hidden'}>${Bars.controls('tb')}</div>
       <div class="pchart-box term-chart" id="t-chart" ${cmode === 'live' ? '' : 'hidden'}></div>
       <div class="pchart-box term-chart cndl-box" id="t-c1" ${cmode === 'c1' ? '' : 'hidden'}></div>
@@ -336,7 +365,7 @@ export function render(ctx) {
         <button type="button" class="trade-btn buy" data-action="t-ticket" data-side="BUY"><span>${t('term.buy')}</span><small class="tpx-l">${t('px.buyAt')}</small><b class="num" data-tpx="BUY">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'BUY')) : '–'}</b></button>
         <button type="button" class="trade-btn sell" data-action="t-ticket" data-side="SELL"><span>${t('term.sell')}</span><small class="tpx-l">${t('px.sellAt')}</small><b class="num" data-tpx="SELL">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'SELL')) : '–'}</b></button>
       </div>
-      ${closedNote(sym)}
+      ${closedNote(sym, ctx.data)}
       <p class="trade-hint">${t('term.hint2', { lev: M.maxLev(sym) })}</p>
     </section>
     <section class="term-side">
@@ -382,7 +411,6 @@ function refresh(el, ctx) {
 }
 
 export function mount(el, ctx) {
-  if (!ctx.data?.signals) return;
   const { sym, sig } = currentSym(ctx);
   Live.onData(); // subscribe the chosen symbol (polling + stream)
   tvOn = false;
@@ -410,11 +438,12 @@ export function mount(el, ctx) {
     const q = W.priceOf(sym, ctx.data); let st = Live.stamp(q?.t || 0, Date.now(), M.isOpen(sym));
     if (st.code === 'live' && M.delayed(sym)) st = { code: 'stale', text: t('term.delayedLive', { s: Math.max(0, Math.round((Date.now() - q.t) / 1000)) }) };
     const s = el.querySelector('#t-px .live-stamp'); if (s) { s.className = `live-stamp is-${st.code}`; s.innerHTML = `<i aria-hidden="true"></i>${F.esc(st.text)}`; }
+    if (termView() === 'watch') stampWatch(el, ctx);
   }, 1000);
   liveOff = () => document.removeEventListener('pulse:live', fn);
   /* opened from a signal ("Zainvestovat nanečisto") -> the order ticket opens prefilled, once */
   const sid = ctx.params.get('s');
-  if (sig && sid && autoTicketFor !== sid && sig.status === 'open' && !sig.intraday_hit) { autoTicketFor = sid; setTimeout(() => ticket(ctx, sig.action, sym, sig), 250); }
+  if (sig && sid && autoTicketFor !== sid && D.entryOpen(sig)) { autoTicketFor = sid; setTimeout(() => ticket(ctx, sig.action, sym, sig), 250); }
 }
 
 /* the chart object is rebuilt from a fresh series on every refresh (the symbol's live history grows) */
@@ -486,7 +515,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   /* 1.10.0: four deposits from the minimum (100 Kč); the default = the example on the signal card (D.offerNums) */
   const minAmt = D.DEP_MIN[c] || 0;
   const BASE = { CZK: [1000, 5000, 10000], EUR: [40, 200, 400], USD: [50, 250, 500] }[c] || [minAmt * 10, minAmt * 50, minAmt * 100];
-  const useSig = sig && sig.action === side;
+  const useSig = sig && sig.action === side && D.entryOpen(sig);
   const dir = side === 'SELL' ? -1 : 1;
   const maxLev = M.maxLev(sym);
   const levs = M.levSteps(maxLev);
@@ -497,7 +526,9 @@ function ticket(ctx, side, sym, sig, opt = {}) {
      open) or at the open (closed); only a price past it -> a limit order AT the max entry */
   const sigMx = useSig ? D.maxEntry(sig) : null;
   const sigLim = useSig && sigMx > 0 && dir * (q.p - sigMx) > 0;
-  const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
+  const sigOpen = useSig;
+  /* 1.13.9: "do konce signálu" for a waiting buy = until the entry window closes (D.entryWindowEnd), not the exit date */
+  const sigW = useSig ? D.entrySig(sig) : null;
   /* 1.13.1: closed market without a signal -> the default is "Koupit při otevření" (a market order at the next open);
      a limit price only under Pokročilé */
   const st = { side, amount: 0, auto: true, prof: D.profId(), lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
@@ -535,7 +566,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     if (atOpen()) return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'tk.atOpenSell' : 'tk.atOpen', { h: F.esc(M.hours(sym)), v: pxC(sym, st.limit) })}</span></p>`;
     if (W.marketable(side, st.limit, q.p)) return `<p class="tk-lim is-bad">${t(side === 'SELL' ? 'term.err.limitNowSell' : 'term.err.limitNowBuy')}</p>`;
     const d = limitDistance({ side, limit: st.limit }, q.p);
-    const exp = W.expiryFor(st.valid, useSig ? sig : null);
+    const exp = W.expiryFor(st.valid, sigW);
     return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'term.tkLimSell' : 'term.tkLimBuy', { v: pxOf(sym, st.limit), sym })} ${F.esc(d.text.charAt(0).toUpperCase() + d.text.slice(1))}. ${t('term.tkLimUntil', { d: F.dmTime(exp) })}</span></p>`;
   };
   const goText = () => (mktOpen() ? t(side === 'SELL' ? 'inv.goAtOpenSell' : 'inv.goAtOpen', { d: sess().o ? openWhen(sess().o) : '' })
@@ -557,7 +588,9 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.13.6: on top ONE money line + the profile switch (this sheet only); the profile table, "Příklady pák", the notes and
        the fee fold into "Podrobnosti ▾" (B.moneyBlock = the same numbers as the card and the detail) */
-    const mm = { s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp };
+    const mm = { s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp,
+      /* 1.13.9: the profile columns compare each profile with ITS deposit (1:20 = a quarter); a typed amount stays the same */
+      amountFor: (col) => (st.auto ? stakeAt(col.lev) : st.amount) };
     return `<div class="tk-out">
       ${B.tkProfSwitch(sym, st.prof, st.lev)}
       ${B.tkMoneyLine({ ...mm, lev: st.lev })}
@@ -646,7 +679,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (!goB || goB.disabled) return;
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
         if (mktOpen()) {
-          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: capPx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen && useSig ? sig.id : null, valid: 'sess', sig: useSig ? sig : null, atOpen: true });
+          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: capPx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen && useSig ? sig.id : null, valid: 'sess', sig: sigW, atOpen: true });
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
@@ -657,7 +690,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
           return;
         }
         if (isLim()) {
-          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: st.limit, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen ? sig.id : null, valid: st.valid, sig: useSig ? sig : null, atOpen: true });
+          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: st.limit, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen ? sig.id : null, valid: st.valid, sig: sigW, atOpen: true });
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
@@ -670,7 +703,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         /* 1.13.1: the promise holds at the moment of buying – an untouched deposit is re-sized from the newest price */
         const q2 = W.priceOf(sym, ctx.data);
         if (st.auto && q2 && q2.p > 0 && q2.p !== q.p) { q.p = q2.p; q.t = q2.t; resize(); }
-        const res = W.open(ctx.data, { sym, name: nameOf(sym, ctx.data), side, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sig && sig.action === side && sig.status === 'open' && !sig.intraday_hit ? sig.id : null });
+        const res = W.open(ctx.data, { sym, name: nameOf(sym, ctx.data), side, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: useSig ? sig.id : null });
         if (!res.ok) { toast(t(`term.err.${res.reason}`, { h: M.hours(sym) })); return; }
         haptic(20);
         closeTopSheet();
@@ -728,8 +761,8 @@ function pickKeys(tabId, data, sigs) {
 function picker(ctx, onPick = null) {
   const sigs = [...new Set(openSigs(ctx.data).map((s) => s.symbol))];
   const tabs = PTABS.filter((id) => ['fav', 'sig', 'akcie', 'etf'].includes(id) || M.groups().some((g) => g.id === id));
-  if (!ptab || !tabs.includes(ptab)) ptab = M.ready() ? 'indexy' : 'sig';
-  const all = () => [...new Set(Object.keys(M.ready() ? Object.fromEntries(M.groups().flatMap((g) => g.items.map((x) => [x.key, 1]))) : {}).concat(Object.keys(INSTR)))];
+  if (!ptab || !tabs.includes(ptab)) ptab = M.groups().length ? 'indexy' : 'sig';
+  const all = () => [...new Set(Object.keys(M.groups().length ? Object.fromEntries(M.groups().flatMap((g) => g.items.map((x) => [x.key, 1]))) : {}).concat(Object.keys(INSTR)))];
   const list = (qq) => {
     const q = qq.trim().toUpperCase();
     const keys = q ? all().filter((k) => M.searchText(k).includes(q)).sort((a, b) => (b === q) - (a === q) || (!!M.get(b)) - (!!M.get(a))).slice(0, 40) : pickKeys(ptab, ctx.data, sigs);

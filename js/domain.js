@@ -267,23 +267,40 @@ export function sizingBase(equity = null) {
    so the worst case grows with it: ~1 % · ~2 % · ~5 % of the wallet on a share (capped at the deposit). */
 export const BASE_PROF = PROFILES[0];
 export function stakeCap(equity = null) { return niceRound(sizingBase(equity) * (BASE_PROF.cap ?? 0.1)); }
-/* the worst share of the wallet a profile risks on one instrument (nominal: 1 % × its leverage, the deposit caps it) */
-export const profWorstPct = (p, sym = 'AAPL') => BASE_PROF.pct * profLevFor(p, sym);
+/* 1.13.9: the worst case of ONE trade never goes above ~5 % of the wallet (the Agresivněji risk), whatever the leverage:
+   up to 1:5 the deposit is the Konzervativně stake (1 % × leverage), above it the deposit shrinks by 5 / leverage
+   (1:10 -> half, 1:20 -> a quarter), so 1:20 = the same trade size as 1:5 on the full deposit, just less money tied up */
+export const WORST_MAX = PROFILES[PROFILES.length - 1].pct;
+export const AGGR_LEV = +PROFILES[PROFILES.length - 1].lev || 20;
+/* at this leverage the trade ends after a move of 100 / lev % against it (1:20 -> 5 %) */
+export const wipePct = (lev) => 100 / Math.max(1, +lev || 1);
+export const levFactor = (lev) => Math.min(1, WORST_MAX / (BASE_PROF.pct * Math.max(1, +lev || 1)));
+export const levWorstPct = (lev) => Math.min(BASE_PROF.pct * Math.max(1, +lev || 1), WORST_MAX);
+/* the worst share of the wallet a profile risks on one instrument (1 % × its leverage, max 5 %; the deposit caps it) */
+export const profWorstPct = (p, sym = 'AAPL') => levWorstPct(profLevFor(p, sym));
 /* opt.prof = another profile than mine (the comparison columns); its leverage unless opt.lev says otherwise */
 export function stakeFor(s = null, opt = {}) {
   if (typeof opt === 'number' || opt == null) opt = { equity: opt }; // old call shape stakeFor(s, equity)
   const ccy = walletCcy();
   const eq = sizingBase(opt.equity ?? null);
-  /* 1.13.5: the profile and the leverage do NOT change the deposit (opt.prof / opt.lev kept for old call shapes) */
+  /* 1.13.5: the profile does not change the base deposit; 1.13.9: a leverage above 1:5 shrinks it (levFactor) so the
+     worst case stays ~5 % of the wallet. lev = opt.lev, else the leverage of opt.prof / my profile for this symbol */
   const p = BASE_PROF;
+  const st = STAKE_STEP[ccy] || 10;
+  const lev = opt.lev > 0 ? opt.lev : profLevFor(opt.prof ? prof(opt.prof) : prof(), s?.symbol);
+  const f = levFactor(lev);
   const cap = stakeCap(eq);
   let a = cap;
   const px = opt.px > 0 ? opt.px : s?.entry;
   if (s && px > 0 && s.stop > 0 && px !== s.stop) {
     const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px);
     /* 1.13.7: a calm deposit – whole 100 Kč / 10 € / 10 $ (7 507 -> 7 500), never above the risk % */
-    if (want < cap) { const st = STAKE_STEP[ccy] || 10; a = Math.floor(want / st + 1e-9) * st; }
+    if (want < cap) a = Math.floor(want / st + 1e-9) * st;
   }
+  if (f < 1) a = Math.floor(a * f / st + 1e-9) * st;
+  /* 1.13.9 (lead 12. 11.): Agresivněji 1:20 = a deposit of 5 % of the wallet (exposure = the whole wallet); the worst
+     case is the whole deposit = ~5 % of the wallet, the same on every screen, whatever the stop distance */
+  if (lev >= AGGR_LEV) a = Math.floor(eq * WORST_MAX / 100 / st + 1e-9) * st;
   return a >= (DEP_MIN[ccy] || 0) ? a : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
 }
 /* 1.13.7 the rounding step of the default deposit (D.stakeFor) */
@@ -292,11 +309,14 @@ export const STAKE_STEP = { CZK: 100, EUR: 10, USD: 10 };
 export function stakeLimited(s, amount, opt = {}) {
   const eq = sizingBase(opt.equity ?? null);
   if (!(eq > 0) || !(amount > 0)) return false;
-  return Math.abs(amount - stakeCap(eq)) < 0.5;
+  const st = STAKE_STEP[walletCcy()] || 10;
+  const f = levFactor(opt.lev || 1);
+  if ((opt.lev || 1) >= AGGR_LEV) return false; // 1:20: the 5 % deposit is the rule itself, not a cap
+  return Math.abs(amount - stakeCap(eq)) < 0.5 || (f < 1 && Math.abs(amount - Math.floor(stakeCap(eq) * f / st + 1e-9) * st) < 0.5);
 }
 
 /* 1.13.5 Kalkulačka: the same leverage as the profiles = the market cap of the instrument (slider max LEVERAGE_MAX) */
-export const calcLevCap = (sig) => Math.max(1, Math.min(CONFIG.CALC.LEVERAGE_MAX, profLevFor(PROFILES[PROFILES.length - 1], sig?.symbol)));
+export const calcLevCap = (sig) => Math.max(1, profLevFor(PROFILES[PROFILES.length - 1], sig?.symbol));
 export function leverageCap(data, sig) {
   const c = CONFIG.CALC;
   return Math.max(c.LEVERAGE_MIN, Math.min(c.LEVERAGE_MAX, sig?.max_leverage ?? c.LEVERAGE_MAX, levelMaxLeverage(data)));
@@ -329,7 +349,7 @@ export function positionAt(sig, { account, ccy, leverage, fx: fxIn = null }) {
   const stopDist = Math.abs(sig.entry - sig.stop) / sig.entry;
   const targetDist = Math.abs(sig.target - sig.entry) / sig.entry;
   const lev = Math.max(1, leverage || 1);
-  const deposit = stakeFor(sig, { equity: account, px: sig.entry });
+  const deposit = stakeFor(sig, { equity: account, px: sig.entry, lev });
   const notional = deposit * lev;
   const loss = Math.min(deposit, notional * stopDist);
   const gain = notional * targetDist;
@@ -365,6 +385,118 @@ export function nextRunLabel(data, now = clock()) {
   const days = F.daysUntil(d, now);
   const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(d);
   return t('fmt.at', { day, time: F.time(d) });
+}
+
+/* ---------- 1.13.9 US session calendar + the robot's check plan (ONE place) ----------
+   NYSE regular session 9:30–16:00 New York, Mon–Fri, without the NYSE holidays below (early closes 13:00 not modelled). */
+export const US_HOLIDAYS = new Set([
+  '2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03', '2026-05-25', '2026-06-19', '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25',
+  '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24',
+]);
+/* The server's plan – keep in sync with the systemd timers on the server (/etc/systemd/system):
+   pulse-scan.timer    OnCalendar=Mon..Fri *-*-* 14..22:05/20:00 Europe/Prague (14:05, 14:25 … 22:45; scan.py works only
+                       while NYSE is open -> the real checks are 15:45 … 21:45 Prague in a normal week)
+   pulse-nightly.timer Mon–Fri 22:45 Prague = the main (official) batch of the day */
+export const SCAN_PLAN = { hours: [14, 22], minutes: [5, 25, 45], official: '22:45' };
+const NYF = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' });
+const PRF = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Prague', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' });
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function zp(fmt, ms) {
+  const o = {}; fmt.formatToParts(new Date(ms)).forEach((x) => { o[x.type] = x.value; });
+  return { ymd: `${o.year}-${o.month}-${o.day}`, y: +o.year, m: +o.month, d: +o.day, wd: WD.indexOf(o.weekday), min: (+o.hour % 24) * 60 + +o.minute };
+}
+/* New York wall time (y-m-d, minutes) -> UTC ms */
+function nyAt(y, m, d, mins) {
+  const guess = Date.UTC(y, m - 1, d, Math.floor(mins / 60), mins % 60);
+  const p = zp(NYF, guess);
+  return guess - (Date.UTC(p.y, p.m - 1, p.d, Math.floor(p.min / 60), p.min % 60) - guess);
+}
+export const usTradingDay = (ymd, wd) => wd >= 1 && wd <= 5 && !US_HOLIDAYS.has(ymd);
+/* the US session open at ms or the next one ({ open, close } in ms); startAfter = the first session that OPENS at / after ms */
+export function usSession(ms = +clock(), startAfter = false) {
+  let p = zp(NYF, ms);
+  for (let i = 0; i < 14; i++) {
+    if (usTradingDay(p.ymd, p.wd)) {
+      const open = nyAt(p.y, p.m, p.d, 570), close = nyAt(p.y, p.m, p.d, 960);
+      if (startAfter ? open >= ms : close > ms) return { open, close };
+    }
+    p = zp(NYF, Date.UTC(p.y, p.m - 1, p.d + 1, 17, 0));
+  }
+  return null;
+}
+export function usOpenAt(ms = +clock()) { const x = usSession(ms); return !!x && ms >= x.open && ms < x.close; }
+/* the next check of the server scan that really runs (a timer slot inside the US session), as a Date */
+export function nextScanAt(now = clock()) {
+  let x = Math.floor(+now / 60000) * 60000 + 60000;
+  const m0 = new Date(x).getUTCMinutes(); // Prague is a whole-hour offset from UTC -> the same minute
+  x += ((((5 - (m0 % 20)) % 20) + 20) % 20) * 60000;
+  for (let i = 0; i < 8 * 72; i++, x += 20 * 60000) {
+    const p = zp(PRF, x);
+    if (p.wd < 1 || p.wd > 5) continue;
+    const h = Math.floor(p.min / 60);
+    if (h < SCAN_PLAN.hours[0] || h > SCAN_PLAN.hours[1] || !SCAN_PLAN.minutes.includes(p.min % 60)) continue;
+    if (usOpenAt(x)) return new Date(x);
+  }
+  return null;
+}
+/* ONE "další kontrola": the next real scan or the main evening batch, whichever comes first -> { at: Date, kind } */
+export function nextCheck(data, now = clock()) {
+  const sc = nextScanAt(now), off = nextRun(data, now);
+  return sc && sc < off ? { at: sc, kind: 'scan' } : { at: off, kind: 'official' };
+}
+/* "dnes 15:45" / "zítra 15:45" / "pondělí 15:45" */
+export function whenLabel(d, now = clock()) {
+  const days = F.daysUntil(d, now);
+  return `${days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(d)} ${F.time(d)}`;
+}
+/* the robot's working state for the status line on Dnes and Signály:
+   before (a US session later today) · open · after (closed today, the evening batch still to come) · closed (weekend / holiday / night) */
+export function scanStatus(data, now = clock()) {
+  const ms = +now;
+  const sess = usSession(ms);
+  const today = zp(PRF, ms).ymd;
+  const sameDay = (a) => !!a && zp(PRF, a).ymd === today;
+  const off = nextRun(data, now);
+  const prev = usSession(ms - 12 * 3600000);
+  let phase;
+  if (sess && ms >= sess.open) phase = 'open';
+  else if (sess && sameDay(sess.open)) phase = 'before';
+  else if (prev && prev.close <= ms && sameDay(prev.close) && sameDay(+off)) phase = 'after';
+  else phase = 'closed';
+  const vis = HORIZONS.filter((h) => !(CONFIG.HIDDEN_HORIZONS || []).includes(h));
+  const nToday = allOpen(data).filter((x) => vis.includes(x.horizon) && x.created_at && zp(PRF, Date.parse(x.created_at)).ymd === today).length;
+  const nx = nextCheck(data, now);
+  return { phase, open: sess ? new Date(sess.open) : null, close: sess ? new Date(sess.close) : null, next: nx.at, kind: nx.kind, official: off, nToday };
+}
+
+/* ---------- 1.13.9 entry window of a signal (ONE rule for cards, lists, the invest sheet, the robot-for-me, Obchodovat) ----------
+   The strategies work on daily bars: a signal is computed after a close and entered at the next session. So it can be
+   bought from its publication until the END of the first US session that opens after it was published (an intraday
+   preview from 17:05 -> until the close of the next day). The price rule stays D.maxEntry (buy at / under it, a limit
+   order AT it above it). After the window the signal leaves the offer lists (it keeps running for those who hold it). */
+export function entryWindowEnd(s) {
+  if (s?.entry_valid_until) return Date.parse(s.entry_valid_until) || null;
+  const c = Date.parse(s?.created_at || 0);
+  if (!(c > 0)) return null;
+  const x = usSession(c, true);
+  return x ? x.close : null;
+}
+export function entryOpen(s, now = clock()) {
+  if (!s || (s.status && s.status !== 'open') || s.intraday_hit) return false;
+  const end = entryWindowEnd(s);
+  return !(end && +now >= end);
+}
+/* the signal as an order sees it: exit_date = the New York day the entry window ends (W.expiryFor 'sig' -> that close) */
+export function entrySig(s) {
+  const end = entryWindowEnd(s);
+  if (!s || !end) return s;
+  const ymd = zp(NYF, end).ymd;
+  return !s.exit_date || ymd < s.exit_date ? { ...s, exit_date: ymd } : s;
+}
+/* "Vstup platí do dnes 22:00" */
+export function entryUntilText(s, now = clock()) {
+  const end = entryWindowEnd(s);
+  return end ? t('ew.until', { d: whenLabel(new Date(end), now) }) : '';
 }
 
 export function emptyReason(data, hz) {
@@ -416,14 +548,16 @@ export function entryState(s, now = clock()) {
   if (s.intraday_hit) return null;
   if (isTimeExit(s, now)) return null;
   const E = CONFIG.ENTRY;
-  if (s.entry_valid_until && new Date(s.entry_valid_until) < now) {
-    return { code: 'expired', label: t('entry.expired'), note: t('entry.note.expired', { time: F.dmTime(s.entry_valid_until) }) };
+  /* 1.13.9: the entry window (D.entryOpen) – after it the signal is no longer offered */
+  const end = entryWindowEnd(s);
+  if (end && +now >= end) {
+    return { code: 'expired', label: t('entry.expired'), note: t('entry.note.expired', { time: F.dmTime(new Date(end)) }) };
   }
   const r = s.pnl_r ?? 0;
   const prog = s.progress ?? (s.rr ? r / s.rr : 0);
   if (r > E.LATE_R || prog > E.LATE_PROGRESS) return { code: 'late', label: t('entry.late'), note: t('entry.note.late') };
   if (r > E.VALID_R) return { code: 'limit', label: t('entry.limit', { price: spx(s, maxEntry(s)) }), note: t('entry.note.limit') };
-  return { code: 'ok', label: t('entry.ok'), note: s.entry_valid_until ? t('entry.note.ok', { time: F.dmTime(s.entry_valid_until) }) : t('entry.note.okNear') };
+  return { code: 'ok', label: t('entry.ok'), note: end ? t('entry.note.ok', { time: F.dmTime(new Date(end)) }) : t('entry.note.okNear') };
 }
 
 /* 1.13.6 ONE "nejvýš za" price for a signal in EVERY state (market open / closed, card, detail, sheet, toast, robot-for-me):
@@ -446,7 +580,7 @@ export function pastMaxEntry(s, px) {
 }
 /* Order text for "Jak zadat" */
 export function orderLines(s, data = null, now = clock()) {
-  const until = s.entry_valid_until || `${s.exit_date}T22:00:00`;
+  const until = entryWindowEnd(s) ? new Date(entryWindowEnd(s)) : `${s.exit_date}T22:00:00`;
   return [
     t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, maxEntry(s)), time: F.dmTime(until) }),
     t('order.stop', { price: spx(s, s.stop) }),
@@ -608,7 +742,9 @@ export function cardState(s, data = null, now = clock()) {
      entry, valid until the signal ends; (c) late / expired -> skip it. Market closed + (a) -> a limit for the open. */
   const est = entryState(s, now);
   if (!est || est.code === 'late' || est.code === 'expired') {
-    return { ...base, code: 'late', tone: 'flat', badge: t('u.chip.late'), text: t('u.do.late'), cta: null, est };
+    /* 1.13.9: the entry window is over -> "robot ho drží, nový vstup už ne" (not "cena utekla") */
+    const ew = est?.code === 'expired';
+    return { ...base, code: 'late', tone: 'flat', badge: t(ew ? 'ew.chip' : 'u.chip.late'), text: t(ew ? 'ew.do' : 'u.do.late'), cta: null, est };
   }
   const mv = base.move ?? 0;
   /* 1.13.6 ONE rule (= the sheet, the detail, the robot-for-me): the live price at / better than maxEntry -> buy
@@ -732,8 +868,8 @@ export function offerNums(s, data, { amount = null, lev = null, base = null, sl 
 /* 1.13.7: the SAME deposit (stakeFor) and the leverage of the chosen profile as an open signal's card -> Ukončené follow the profile */
 export function closedNums(s) {
   const ccy = walletCcy();
-  const a = stakeFor(s && s.entry > 0 && s.stop > 0 ? s : null);
   const lev = profileLev(s?.symbol);
+  const a = stakeFor(s && s.entry > 0 && s.stop > 0 ? s : null, { lev });
   const pct = priceMove(s);
   /* the trade ends at the stop at worst: the money is capped at the deposit (as outcome() does) */
   const money = pct == null ? null : Math.max(-a, (a * lev * pct) / 100);
