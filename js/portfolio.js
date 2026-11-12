@@ -256,6 +256,22 @@ export function robotState(data, p) {
   return null;
 }
 
+/* 1.15.0 "the robot left - leave too?": my open trades whose robot trade (paper.json closed[]) has already ended, newest first.
+   Used by Dnes (a to-do card) and the trade page (a block with "Ukončit taky"). { pos, at (ms), exit (price | null), pnlPct (robot's result in % | null) } */
+export function robotExits(data, w = W.get()) {
+  const out = [];
+  ((w && w.positions) || []).forEach((pos) => {
+    const rb = robotState(data, pos);
+    if (!rb || rb.k !== 'closed') return;
+    const at = Date.parse(rb.x.closed_at || 0);
+    out.push({ pos, at: Number.isFinite(at) ? at : 0, exit: +rb.x.exit > 0 ? +rb.x.exit : null, pnlPct: rb.x.pnl_pct != null && Number.isFinite(+rb.x.pnl_pct) ? +rb.x.pnl_pct : null });
+  });
+  return out.sort((a, b) => b.at - a.at);
+}
+/* "Nechat běžet": the client decided to keep such a trade - remembered per trade id (synced with the account) */
+export const isFollowOff = (id) => (store.get('followOff', []) || []).includes(id);
+export function followOff(id) { const a = (store.get('followOff', []) || []).filter((x) => x !== id); a.push(id); store.set('followOff', a.slice(-200)); }
+
 /* the timeline of one trade: bought (order placed / filled), fees, my stop / target changes, robot + signal events, the end */
 export function timeline(data, p, w) {
   const ev = [];
