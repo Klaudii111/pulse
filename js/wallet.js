@@ -582,7 +582,10 @@ export function autoAmount(data, sig, s = null) {
   const mxE = D.maxEntry(sig);
   const now = M.isOpen(sig.symbol) && q && marketable(sig.action, mxE, q.p);
   const px = now ? q.p + dirOf(sig.action) * M.spread(sig.symbol, q.p) / 2 : mxE;
-  return Math.floor(Math.min(D.stakeFor(sig, { equity: sm.equity, lev: autoLev(sig.symbol), px }), Math.max(0, sm.free)));
+  /* 1.15.0 STYLES: exactly the chosen style's deposit (and its leverage, autoLev); a trade the free money does not cover
+     is NOT opened (0 -> reason 'free'), never shrunk to what is left */
+  const a = Math.floor(D.stakeFor(sig, { equity: sm.equity, lev: autoLev(sig.symbol), px }));
+  return a > 0 && a <= Math.max(0, sm.free) + 1e-6 ? a : 0;
 }
 /* the leverage the robot-for-me uses = the user's leverage profile for that instrument (Konzervativně 1:1 …) */
 let levFn = () => 1;

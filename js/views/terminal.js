@@ -619,10 +619,10 @@ function ticket(ctx, side, sym, sig, opt = {}) {
        the fee fold into "Podrobnosti ▾" (B.moneyBlock = the same numbers as the card and the detail) */
     const mm = { s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp,
       /* 1.13.9: the profile columns compare each profile with ITS deposit (1:20 = a quarter); a typed amount stays the same */
-      amountFor: (col) => (st.auto ? stakeAt(col.lev) : st.amount) };
+      amountFor: (col) => (st.auto ? D.stakeFor(sizeSig(), { prof: col.id, lev: col.lev, px: basePx() }) : st.amount) };
     return `<div class="tk-out">
-      ${B.tkProfSwitch(sym, st.prof, st.lev)}
-      ${B.tkMoneyLine({ ...mm, lev: st.lev })}
+      ${B.tkProfSwitch(sym, st.prof, st.lev, useSig ? sig.id : null)}
+      ${B.tkMoneyLine({ ...mm, lev: st.lev, prof: st.prof })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <details class="tk-det"${st.detOpen ? ' open' : ''}><summary data-tkdet>${t('tk.details')}${icon('chev-down', 'icon-xs')}</summary>
       ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen, ro: !!useSig } })}
@@ -642,7 +642,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     <div id="tk-out">${preview()}</div>
     <details class="tk-adv"><summary>${t('inv.adv')}${icon('chev-down', 'icon-xs')}</summary>
     <p class="sheet-label">${t('inv.riskL')}</p>
-    <div class="chips tk-chips">${CONFIG.CALC.RISK_PROFILES.map((p) => `<button type="button" class="chip" data-risk="${p.pct}" aria-pressed="${st.risk === p.pct}">${t('term.riskChip', { v: p.pct })}</button>`).join('')}</div>
+    <div class="chips tk-chips">${[1, 2, 5].map((v) => `<button type="button" class="chip" data-risk="${v}" aria-pressed="${st.risk === v}">${t('term.riskChip', { v })}</button>`).join('')}</div>
     <p class="sheet-label">${t('term.otype')}${qm('LIMIT')}</p>
     <div class="tk-type" role="radiogroup" aria-label="${t('term.otype')}">${['mkt', 'lim'].map((id) => `<button type="button" class="tk-type-b" role="radio" data-otype="${id}" aria-checked="${st.type === id}"><b>${t(id === 'mkt' && !open ? 'term.otype.mktOpen' : `term.otype.${id}`)}</b><small>${id === 'mkt' && !open ? t('term.otype.mktOpenS') : t(`term.otype.${id}S`)}</small></button>`).join('')}</div>
     <div id="tk-limf" ${isLim() ? '' : 'hidden'}>
@@ -668,6 +668,15 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     onMount(sh) {
       sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
       const root = sh.querySelector('#tk');
+      /* 1.15.0 STYLES: a style chosen in "Vyber styl" (opened from this ticket's style row) = this ticket's deposit and leverage */
+      const onStyle = () => {
+        if (!root.isConnected) { document.removeEventListener('pulse:prof', onStyle); return; }
+        st.prof = D.profId();
+        const L = B.selLev(sym);
+        st.lev = levs.includes(L) ? L : levs.filter((v) => v <= L).pop() || 1;
+        st.auto = true; st.risk = null; resize(); upd();
+      };
+      document.addEventListener('pulse:prof', onStyle);
       const upd = () => {
         root.querySelector('#tk-out').innerHTML = preview();
         const go = root.querySelector('[data-go]');

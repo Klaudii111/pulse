@@ -35,6 +35,7 @@ import * as Wal from './views/penezenka.js';
 import * as Comm from './community.js';
 import * as H from './health.js';
 import * as Sync from './sync.js';
+import * as Sty from './styles.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -448,9 +449,11 @@ const GLOBAL = {
   /* guided tour on the real screens (Dnes "?", Více, after the first-run guide) */
   tour() { if (sheetOpen()) closeAllSheets(); store.set('faq3off', 0); Tour.start(); },
   /* "Robot obchoduje za mě (nanečisto)" switch (Dnes account card, platform) */
-  'auto-toggle'() {
+  'auto-toggle'(el, ev, gated = false) {
     const on = !store.get('autoCopy', null)?.on;
     if (!on) { setAuto({ on: false, at: Date.now() }); return; }
+    /* 1.15.0: a leveraged style warns first (several trades at once, losses add up) */
+    if (!gated) { Sty.robotGate(() => GLOBAL['auto-toggle'](el, ev, true)); return; }
     /* 1.13.0: never take the running signals silently – ask once; default = only new signals */
     const run = data.signals ? autoCandidates({ all: true }) : [];
     if (!run.length) { setAuto({ on: true, at: Date.now(), skip: [] }); return; }
@@ -465,7 +468,10 @@ const GLOBAL = {
   'pos-close'(el) { Term.closeConfirm(ctx(), el.dataset.id); },
   /* Můj profil (Nastavení) + the 3 profile chips on a compact signal card */
   /* 1.13.2: risk and leverage are ONE profile (older links / buttons with data-id land here too) */
-  'risk-prof'(el) { B.setLevProfile(el.dataset.id); rerender({ soft: true }); },
+  'risk-prof'(el) { Sty.choose(el.dataset.id); },
+  /* 1.15.0 STYLES: the style row opens "Vyber styl"; "Porovnat styly" = the same sheet with this signal's numbers */
+  'style-open'(el) { Sty.openPicker({ sigId: el.dataset.id || null }); },
+  'style-compare'(el) { Sty.openPicker({ sigId: el.dataset.id || null }); },
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
   /* "?" next to a trading word: one sentence + an example */
   'term-help'(el) { termHelp(el.dataset.k); },
@@ -473,9 +479,9 @@ const GLOBAL = {
   /* 1.13.0: inside the invest sheet a leverage tap is a one-off for that ticket – the global profile stays */
   'lev-prof'(el) {
     if (!el.isConnected || el.closest('#tk')) return;
-    B.setLevProfile(el.dataset.prof);
-    /* 1.13.5: no toast in Nastavení – the selected profile is visible right there */
-    if (!sheetOpen()) rerender({ soft: true });
+    /* 1.15.0: through the style gate (the first switch to a risky style asks once) */
+    Sty.choose(el.dataset.prof);
+    if (el.tagName === 'SELECT') el.value = D.profId();
   },
   /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */
   'lev-own'(el) { if (!el.isConnected || el.closest('#tk')) return; B.setLevOwn(+el.dataset.lev, el.dataset.sym || null); },
@@ -671,6 +677,9 @@ async function boot() {
   /* 1.13.1: one leverage profile for every money number (cards, detail, sheet, robot-for-me) – set before the first render */
   D.setLevOf((sym) => B.selLev(sym));
   W.setAutoLev((sym) => B.selLev(sym));
+  Sty.init({ data: () => data });
+  /* 1.15.0: a style chosen in a sheet re-renders the screen below once the sheets are closed */
+  document.addEventListener('pulse:prof', () => { if (!sheetOpen()) rerender({ soft: true }); else setTimeout(() => { if (!sheetOpen()) rerender({ soft: true }); }, 450); });
   route = parseRoute();
   curHash = window.__pulseHash ?? location.hash;
   VIEWS[route.name].enter?.();
@@ -700,7 +709,8 @@ async function boot() {
     /* 1.15.0: picking another trade in the desktop side list replaces the detail (Back still returns to where I came from) */
     ev.preventDefault(); window.__pulseGo(href, { replace: !!a.closest('.pd-side') && route.name === 'obchod' });
   });
-  window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute({ pop: true }); });
+  /* 1.15.0: Back that only closed a style sheet over another sheet (Vyber styl / its confirmation) keeps the sheet below */
+  window.addEventListener('popstate', () => { if (Sty.justClosed() && sheetOpen()) return; window.__pulseHash = null; onRoute({ pop: true }); });
   Live.setExtraSymbols(W.watched);
   Live.initLive(() => data);
   Live.onStatus(() => renderChrome());

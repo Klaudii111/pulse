@@ -13,6 +13,7 @@ import { icon, il, ladder, toast } from './ui.js';
 import { howStrip } from './views/help.js';
 import * as H from './health.js';
 import * as B from './brief.js';
+import * as Sty from './styles.js';
 
 let root = null;
 
@@ -75,20 +76,10 @@ function avgR() {
   const v = hz.map((h) => +H.strat(data, h)?.backtest?.avg_r).filter((x) => Number.isFinite(x));
   return v.length ? v.reduce((a, x) => a + x, 0) / v.length : null;
 }
+/* 1.15.0 STYLES: the ONE style row (Konzervativně pre-selected, "doporučeno pro začátek"; the other four one tap away
+   in the sheet "Vyber styl") + what the chosen style means with this wallet */
 function profCards() {
-  const cs = D.calcState();
-  const cap = typedCap();
-  const id = D.profId();
-  const r = avgR();
-  const sm = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${F.money(Math.abs(v), cs.ccy, 0)}`;
-  return D.PROFILES.map((p) => {
-    /* 1.13.5: the same deposit for every profile, the leverage makes the loss ~1 / 2 / 5 % on a share */
-    const loss = cap * D.profWorstPct(p, 'AAPL') / 100;
-    const ex = r != null ? t('onb.p.ex', { c: F.money(cap, cs.ccy, 0), a: sm(loss * r), l: sm(-loss) }) : t('onb.p.ex0', { c: F.money(cap, cs.ccy, 0), l: sm(-loss) });
-    return `<button type="button" role="radio" class="onb-pc is-${p.id}" data-prof="${p.id}" aria-checked="${p.id === id}">
-      <span class="onb-pc-h"><b>${t(`mb.p.${p.id}`)}</b><small>${B.profShort(p.id)}</small></span>
-      <span class="onb-pc-ex num">${F.esc(ex)}</span></button>`;
-  }).join('');
+  return `${Sty.styleRow({ rec: true, cls: 'onb-sty' })}<p class="sty-def" data-stydef>${Sty.defText()}</p>`;
 }
 function slideP() {
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="3 / 4">
@@ -96,7 +87,7 @@ function slideP() {
     <p class="onb-k">${t('onb.step', { n: 3 })}</p>
     <h2 class="onb-t">${t('onb.p.t')}</h2>
     <p class="onb-s">${t('onb.p.s')}</p>
-    <div class="onb-profs" id="onb-profs" role="radiogroup" aria-label="${F.esc(t('onb.p.t'))}">${profCards()}</div>
+    <div class="onb-profs" id="onb-profs">${profCards()}</div>
     <p class="onb-pnote">${t('onb.p.note')}</p>
   </section>`;
 }

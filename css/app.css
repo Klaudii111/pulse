@@ -3848,3 +3848,67 @@ a.tr-main, a.hi-main, a.wl-row.is-link { color: inherit; text-decoration: none; 
 .d-rs .pd-rs-note { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3, var(--ink-2)); }
 /* 1.15.0: focus / scrollIntoView never leaves a control under the fixed top bar or the bottom tab bar (phone) */
 @media (max-width: 1099px) { html { scroll-padding-top: 72px; scroll-padding-bottom: calc(96px + var(--sab, 0px)); } }
+
+/* ===== 1.15.0 STYLY (styles.js) – style row, "Vyber styl" sheet, risk meter, warnings, big když vyjde / nevyjde =====
+   Classes: .sty-wrap .sty-row(-l/-n/-i) .sty-rec .sty-meter .sty-sheet .sty-list .sty-card(.is-on .is-<id>) .sty-c1-4
+   .sty-cn .sty-on .sty-cap .sty-foot .sty-warn(.is-robot) .sty-main .sty-dep .sty-big .sty-k(.is-win .is-loss) .sty-kl
+   .sty-cmp .sty-hon .sty-ml(-l) .sty-calc .sty-def .sty-d1 .sty-d2 – colours only from the skin tokens */
+.sty-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 4px 0 10px; }
+.sty-row { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--raise); color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+.sty-row:hover { border-color: var(--gold); }
+.sty-row-l { color: var(--ink-3); }
+.sty-row-n { font-weight: 650; white-space: nowrap; }
+.sty-row-i { color: var(--ink-3); }
+.sty-rec { font-size: 12.5px; color: var(--up); }
+.sty-meter { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
+.sty-meter i { width: 6px; height: 13px; border-radius: 2px; background: var(--line-2); }
+/* the bar's colour grows with its position: 1–2 calm green, 3 amber, 4–5 coral (only the lit bars are coloured) */
+.sty-meter i.on:nth-child(-n+2) { background: var(--up); }
+.sty-meter i.on:nth-child(3) { background: color-mix(in srgb, var(--down) 45%, #f2c94c); }
+.sty-meter i.on:nth-child(n+4) { background: var(--down); }
+.sg-ctl .sty-wrap { margin: 0; }
+.sty-list { display: grid; gap: 10px; }
+.sty-card { display: grid; gap: 5px; width: 100%; padding: 13px 14px; text-align: left; border-radius: var(--r-card, 18px);
+  border: 1px solid var(--line); background: var(--raise); color: var(--ink); font: inherit; cursor: pointer; }
+.sty-card.is-on { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.sty-c1 { display: flex; align-items: center; gap: 10px; }
+.sty-cn { font-size: 17px; }
+.sty-on { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--gold); }
+.sty-c2 { font-size: 13.5px; color: var(--ink-2); }
+.sty-cap { color: var(--gold); }
+.sty-c3 { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.sty-c3 small { font-weight: 400; color: var(--ink-3); }
+.sty-c3 .up { color: var(--up); } .sty-c3 .down { color: var(--down); }
+.sty-c3 .up, .sty-c3 .down { white-space: nowrap; }
+.sty-c4 { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+.sty-c4.is-warn { color: var(--ink-2); }
+.sty-card.is-aggr .sty-c4 { color: var(--down); }
+.sty-foot { margin: 12px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.sty-warn { display: flex; gap: 10px; margin: 0 0 10px; padding: 12px; border-radius: 14px; background: var(--down-soft);
+  border: 1px solid var(--down-line); color: var(--ink); font-size: 14px; line-height: 1.45; }
+.sty-warn .icon { flex: none; color: var(--down); margin-top: 2px; }
+.sty-warn.is-robot { background: var(--gold-soft); border-color: var(--gold); }
+.sty-warn.is-robot .icon { color: var(--gold); }
+.sty-sheet .btn-stack { display: grid; gap: 8px; margin-top: 12px; }
+.sty-dep { margin: 0 0 6px; }
+.sty-dep small { color: var(--ink-3); }
+.sty-big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
+.sty-k { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--raise-2); }
+.sty-k b { font-size: 21px; line-height: 1.2; white-space: nowrap; }
+.sty-k.is-win { background: var(--up-soft); }
+.sty-k.is-loss { background: var(--down-soft); }
+.sty-kl { font-size: 12.5px; color: var(--ink-2); }
+.sty-k small { font-size: 11.5px; line-height: 1.3; color: var(--ink-3); }
+.sty-cmp { margin: 4px 0 2px; display: inline-flex; align-items: center; gap: 4px; }
+.sty-hon { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+.sty-ml-l { color: var(--ink-3); font-size: .92em; }
+.sty-ml .up, .sty-ml .down { white-space: nowrap; }
+.sty-calc { display: block; margin: 0 0 14px; }
+.sty-def { display: grid; gap: 4px; margin: 6px 0 0; font-size: 14px; line-height: 1.4; }
+.sty-d1 { color: var(--ink); }
+.sty-d2 { color: var(--ink-3); font-size: 13px; }
+@media (max-width: 359px) { .sty-k b { font-size: 18px; } }
+/* the style sheets also open from the first-run guide (.onb, z-index 190): above it */
+.sheet.sty-sheet { z-index: 201 !important; } /* beats the stacked-sheet rules (.sheet ~ .sheet ~ … 0,4,0) */
+.sheet-scrim:has(+ .sty-sheet) { z-index: 200 !important; }

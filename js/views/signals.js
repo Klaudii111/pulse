@@ -309,7 +309,7 @@ function sgControls(hz) {
   const pid = D.profId();
   const chev = icon('chev-down', 'icon-xs sg-sel-i');
   const hzSel = `<label class="sg-sel sg-sel-hz"><span class="sg-sel-l">${t('sg.hzSel', { v: '' }).trim()}</span><select data-chg="sig-hz" aria-label="${F.esc(t('sg.hz'))}">${HZ_TABS.map((h) => `<option value="${h}"${h === hz ? ' selected' : ''}>${F.esc(h === 'ALL' ? t('sg.hzAll') : t(`u.tab.${h}`))}</option>`).join('')}</select>${chev}</label>`;
-  const pfSel = `<label class="sg-sel sg-sel-pf"><span class="sg-sel-l">${t('sg.profSel', { v: '' }).trim()}</span><select data-chg="lev-prof" aria-label="${F.esc(t('mb.levAria'))}">${D.PROFILES.map((p) => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${F.esc(t(`mb.p.${p.id}`))}</option>`).join('')}</select>${chev}</label>`;
+  const pfSel = B.styleRow(); // 1.15.0: the ONE style row "Styl: … ▾" (sheet "Vyber styl")
   return `<div class="sg-ctl">${hzSel}${pfSel}</div>`;
 }
 

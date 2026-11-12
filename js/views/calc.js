@@ -4,7 +4,8 @@ import * as D from '../domain.js';
 import { icon, seg, segMove, pill, openSheet, closeTopSheet, skBlock, haptic } from '../ui.js';
 import { disclaimer } from './signals.js';
 import { t } from '../i18n/index.js';
-import { lossView, allTxt } from '../brief.js';
+import { lossView, allTxt, styleTxt, levTxt } from '../brief.js';
+import { styleRow } from '../styles.js';
 const CALC_LEV_MAX = 20; // 1.13.9: slider range = the demo cap (M.DEMO_LEV)
 
 /* 1.13.9: only signals that can still be bought (D.entryOpen) – the first one is the default */
@@ -54,15 +55,9 @@ export function render(ctx) {
       </section>
 
       <section class="field">
-        <p class="field-l">${t('calc.profile')}</p>
-        <div class="profiles" role="radiogroup" aria-label="${t('calc.profile')}">
-          ${C.RISK_PROFILES.map((p) => { const pl = Math.min(D.profLevFor(p, s.symbol), cap); const wv = worstView(ctx, s, pl); return `<button type="button" class="profile" role="radio" aria-checked="${p.id === cs.profile}" data-action="profile" data-id="${p.id}">
-            <span class="profile-t">${t(`mb.p.${p.id}`)}<span class="radio-dot"></span></span>
-            <span class="profile-v num" style="display:block">1:${pl}</span>
-            <span class="profile-s num">${F.esc(wv)}</span>
-          </button>`; }).join('')}
-        </div>
-        <p class="field-s">${t('calc.sameDep')}</p>
+        <p class="field-l">${t('sty.fieldL')}</p>
+        ${styleRow({ sigId: s.id })}
+        <p class="field-s">${t('sty.calcS')}</p>
       </section>
 
       <section class="field">
@@ -101,17 +96,27 @@ function output(ctx, s) {
   const k = r.notional > 0 ? (n.amount * lev) / r.notional : 1;
   r.units *= k; r.deposit = r.margin = n.amount; r.notional = n.amount * lev; r.marginPct = n.amount / eq * 100;
   r.loss = Math.abs(n.maxLoss ?? 0); r.lossPct = r.loss / eq * 100; r.gain = n.potential ?? 0; r.gainPct = r.gain / eq * 100;
-  const lv = lossView(n.maxLoss, n.amount, lev, cs.ccy, { capped: n.maxLoss != null && n.maxLoss <= -n.amount + 0.5 });
+  /* 1.15.0 STYLES: "když vyjde / když nevyjde" from the ONE model (D.moneyAt + B.styleTxt) – the card's numbers */
+  const sn = D.moneyAt({ side: s.action, base: n.base, amount: n.amount, lev, sl: s.stop, tp: s.target, horizon: s.horizon, prof: D.profId() });
+  const sx = styleTxt(sn, cs.ccy);
+  const lv = sx.lv;
   const rate = r.quote === cs.ccy ? '' : t('calc.rate', { q: r.quote, v: F.num((fx[cs.ccy] || 1) / (fx[r.quote] || 1), 2), c: cs.ccy }) + (fx.as_of ? t('calc.rateFrom', { date: F.dm(fx.as_of) }) : t('calc.rateApprox'));
   return `<div class="result-card">
+    <div class="sty-calc mb-main sty-main is-on" data-p="${F.esc(D.profId())}" data-l="${lev}">
+      <p class="sc-dep sty-dep">${t('sty.depLine', { a: `<b class="nw num">${F.money(n.amount, cs.ccy, 0)}</b>`, l: levTxt(lev) })}${sn.share != null ? ` <small>(${t('sty.ofW', { v: F.num(Math.round(sn.share * 10) / 10, sn.share < 1 ? 1 : 0) })})</small>` : ''}</p>
+      <div class="sty-big">
+        <p class="sty-k is-win"><span class="sty-kl">${t('sty.win')}</span><b class="num up" data-win="${Math.round(sn.win)}">${sx.win}</b>${sn.est ? `<small>${t('sty.winEst')}</small>` : ''}</p>
+        <p class="sty-k is-loss"><span class="sty-kl">${t('sty.loss')}</span><b class="num down" data-lv="${sx.lv?.v ?? ''}">${sx.loss}</b>${sx.note ? `<small>${sx.note}</small>` : ''}</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-small sty-cmp" data-action="style-compare" data-id="${F.esc(s.id)}">${t('sty.cmp')}${icon('chev-right', 'icon-xs')}</button>
+    </div>
     <p class="result-hero-l">${t('calc.size')}</p>
     <p class="result-hero num">${F.money(r.notional, cs.ccy)}</p>
     <p class="result-units num">${t('calc.units', { n: F.num(r.units, r.units < 10 ? 2 : 1), sym: F.esc(s.symbol) })}</p>
     <div class="result-grid">
       <div><p class="rg-l">${t('calc.margin')}</p><p class="rg-v num">${F.money(r.margin, cs.ccy)}</p><p class="rg-s num">${t('calc.ofAcc', { v: F.pct(r.marginPct) })}</p></div>
       <div><p class="rg-l">${t('calc.rr')}</p><p class="rg-v num">${F.rr(s.rr)}</p><p class="rg-s num">${t('calc.stopDist', { v: F.pct(r.stopDist, 1) })}</p></div>
-      <div><p class="rg-l">${t('calc.loss')}</p><p class="rg-v num down">${lv ? lv.txt : F.money(-r.loss, cs.ccy)}</p><p class="rg-s num">${lv && lv.capped ? F.esc(allTxt(lv)) : t('calc.ofAcc', { v: F.spct(-r.lossPct, 2) })}</p></div>
-      <div><p class="rg-l">${t('calc.gain')}</p><p class="rg-v num up">+${F.money(r.gain, cs.ccy)}</p><p class="rg-s num">${t('calc.ofAcc', { v: F.spct(r.gainPct, 2) })}</p></div>
+
     </div>
     <div class="callout">${icon('info')}<div>${t('calc.levNote5', { a: F.money(r.deposit, cs.ccy, 0), n: F.money(r.notional, cs.ccy, 0), lev: lev > 1 ? `1:${lev}` : t('mb.noLev') })}</div></div>
     <p class="jnote" style="margin-top:12px">${F.esc(t('calc.foot', { rate }))}</p>
