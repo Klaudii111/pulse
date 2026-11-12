@@ -1,0 +1,233 @@
+/* =====================================================================================================
+   PULSE skin "Noční tyrkys" (owner pick 12. 11. 2026). Load AFTER css/app.css. Dark only.
+   · deep petrol background: rendered picture img/bg/bg-*.webp|jpg, CSS glows as the fallback (static, no animation)
+   · glass (backdrop blur) only where content scrolls underneath or the surface is the hero:
+     top bar, floating tab bar, sheets, the two money hero cards. Lists use a translucent fill without blur
+     (same look over the smooth glow, no blur cost while scrolling on cheap phones).
+   · one gradient (teal #22D3C5 -> blue #2E8BFF, dark ink) for primary actions; buy / sell solid green / red
+   · all text tokens checked >= 4.5 : 1 on the surfaces they sit on
+   ===================================================================================================== */
+:root, :root:not([data-theme='light']) {
+  color-scheme: dark;
+  --bg: #020A0D; --bg-sunk: #01070A;
+  /* solid surfaces (toasts, inner tiles, chart strokes, fallbacks) */
+  --raise: #071419; --raise-2: #0C1A1F; --raise-3: #132328; --raise-4: #1B2F35;
+  --line: rgba(160, 240, 235, 0.07); --line-2: rgba(160, 240, 235, 0.11); --line-3: rgba(160, 240, 235, 0.19);
+  /* greys a notch lighter than on a flat background: small text keeps >= 4.5 : 1 over the picture's side glows */
+  --ink: #F2FBFB; --ink-2: #BCD1D4; --ink-3: #A3BCC0; --ink-4: #5C7479;
+  --gold: #4FE3D6; --gold-hi: #7FF0E6; --gold-ink: #00171C;
+  --gold-soft: rgba(79, 227, 214, 0.12); --gold-line: rgba(79, 227, 214, 0.42);
+  --up: #3DE0A0; --up-soft: rgba(61, 224, 160, 0.12); --up-line: rgba(61, 224, 160, 0.36);
+  --down: #FF7B70; --down-soft: rgba(255, 123, 112, 0.12); --down-line: rgba(255, 123, 112, 0.36);
+  --neutral: #8FA3A7;
+  --buy: #2FD08E; --buy-hi: #45DC9D; --buy-ink: #03140B;
+  --sell: #F2685E; --sell-hi: #F57D74; --sell-ink: #1D0604;
+  --card-grad: var(--raise);
+  --glass: rgba(2, 14, 18, 0.66);
+  --scrim: rgba(0, 4, 6, 0.62);
+  --tabbar-h: 76px;
+  --r-card: 20px; --r-sheet: 26px;
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--gold);
+  /* skin-only tokens */
+  --sk-grad: linear-gradient(120deg, #22D3C5 0%, #2E8BFF 100%);
+  --sk-grad-ink: #00141A;
+  --sk-grad-shadow: 0 8px 24px -8px rgba(34, 180, 220, 0.55);
+  --sk-card: rgba(180, 255, 250, 0.045);
+  --sk-card-base: rgba(2, 10, 13, 0.55);
+  --sk-edge: rgba(160, 240, 235, 0.14);
+  --sk-hl: rgba(200, 255, 250, 0.10);
+  --sk-fill: rgba(255, 255, 255, 0.06);
+  --sk-fill-2: rgba(255, 255, 255, 0.10);
+  --sk-solid: #051317;
+  --sk-blur: blur(20px) saturate(160%);
+}
+
+/* ---------- BACKGROUND: rendered picture "AB" (glass waves at the top + soft glows at the sides; owner pick 12. 11.) ----------
+   · one fixed pseudo-element behind everything (never background-attachment: fixed - mobile repaints it on scroll)
+   · layers: picture (cover, anchored to the top so the waves stay up on every screen height) over the CSS glows
+     over #020A0D: the base colour shows at once, the picture appears when loaded, and if it fails the glows remain
+   · phone picture up to 900 px width, desktop picture above; WebP via image-set() with a JPEG fallback
+     (no var() inside these declarations: a browser without image-set(type()) keeps the plain JPEG line)
+   · prefers-reduced-transparency / prefers-reduced-data: glows only, no picture download */
+html { background: var(--bg); }
+body { background: transparent; }
+body::before, .gate, .onb {
+  background-color: #020A0D;
+  background-image: url('../img/bg/bg-phone.jpg'),
+    radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%),
+    radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%),
+    radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%);
+  background-image: image-set(url('../img/bg/bg-phone.webp') type('image/webp'), url('../img/bg/bg-phone.jpg') type('image/jpeg')),
+    radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%),
+    radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%),
+    radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%);
+  background-size: cover, 100% 100%, 100% 100%, 100% 100%;
+  background-position: center top, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat;
+}
+@media (min-width: 901px) {
+  body::before, .gate, .onb {
+    background-image: url('../img/bg/bg-desktop.jpg'),
+      radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%),
+      radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%),
+      radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%);
+    background-image: image-set(url('../img/bg/bg-desktop.webp') type('image/webp'), url('../img/bg/bg-desktop.jpg') type('image/jpeg')),
+      radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%),
+      radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%),
+      radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%);
+  }
+}
+@media (prefers-reduced-data: reduce) {
+  body::before, .gate, .onb { background-image: radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%),
+    radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%),
+    radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%); background-size: 100% 100%; }
+}
+body::before { content: ''; display: block; position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+body::after { content: none; display: none; }
+/* text that sits right on the waves (page heading, back link, subtitle, trade-page heading): a soft local shade
+   behind the text only - the waves stay bright around it */
+.page-head, .pd-head { position: relative; isolation: isolate; }
+.page-head::before, .pd-head::before { content: ''; position: absolute; z-index: -1; inset: -16px -28px -12px; pointer-events: none;
+  background: radial-gradient(85% 100% at 30% 45%, rgba(2, 10, 13, 0.76), rgba(2, 10, 13, 0.5) 55%, rgba(2, 10, 13, 0) 100%); }
+
+/* ---------- cards: translucent glass fill, 1 px light edge, inner highlight (no blur on lists) ---------- */
+.card, .sc, .wc, .hero, .acc-card, .d-acc, .d-hero, .how-card, .big-acc, .wal-card, .gtile, .next-card, .pcta, .path, .hi-card, .tile, .field, .sc.is-new, .moje-card {
+  background: linear-gradient(180deg, var(--sk-hl) -40%, transparent 38%), linear-gradient(var(--sk-card), var(--sk-card)), var(--sk-card-base);
+  border: 1px solid var(--sk-edge); border-radius: var(--r-card);
+  box-shadow: inset 0 1px 0 var(--sk-hl), 0 12px 32px -14px rgba(0, 0, 0, 0.7);
+}
+/* the two money cards are the hero: real glass + a soft teal / blue wash */
+.d-hero, .wl-hero {
+  background: radial-gradient(90% 70% at 100% 0%, rgba(46, 139, 255, 0.20), transparent 60%), radial-gradient(70% 60% at 0% 100%, rgba(34, 211, 197, 0.12), transparent 60%),
+    linear-gradient(var(--sk-card), var(--sk-card)), var(--sk-card-base);
+  -webkit-backdrop-filter: var(--sk-blur); backdrop-filter: var(--sk-blur);
+}
+.sc.is-late, .sc.is-done { background: rgba(255, 255, 255, 0.025); box-shadow: none; }
+.sc-money, .sc-res > div, .acct-note, .hw-chip { background: var(--sk-fill); border-color: var(--line-2); }
+.next-card.is-live { border-color: var(--up-line); }
+.d-empty, .hs-row { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--sk-edge); }
+.sheet .sc, .sheet .card { background: var(--sk-fill); box-shadow: none; }
+
+/* 1.15 Portfolio + trade detail: the value card is a hero, rows are list cards (no blur), tiles are fills */
+.pf-hero {
+  background: radial-gradient(90% 70% at 100% 0%, rgba(46, 139, 255, 0.18), transparent 60%), radial-gradient(70% 60% at 0% 100%, rgba(34, 211, 197, 0.10), transparent 60%),
+    linear-gradient(var(--sk-card), var(--sk-card)), var(--sk-card-base);
+  border: 1px solid var(--sk-edge); box-shadow: inset 0 1px 0 var(--sk-hl), 0 12px 32px -14px rgba(0, 0, 0, 0.7);
+  -webkit-backdrop-filter: var(--sk-blur); backdrop-filter: var(--sk-blur);
+}
+.pf-row, .pf-empty, .pf-sum {
+  background: linear-gradient(180deg, var(--sk-hl) -60%, transparent 40%), linear-gradient(var(--sk-card), var(--sk-card)), var(--sk-card-base);
+  border-color: var(--sk-edge); }
+.pf-row.is-sel { border-color: var(--gold-line); background: var(--gold-soft); }
+.pf-split a, .pd-chip, .pd-tl-ic { background: var(--sk-fill); }
+.pf-split a { border-color: var(--line-2); }
+.pd-state { background: var(--sk-fill); border-color: var(--line-2); }
+
+/* ---------- top bar + floating glass tab bar ---------- */
+.topbar { background: var(--glass); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: var(--sk-blur); backdrop-filter: var(--sk-blur); }
+.tabbar { left: 12px; right: 12px; bottom: calc(var(--sab) + 10px); padding: 6px 4px; border-radius: 26px;
+  background: var(--glass); border: 1px solid var(--sk-edge);
+  -webkit-backdrop-filter: blur(26px) saturate(180%); backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--sk-hl), 0 14px 40px -10px rgba(0, 0, 0, 0.8); }
+.tab { position: relative; isolation: isolate; border-radius: 20px; color: var(--ink-3); }
+.tab span { font-size: 10px; letter-spacing: -0.01em; }
+.tab[aria-current='page'] { color: var(--ink); font-weight: 620; }
+.tab[aria-current='page']::before { content: ''; position: absolute; top: 3px; left: 50%; width: 54px; height: 30px; transform: translateX(-50%); border-radius: 16px;
+  background: var(--gold-soft); box-shadow: inset 0 0 0 1px var(--gold-line); z-index: -1; }
+.tab[aria-current='page'] .icon { color: var(--gold); }
+.bal-pill, .icon-btn, .bell { background: var(--sk-fill); border: 1px solid var(--sk-edge); }
+.bal-pill small { color: var(--gold); background: var(--gold-soft); }
+@media (min-width: 1024px) {
+  :root:not([data-theme='light']) .sidebar, .sidebar { background: rgba(2, 14, 18, 0.55); border-right: 1px solid var(--sk-edge); }
+  .side-link:hover { background: var(--sk-fill); }
+  .side-link[aria-current='page'] { color: var(--ink); background: var(--gold-soft); box-shadow: inset 0 0 0 1px var(--gold-line); }
+}
+
+/* ---------- buttons ---------- */
+.btn-primary, .btn-invest, .cc-go, .sc-go, .stp-n, .how-n, .btn.d-hero-b {
+  background: var(--sk-grad); color: var(--sk-grad-ink); border: 0; text-shadow: none;
+  box-shadow: var(--sk-grad-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+.btn-primary .icon, .btn-invest .icon, .btn.d-hero-b .icon { color: inherit; }
+@media (hover: hover) { .btn-primary:hover, .btn-invest:hover, .btn.d-hero-b:hover { background: var(--sk-grad); filter: brightness(1.08); } }
+.btn-primary:active, .btn-invest:active, .btn.d-hero-b:active { background: var(--sk-grad); filter: brightness(0.92); }
+.btn-primary[disabled], .btn-primary[aria-disabled='true'], .btn-invest[disabled], .btn-invest[aria-disabled='true'] {
+  background: var(--raise-3); color: var(--ink-3); box-shadow: none; filter: none; }
+.btn-secondary, .invest-btn { background: var(--sk-fill); color: var(--ink); border: 1px solid var(--sk-edge); box-shadow: inset 0 1px 0 var(--sk-hl); }
+@media (hover: hover) { .btn-secondary:hover { background: var(--sk-fill-2); } }
+.invest-btn .icon { color: var(--gold); }
+.btn-danger { color: #fff; background: #C93D33; }
+.trade-btn { border-radius: 16px; }
+.trade-btn.buy { background: var(--buy); color: var(--buy-ink); box-shadow: 0 8px 22px -12px rgba(47, 208, 142, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+.trade-btn.sell { background: var(--sell); color: var(--sell-ink); box-shadow: 0 8px 22px -12px rgba(242, 104, 94, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+@media (max-width: 1099px) {
+  .trade-btns { background: color-mix(in srgb, var(--sk-solid) 96%, transparent); border: 1px solid var(--sk-edge); }
+}
+
+/* ---------- segments, chips, selections ---------- */
+.seg, .pf-sw-g, .sg-sel { background: linear-gradient(rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.045)), rgba(2, 10, 13, 0.62); border: 1px solid var(--sk-edge); }
+.seg-ind { background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.4); }
+.seg-btn .seg-count { color: var(--ink-2); background: rgba(255, 255, 255, 0.10); }
+.seg-btn[aria-selected='true'] .seg-count { color: var(--gold-ink); background: var(--gold); }
+.range-chip[aria-pressed='true'], .pf-sw-b[aria-checked='true'] { color: var(--ink); background: rgba(255, 255, 255, 0.13); box-shadow: inset 0 0 0 1px var(--sk-edge); }
+.lev-chip[aria-checked='true'], .tk-chips .chip[aria-pressed='true'], .uf-chip[aria-pressed='true'], .pick-tab[aria-selected='true'], .onb-ccy .chip[aria-checked='true'], .onb-yn .chip[aria-checked='true'] {
+  color: var(--sk-grad-ink); background: var(--sk-grad); border-color: transparent; box-shadow: none; }
+.chip, .cc-pill { background: var(--sk-fill); border-color: var(--line-2); }
+/* market tags in the picker: a long label (EN "closed · Mon–Fri 15:30–22:00 CET") wraps inside its frame */
+.pk-tag { height: auto; min-height: 18px; padding: 2px 6px; line-height: 1.25; }
+/* unavailable amount chips stay dashed + dimmed, but their label keeps >= 3 : 1 */
+.chip.is-off, .chip:disabled { opacity: 0.5; }
+.cc-chip[aria-checked='true'], .mb-col.is-on, .broker[aria-pressed='true'], .profile[aria-checked='true'], .mp-opt[aria-checked='true'], .jbtn[aria-checked='true'],
+.tk-type-b[aria-checked='true'], .mb-own-b.is-on, .lx-row.is-on, .onb-r[aria-checked='true'], .onb-pc[aria-checked='true'] {
+  border-color: var(--gold); background: var(--gold-soft); }
+.lx-tab tbody tr.is-on th, .lx-tab tbody tr.is-on td { background: var(--gold-soft); }
+.gtile-ic, .pcta-ic, .path-ic { background: var(--gold-soft); color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold-line); }
+.bell-n { background: var(--sk-grad); color: var(--sk-grad-ink); }
+
+/* ---------- sheets, inputs ---------- */
+.sheet { background: rgba(4, 18, 23, 0.92); border: 1px solid var(--sk-edge); border-bottom: 0;
+  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: inset 0 1px 0 var(--sk-hl), 0 -20px 60px rgba(0, 0, 0, 0.6); }
+.sheet-cta { background: var(--sk-solid); border-top: 1px solid var(--line); }
+.money-input input, .jin, .select, .onb-money, .gate input { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--sk-edge); }
+.toast { background: var(--raise-4); border-color: var(--line-3); }
+/* first-run guide: the Skip link sits on the waves -> its own dark pill */
+.onb-skip { background: rgba(2, 10, 13, 0.62); border-radius: 99px; }
+::placeholder, .gate input::placeholder { color: var(--ink-3); opacity: 1; }
+/* a strategy hidden after the test stays visibly dimmed but readable (0.72 -> 0.8 keeps grey text >= 4.5 : 1) */
+.le-card.is-grey { opacity: 0.8; }
+
+/* ---------- charts: quiet grid, readable axis, solid price tag ---------- */
+.br-grid { stroke: rgba(160, 240, 235, 0.08); }
+.ck-ax { fill: var(--ink-3); }
+.ck-last { stroke: rgba(242, 251, 251, 0.30); }
+.br-area { opacity: 0.14; }
+.br-line { stroke-width: 2.2; }
+.br-pulse { opacity: 0.5; }
+
+/* ---------- warm (gold) glows hard-coded in older layers of app.css -> teal ---------- */
+.inst-qr { box-shadow: 0 10px 40px rgba(34, 211, 197, 0.16); }
+.pa-glow { background: radial-gradient(closest-side, rgba(34, 211, 197, 0.16), transparent); }
+.pa-v, .perf-big { text-shadow: none; }
+.glow::before { --hero-glow: rgba(34, 211, 197, 0.12); }
+.sig.celebrate::after { box-shadow: 0 0 0 1px rgba(79, 227, 214, 0.55), 0 0 36px rgba(79, 227, 214, 0.28); }
+.ev-row.is-new { background: linear-gradient(90deg, rgba(79, 227, 214, 0.07), transparent 70%); }
+.le-light.is-watch i { box-shadow: 0 0 12px rgba(79, 227, 214, 0.5); }
+.onb-orb.o1 { background: rgba(46, 139, 255, 0.22); }
+.onb-orb.o2 { background: rgba(34, 211, 197, 0.16); }
+
+/* ---------- fallbacks: no backdrop-filter / reduced transparency -> solid fills ---------- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar, .tabbar { background: rgba(3, 15, 19, 0.97); }
+  .sheet { background: var(--sk-solid); }
+  .d-hero, .wl-hero { background: radial-gradient(90% 70% at 100% 0%, rgba(46, 139, 255, 0.16), transparent 60%), #08171B; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body::before, .gate, .onb { background-image: radial-gradient(60% 36% at 0% 0%, rgba(34, 211, 197, 0.26), transparent 70%), radial-gradient(60% 38% at 100% 30%, rgba(46, 139, 255, 0.22), transparent 70%), radial-gradient(70% 34% at 40% 104%, rgba(34, 211, 197, 0.13), transparent 70%); background-size: 100% 100%; }
+  .topbar, .tabbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .topbar { background: #03100F; }
+  .tabbar { background: #071A1E; }
+  .sheet { background: var(--sk-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .card, .sc, .wc, .hero, .acc-card, .d-acc, .d-hero, .how-card, .big-acc, .wal-card, .gtile, .next-card, .pcta, .path, .hi-card, .tile, .field, .sc.is-new, .moje-card,
+  .wl-hero { background: #08171B; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .trade-btns { background: var(--sk-solid); }
+}
