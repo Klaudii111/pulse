@@ -23,6 +23,10 @@ import { ziRobot } from './home.js';
 
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 const sg = (v, c, dec = 0) => (v == null || !Number.isFinite(v) ? '–' : Math.abs(v) < 0.5 && dec === 0 ? `±${F.money(0, c, 0)}` : (v > 0 ? '+' : '') + F.money(v, c, dec));
+/* 1.15.0 (B1): "dnes" of a trade is null while its price has not arrived on this device -> a quiet "…", never a wrong ±0 */
+const UNK = '…';
+const sgT = (v, c) => (v == null ? UNK : sg(v, c));
+const toneT = (v) => (v == null ? 'is-unk' : tone(v));
 const nm = (p) => B.whatIs(p.sym, p.name).name;
 const levTxt = (lev) => B.levTxt(lev || 1);
 const dayStart = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
@@ -60,6 +64,9 @@ export function unmount() { cleanup(); }
 /* ======================================================================================================
    PORTFOLIO
    ====================================================================================================== */
+/* the header's "Dnes": a number only when every open trade has its price (W.summary().todayReady) */
+const heroToday = (sm, h, td, c) => (sm.todayReady === false ? t('po.todayWait') : t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) }));
+const heroTodayCls = (sm, td) => (sm.todayReady === false ? 'is-unk' : `tone-${td.tone}`);
 function heroHtml(sm) {
   const h = P.head(sm);
   const c = h.ccy;
@@ -68,7 +75,7 @@ function heroHtml(sm) {
   return `<section class="pf-hero" id="pf-hero" aria-label="${F.esc(t('po.value'))}">
     <p class="d-k">${t('po.value')}${B.qh('PFVAL')}<span class="demo-chip">${t('badge.paperShort')}</span></p>
     <p class="pf-eq num" data-pf="eq" data-eq="${h.eq}">${F.money(h.eq, c, 0)}</p>
-    <p class="pf-chg num"><span class="tone-${td.tone}" data-pf="today">${t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) })}</span>
+    <p class="pf-chg num"><span class="${heroTodayCls(sm, td)}" data-pf="today">${heroToday(sm, h, td, c)}</span>
       <span class="pf-dot" aria-hidden="true">·</span><span class="tone-${tt.tone}" data-pf="total">${t('po.total', { v: tt.zero ? `±${F.money(0, c, 0)}` : F.esc(tt.text), p: F.mpct(h.totalPct, h.total) })}</span></p>
     <div class="pf-chart" id="pf-chart" role="img" aria-label="${F.esc(t('po.chartAria'))}"><p class="pchart-empty">${t('common.loading')}</p></div>
     <div class="pf-rrow"><div class="range-chips pf-ranges" role="group" aria-label="${F.esc(t('po.rangeAria'))}">${P.RANGES.map((r) => `<button type="button" class="range-chip" data-pf-range="${r.id}" aria-pressed="${r.id === P.curRange()}">${t(`po.r.${r.id}`)}</button>`).join('')}</div></div>
@@ -95,7 +102,7 @@ export function row(p, sm, { compact = false, sel = false } = {}) {
       ${compact ? '' : `<span class="pf-when"><span class="pf-src is-${f.src.kind}">${F.esc(srcText(f.src))}</span></span>`}</span>
     <span class="pf-v num">${compact ? '' : `<span class="pf-spark mi-spark ${tone(td ?? 0)}" data-f="spark" aria-hidden="true">${sp ? sparkline(sp, { w: 56, h: 18 }) : ''}</span>`}<b data-f="value">${F.money(f.value, c, 0)}</b>
       <span class="pf-res ${tone(p.pnl)}" data-f="pnl">${sg(p.pnl, c)} · ${F.mpct(p.pnlPct, p.pnl)}</span>
-      ${compact ? '' : `<small class="pf-td ${tone(td ?? 0)}" data-f="today">${t('po.rowToday', { v: sg(td ?? 0, c) })}</small>`}</span>
+      ${compact ? '' : `<small class="pf-td ${toneT(td)}" data-f="today">${t('po.rowToday', { v: sgT(td, c) })}</small>`}</span>
   </a>`;
 }
 
@@ -327,7 +334,7 @@ function noteHtml(h, c) {
   const n = document.getElementById('pf-cnote');
   if (!n) return;
   const tn = D.moneyTone(h.change, c, h.changePct);
-  const parts = [`<span class="tone-${tn.tone}">${t(`po.ch.${h.range}`, { v: tn.zero ? `±${F.money(0, c, 0)}` : F.esc(tn.text), p: F.mpct(h.changePct, h.change) })}</span>`];
+  const parts = [h.range === 'd' && h.unk ? `<span class="is-unk">${t('po.todayWait')}</span>` : `<span class="tone-${tn.tone}">${t(`po.ch.${h.range}`, { v: tn.zero ? `±${F.money(0, c, 0)}` : F.esc(tn.text), p: F.mpct(h.changePct, h.change) })}</span>`];
   if (h.short) parts.push(F.esc(t('po.since', { d: F.dm(new Date(h.made)) })));
   if (h.approx) parts.push(`<span class="pf-approx">${F.esc(t('po.approx', { s: h.missing.join(', ') }))}</span>`);
   n.innerHTML = parts.join(' · ');
@@ -355,7 +362,7 @@ function drawChart(ctx) {
   const flows = (sm.w.cash || []).filter((x) => (x.k === 'dep' || x.k === 'wd') && x.at > h.pts[0].t).reduce((a, x) => a + x.amount, 0);
   h.change = h.pts[lastI].v - h.pts[0].v - flows; h.changePct = h.change / (h.pts[0].v || 1) * 100;
   /* "Dnes" on the chart = the header's "Dnes" (ONE number: W.summary().today); the dashed line = where the day started */
-  if (h.range === 'd') { const hd = P.head(sm); h.change = hd.today; h.changePct = hd.todayPct; h.base = sm.equity - sm.today; } else h.base = null;
+  if (h.range === 'd') { const hd = P.head(sm); if (sm.todayReady === false) { h.unk = true; } else h.unk = false; h.change = hd.today; h.changePct = hd.todayPct; h.base = sm.equity - sm.today; } else h.base = null;
   eqSvg(document.getElementById('pf-chart'), h, sm.w.ccy);
   noteHtml(h, sm.w.ccy);
 }
@@ -371,7 +378,7 @@ function patchRows(root, sm) {
       if (vEl && !matchMedia('(prefers-reduced-motion: reduce)').matches) { vEl.classList.remove('flash-up', 'flash-down'); void vEl.offsetWidth; vEl.classList.add(f.value >= +(vEl.dataset.v || f.value) ? 'flash-up' : 'flash-down'); }
       if (vEl) vEl.dataset.v = String(f.value);
       const pn = set('pnl', `${sg(p.pnl, c)} · ${F.mpct(p.pnlPct, p.pnl)}`); if (pn) pn.className = `pf-res ${tone(p.pnl)}`;
-      const td = set('today', t('po.rowToday', { v: sg(f.today ?? 0, c) })); if (td) td.className = `pf-td ${tone(f.today ?? 0)}`;
+      const td = set('today', t('po.rowToday', { v: sgT(f.today, c) })); if (td) td.className = `pf-td ${toneT(f.today)}`;
       el.classList.remove('pf-t-up', 'pf-t-down', 'pf-t-flat'); el.classList.add(`pf-t-${tone(p.pnl)}`);
     });
   });
@@ -382,7 +389,7 @@ function patchHero(root, sm) {
   const set = (k, v) => { const n = root.querySelector(`[data-pf="${k}"]`); if (n && n.innerHTML !== v) n.innerHTML = v; return n; };
   const e = set('eq', F.money(h.eq, c, 0)); if (e) e.dataset.eq = String(h.eq);
   const td = D.moneyTone(h.today, c, h.todayPct), tt = D.moneyTone(h.total, c, h.totalPct);
-  const a = set('today', t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) })); if (a) a.className = `tone-${td.tone}`;
+  const a = set('today', heroToday(sm, h, td, c)); if (a) a.className = heroTodayCls(sm, td);
   const b = set('total', t('po.total', { v: tt.zero ? `±${F.money(0, c, 0)}` : F.esc(tt.text), p: F.mpct(h.totalPct, h.total) })); if (b) b.className = `tone-${tt.tone}`;
   set('inplay', F.money(h.inPlay, c, 0)); set('free', F.money(h.free, c, 0)); set('n', String(h.n));
 }
@@ -465,7 +472,7 @@ function kolikHtml(p, sm) {
     f.closed ? kvRow(t(p.side === 'SELL' ? 'pd.k.buyBack' : 'pd.k.exitPx'), pxC(p.sym, p.exit), { key: 'exit' }) : kvRow(t('pd.k.px'), pxC(p.sym, f.px), { key: 'px' }),
     kvRow(t(f.closed ? 'pd.k.valEnd' : 'pd.k.val'), F.money(f.value, c, 0), { key: 'value', cls: 'is-strong' }),
     kvRow(t(f.closed ? 'pd.k.resEnd' : 'pd.k.res'), `<span class="${tone(p.pnl)}">${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})</span>`, { key: 'pnl', cls: 'is-strong' }),
-    f.closed ? '' : kvRow(t('pd.k.today'), `<span class="${tone(f.today ?? 0)}">${sg(f.today ?? 0, c)}</span>`, { hint: t('pd.k.todayS'), key: 'today' }),
+    f.closed ? '' : kvRow(t('pd.k.today'), `<span class="${toneT(f.today)}">${sgT(f.today, c)}</span>`, { hint: t('pd.k.todayS'), key: 'today' }),
     kvRow(t('pd.k.fees'), `${t('pd.k.feesV', { s: F.money(f.spread, c, f.spread < 10 && c === 'CZK' ? 0 : f.spread < 10 ? 2 : 0), n: F.money(f.swap, c, f.swap > 0 && f.swap < 10 ? 2 : 0) })}${f.closed && p.fee > 0.5 ? `<small class="pd-q">${t('term.convFee', { v: F.money(p.fee, c, 0) })}</small>` : ''}`, { hint: t(p.lev > 1 ? 'pd.k.feesS' : 'pd.k.feesS1'), key: 'fees' }),
   ];
   if (!f.closed) {
@@ -602,7 +609,7 @@ function topHtml(p, sm, closed) {
   return `<section class="pd-top card pf-t-${tone(p.pnl)}"><p class="d-k">${t('pd.valK')}</p>
     <p class="pd-val num" data-d="value">${F.money(f.value, c, 0)}</p>
     <p class="pd-res num"><span class="${tone(p.pnl)}" data-d="pnl">${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})</span><span class="pd-res-l">${t('pd.resK')}</span></p>
-    <p class="pd-res num"><span class="${tone(f.today ?? 0)}" data-d="today">${sg(f.today ?? 0, c)}</span><span class="pd-res-l">${t('pd.todayK')}</span></p></section>`;
+    <p class="pd-res num"><span class="${toneT(f.today)}" data-d="today">${sgT(f.today, c)}</span><span class="pd-res-l">${t('pd.todayK')}</span></p></section>`;
 }
 
 function chartHtml(p, closed, data) {
@@ -740,7 +747,7 @@ export function mountTrade(el, ctx) {
       if (vEl && !matchMedia('(prefers-reduced-motion: reduce)').matches) { vEl.classList.remove('flash-up', 'flash-down'); void vEl.offsetWidth; vEl.classList.add(fx.value >= +(vEl.dataset.v || fx.value) ? 'flash-up' : 'flash-down'); }
       if (vEl) vEl.dataset.v = String(fx.value);
       const a = set('pnl', `${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})`); if (a) a.className = tone(p.pnl);
-      const b = set('today', sg(fx.today ?? 0, c)); if (b) b.className = tone(fx.today ?? 0);
+      const b = set('today', sgT(fx.today, c)); if (b) b.className = toneT(fx.today);
       set('ctaV', sg(p.pnl, c));
       const q = W.priceOf(p.sym, ctx.data);
       const pxEl = el.querySelector('[data-d="px"]');
@@ -887,7 +894,7 @@ export function dnesBlock(ctx) {
   const td = D.moneyTone(sm.todayOpen, c, null);
   const ords = (sm.w.orders || []).map((o) => ordRow(o, ctx.data, c)).join('');
   const head = `<a class="pf-sum" href="#/portfolio" id="d-pf"><span class="pf-sum-l"><b>${t('po.sumK', { n: h.n })}</b><small class="num">${t('po.sumS', { a: F.money(sm.used, c, 0) })}</small></span>
-    <span class="pf-sum-v num"><b class="tone-${open.tone}">${open.zero ? `±${F.money(0, c, 0)}` : F.esc(open.text)}</b><small class="tone-${td.tone}">${t('po.rowToday', { v: sg(sm.todayOpen, c) })}</small></span>${icon('chev-right', 'icon-xs')}</a>`;
+    <span class="pf-sum-v num"><b class="tone-${open.tone}">${open.zero ? `±${F.money(0, c, 0)}` : F.esc(open.text)}</b><small class="${sm.todayReady === false ? 'is-unk' : `tone-${td.tone}`}">${t('po.rowToday', { v: sm.todayReady === false ? UNK : sg(sm.todayOpen, c) })}</small></span>${icon('chev-right', 'icon-xs')}</a>`;
   const max = 4;
   const more = rows.length > max ? `<a class="d-more" href="#/portfolio">${t('po.allN', { n: rows.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
   return `${head}${rows.length || ords ? `<div class="pf-list">${rows.slice(0, max).map((p) => row(p, sm)).join('')}${ords}</div>${more}` : `<p class="d-empty">${t('d.mine0')}</p>`}`;

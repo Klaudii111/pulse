@@ -1,1 +1,3 @@
 /* 1.15.0 release round (B): Portfolio, trade page, Obchodovat, Peněženka, Historie, Více – fixes after the client's-eyes review. Skin tokens only (no hard colours). */
+/* B1: "dnes" not known yet (prices still loading) – quiet grey placeholder */
+.pf-td.is-unk, .pd-kvs .is-unk, .pd-res .is-unk, .pf-chg .is-unk, .pf-sum-v .is-unk, .pf-cnote .is-unk { color: var(--ink-3); font-weight: 500; }
