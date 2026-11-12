@@ -106,4 +106,10 @@ export default {
   'den.brk0.sell': 'The signal came at {at}. In the demo, enter only if the price is still at least {v}. Valid until {until}.',
   'den.minW.one': 'minute', 'den.minW.other': 'minutes',
   'den.noDemo': 'This market is not in the demo yet – the signal is for information only.',
+  /* 1.15.3 (E): the daily robot's market names and the kinds of markets when there are more than four */
+  'mkt.k.FR40': 'CAC 40 (France)', 'mkt.k.ETHUSD': 'Ethereum', 'mkt.k.WTI': 'WTI crude oil',
+  'den.kind.idx': 'indices ({c})', 'den.kind.gold': 'gold', 'den.kind.silver': 'silver', 'den.kind.oil': 'oil', 'den.kind.crypto': 'crypto', 'den.kind.fx': 'currencies',
+  'den.cty.US': 'US', 'den.cty.DE': 'Germany', 'den.cty.FR': 'France', 'den.cty.UK': 'UK', 'den.cty.JP': 'Japan',
+  'den.sub2': 'Experimental one-day trades on {m} – fictional money only',
+  'den.what': 'It looks for one-day trades on {m}: it enters and closes the trade the same day – betting on a rise or a fall.',
 };

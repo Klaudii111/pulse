@@ -63,4 +63,9 @@ export default {
   'den.brk0.sell': 'Signál vznikl v {at}. V demu vstup jen, když je cena pořád nejníž {v}. Platí do {until}.',
   'den.minW.one': 'minutu', 'den.minW.few': 'minuty', 'den.minW.many': 'minuty', 'den.minW.other': 'minut',
   'den.noDemo': 'V demu tento trh zatím není – signál je jen pro informaci.',
+  /* 1.15.3 (E): jména trhů denního robota a druhy trhů, když jich je víc než čtyři */
+  'mkt.k.FR40': 'CAC 40 (Francie)', 'mkt.k.ETHUSD': 'Ethereum', 'mkt.k.WTI': 'Ropa WTI',
+  'den.kind.idx': 'indexech ({c})', 'den.kind.gold': 'zlatě', 'den.kind.silver': 'stříbře', 'den.kind.oil': 'ropě', 'den.kind.crypto': 'kryptoměnách', 'den.kind.fx': 'měnách',
+  'den.cty.US': 'USA', 'den.cty.DE': 'Německo', 'den.cty.FR': 'Francie', 'den.cty.UK': 'Británie', 'den.cty.JP': 'Japonsko',
+  'den.sub2': 'Zkušební obchody na jeden den na {m} – jen fiktivní peníze',
 };

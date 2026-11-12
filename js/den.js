@@ -36,12 +36,13 @@ export async function load(force = false) {
 export const state = () => st;
 
 const arr = (x) => (Array.isArray(x) ? x : []);
-const n2 = (v, d = 1) => (Number.isFinite(+v) ? F.num(+v, d) : '–');
+const n2 = (v, d = 1) => (v != null && v !== '' && Number.isFinite(+v) ? F.num(+v, d) : '–');
 const px = (v) => (Number.isFinite(+v) && +v > 0 ? F.num(+v, 1) : '–');
 const side = (s) => (s?.smer === 'PRODEJ' ? 'SELL' : 'BUY');
 const cs = () => lang() === 'cs';
 const mktName = (k) => (k ? (t(`mkt.k.${k}`) !== `mkt.k.${k}` ? t(`mkt.k.${k}`) : String(k)) : '–');
-const mkt = (k) => (k ? (t(`mkt.k.${k}`) !== `mkt.k.${k}` ? `${t(`mkt.k.${k}`)} (${k})` : k) : '–');
+/* "DAX (DE40)"; a name that already carries its own bracket or the code ("CAC 40 (Francie)", "Ropa WTI") stays as it is */
+const mkt = (k) => { if (!k) return '–'; const n = mktName(k); return n === String(k) || n.includes('(') || n.includes(String(k)) ? n : `${n} (${k})`; };
 const ms = (iso) => { const v = Date.parse(iso || 0); return v > 0 ? v : null; };
 /* the robot's own (Czech) text, with local number / date formats */
 const hum = (x) => F.esc(F.human(String(x ?? '')));
@@ -63,18 +64,60 @@ export function pragueDay(v) {
 const dayLabel = (x) => `${F.weekdayShort(new Date(x))} ${F.dm(new Date(x))}`;
 const period = (p) => { const y = /(\d{4}).*?(\d{4})/.exec(String(p || '')); return y ? `${y[1]}–${y[2]}` : '2023–2026'; };
 /* list of market names: "S&P 500, Nasdaq 100 a DAX" */
+const join = (l) => (l.length === 1 ? l[0] : `${l.slice(0, -1).join(', ')} ${t('den.and')} ${l[l.length - 1]}`);
+/* 1.15.3: more than four markets -> the kinds instead: "indexech (USA, Německo, Francie), zlatě, ropě a kryptoměnách" */
+const IDX_CTY = { US500: 'US', US100: 'US', US30: 'US', DE40: 'DE', FR40: 'FR', UK100: 'UK', JP225: 'JP' };
+const KIND = { XAUUSD: 'gold', XAGUSD: 'silver', WTI: 'oil', BRENT: 'oil', BTCUSD: 'crypto', ETHUSD: 'crypto', SOLUSD: 'crypto' };
 function mktList(trhy) {
-  const l = arr(trhy).filter(Boolean).map(mktName);
-  if (!l.length) return t('den.mkt0');
-  return l.length === 1 ? l[0] : `${l.slice(0, -1).join(', ')} ${t('den.and')} ${l[l.length - 1]}`;
+  const ks = [...new Set(arr(trhy).filter(Boolean).map(String))];
+  if (!ks.length) return t('den.mkt0');
+  if (ks.length <= 4) return join(ks.map(mktName));
+  const cty = [], kinds = [], other = [];
+  ks.forEach((k) => {
+    if (IDX_CTY[k]) { if (!cty.includes(IDX_CTY[k])) cty.push(IDX_CTY[k]); }
+    else if (KIND[k]) { if (!kinds.includes(KIND[k])) kinds.push(KIND[k]); }
+    else if (/^[A-Z]{6}$/.test(k)) { if (!kinds.includes('fx')) kinds.push('fx'); }
+    else other.push(mktName(k));
+  });
+  const parts = [];
+  cty.sort((a, b) => 'US DE FR UK JP'.indexOf(a) - 'US DE FR UK JP'.indexOf(b));
+  kinds.sort((a, b) => 'gold silver oil crypto fx'.indexOf(a) - 'gold silver oil crypto fx'.indexOf(b));
+  if (cty.length) parts.push(t('den.kind.idx', { c: cty.map((c) => t(`den.cty.${c}`)).join(', ') }));
+  kinds.forEach((k) => parts.push(t(`den.kind.${k}`)));
+  return join(parts.concat(other));
 }
 
 /* "15:55 New York" / "17:25 Frankfurt" -> the same moment in the user's clock, on the day of `ref` (an ISO time with its offset) */
+/* 1.15.3: v3 writes cas_signalu in UTC ("…+00:00"), so the city in the text decides the zone, not the offset of `ref` */
+const CITY_TZ = [[/new\s*york/i, 'America/New_York'], [/frankfurt|paříž|paris|xetra/i, 'Europe/Berlin'], [/londýn|london/i, 'Europe/London'], [/praha|prague|našeho času/i, 'Europe/Prague']];
+function tzWall(tz, y, mo, d, h, mi) {
+  /* the UTC moment whose wall clock in tz is y-mo-d h:mi (two passes cover the DST edge) */
+  try {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const want = Date.UTC(y, mo - 1, d, h, mi);
+    let g = want;
+    for (let i = 0; i < 2; i++) {
+      const p = Object.fromEntries(f.formatToParts(new Date(g)).map((x) => [x.type, x.value]));
+      const seen = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute);
+      g += want - seen;
+    }
+    return g;
+  } catch { return null; }
+}
 export function nyClock(txt, ref) {
   const m = /(\d{1,2}):(\d{2})/.exec(String(txt || ''));
-  const r = /^(\d{4}-\d{2}-\d{2})T.*([+-]\d{2}:\d{2})$/.exec(String(ref || ''));
+  const r = /^(\d{4}-\d{2}-\d{2})T.*([+-]\d{2}:\d{2}|Z)$/.exec(String(ref || ''));
   if (!m || !r) return null;
-  const d = Date.parse(`${r[1]}T${m[1].padStart(2, '0')}:${m[2]}:00${r[2]}`);
+  const tz = (CITY_TZ.find(([re]) => re.test(String(txt))) || [])[1];
+  if (tz) {
+    /* the calendar day of the signal in that city */
+    let day = r[1];
+    try { day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.parse(ref))); } catch { /* keep */ }
+    const [y, mo, d] = day.split('-').map(Number);
+    const g = tzWall(tz, y, mo, d, +m[1], +m[2]);
+    if (Number.isFinite(g)) return new Date(g);
+  }
+  const d = Date.parse(`${r[1]}T${m[1].padStart(2, '0')}:${m[2]}:00${r[2] === 'Z' ? 'Z' : r[2]}`);
   return Number.isFinite(d) ? new Date(d) : null;
 }
 
@@ -295,7 +338,16 @@ function factsHtml(j, s, now) {
     ${Number.isFinite(r) && s.vysledek_R != null ? `<p class="den-st">${t('den.Rexpl')}</p>` : ''}
     ${isLate(s) ? `<p class="den-st">${t('den.lateExpl')}</p>` : ''}`;
 }
-const styleLines = (j) => arr(j?.styly).filter((y) => y && y.test).map((y) => `<li>${F.esc(t('den.style', { m: mktList(y.trhy), p: period(y.test.obdobi), pf: n2(y.test.pf, 2), n: y.test.obchodu ?? '–', w: y.test.vyhry_pct != null ? F.pct(+y.test.vyhry_pct, 0) : '–', j: y.test.jistota_pct != null ? F.pct(+y.test.jistota_pct, 0) : '–' }))}</li>`).join('');
+/* jistota_pct: 94 -> "94 %", "88–98" -> "88–98 %", a Czech word ("nízká – …") only in Czech */
+function certainty(v) {
+  if (v == null || v === '') return '–';
+  if (Number.isFinite(+v)) return F.pct(+v, 0);
+  const r = /^(\d+)\s*[–-]\s*(\d+)$/.exec(String(v).trim());
+  if (r) return F.pct(+r[2], 0).replace(/^[^\d]*\d+/, `${r[1]}–${r[2]}`);
+  return cs() ? F.human(String(v)) : '–';
+}
+/* the robot's style groups: order of the markets as the user reads them (USA first) */
+const styleLines = (j) => arr(j?.styly).filter((y) => y && y.test).map((y) => `<li>${F.esc(t('den.style', { m: mktList(y.trhy), p: period(y.test.obdobi), pf: n2(y.test.pf, 2), n: y.test.obchodu ?? '–', w: y.test.vyhry_pct != null ? F.pct(+y.test.vyhry_pct, 0) : '–', j: certainty(y.test.jistota_pct) }))}</li>`).join('');
 
 export function render(ctx) {
   const now = ctx.now();
