@@ -97,7 +97,6 @@ export function renderInfo(ctx) {
 
 /* ---------- Settings ---------- */
 export function renderSettings(ctx) {
-  const theme = store.get('theme', 'dark');
   const prox = D.proximityPct();
   const inst = P.installState();
   const sup = P.pushSupport();
@@ -120,8 +119,6 @@ export function renderSettings(ctx) {
     <h2 class="section-title">${t('set.trade')}</h2>
     <div class="card"><div class="card-row"><div><p class="card-t">${t('set.pro')}</p><p class="card-s">${t('set.proS')}</p></div>
       <button class="switch" role="switch" type="button" aria-checked="${Mkt.isPro()}" data-action="pro-toggle" aria-label="${t('set.pro')}"></button></div></div>
-    <h2 class="section-title">${t('set.look')}</h2>
-    <div class="card">${seg({ name: 'theme', small: true, label: t('set.look'), items: [{ id: 'dark', label: t('set.dark') }, { id: 'light', label: t('set.light') }], active: theme })}</div>
     <h2 class="section-title">${t('set.app')}</h2>
     <div class="card"><div class="card-row"><div><p class="card-t">${t('set.install')}</p><p class="card-s">${t(instMsg)}</p></div>
       ${inst === 'installed' ? '' : `<button class="btn btn-secondary btn-small" type="button" data-action="install">${t(inst === 'ios' ? 'nudge.how' : 'nudge.install')}</button>`}</div></div>

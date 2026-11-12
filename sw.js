@@ -14,6 +14,7 @@ const SHELL_FILES = [
   './config.js',
   './manifest.webmanifest',
   './css/app.css',
+  './css/skin.css',
   './js/app.js',
   './js/ui.js',
   './js/format.js',

@@ -432,10 +432,10 @@ function nudgeHtml() {
 
 /* ---------- Theme ---------- */
 function applyTheme() {
-  const th = store.get('theme', 'dark');
-  document.documentElement.dataset.theme = th;
+  /* 1.15.0 skin "Noční tyrkys" is dark only: a stored 'light' from older versions is ignored */
+  document.documentElement.dataset.theme = 'dark';
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute('content', th === 'light' ? '#f4f2ee' : CONFIG.THEME_COLOR);
+  if (m) m.setAttribute('content', CONFIG.THEME_COLOR);
 }
 
 /* ---------- Global actions (event delegation) ---------- */
