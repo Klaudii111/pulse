@@ -28,3 +28,8 @@
 .rb-my { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--gold); min-height: 32px; }
 .rb-v { font-size: 15px; } .rb-v.up { color: var(--up); } .rb-v.down { color: var(--down); }
 .dh-wait { color: var(--ink-4); font-weight: 500; }
+
+/* A2 / A8 the small price line above the ticket's main button */
+.tk-pxl { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0 0 8px; font-size: 12.5px; color: var(--ink-3); text-align: center; }
+.tk-short-m { color: var(--down); font-weight: 600; font-size: 13.5px; }
+.tk-chips .chip.is-off { opacity: .45; }

@@ -603,10 +603,26 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const exp = W.expiryFor(st.valid, sigW);
     return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'term.tkLimSell' : 'term.tkLimBuy', { v: pxOf(sym, st.limit), sym })} ${F.esc(d.text.charAt(0).toUpperCase() + d.text.slice(1))}. ${t('term.tkLimUntil', { d: F.dmTime(exp) })}</span></p>`;
   };
-  const goText = () => (mktOpen() ? t(side === 'SELL' ? 'inv.goAtOpenSell' : 'inv.goAtOpen', { d: sess().o ? openWhen(sess().o) : '' })
-    : atOpen() ? t(side === 'SELL' ? 'inv.goOpenSell' : 'inv.goOpen', { v: pxC(sym, st.limit || 0) })
-    : isLim() ? t(side === 'SELL' ? 'inv.goLimSell' : 'inv.goLim', { v: pxC(sym, st.limit || 0) })
-    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, fillPx()) }));
+  /* 1.15.0 (A2): the main button carries the money that leaves my wallet ("Koupit za 6 000 Kč"); the price of one unit
+     goes on the small line above it (pxLine). (A8): not enough free money -> the button becomes "Dobít peněženku". */
+  const freeNow = () => Math.max(0, Math.floor(W.summary(ctx.data).free));
+  const short = () => st.amount > 0 && st.amount > freeNow();
+  const S = side === 'SELL' ? 'Sell' : '';
+  const goText = () => {
+    if (short()) return t('tk.topup');
+    const a = st.amount > 0 ? money(st.amount, c) : '';
+    const k = mktOpen() || atOpen() ? 'tk.goOpen' : isLim() ? 'tk.goLim' : 'tk.goNow';
+    return a ? t(k + S, { a }) : t(k + S + '0');
+  };
+  const pxLine = () => {
+    const when = sess().o ? openWhen(sess().o) : '';
+    const v = mktOpen() ? t('tk.pxOpen' + S, { v: pxC(sym, capPx()), d: when })
+      : atOpen() ? t('tk.pxOpen' + S, { v: pxC(sym, st.limit || 0), d: when })
+      : isLim() ? t('tk.pxLim' + S, { v: pxC(sym, st.limit || 0) })
+      : t('tk.pxNow', { v: pxC(sym, fillPx()) });
+    const fr = short() ? `<span class="tk-short-m">${t('tk.freeShort', { v: money(freeNow(), c) })}</span>` : '';
+    return `${fr}<span>${v}</span>`;
+  };
   const blocked = () => false;
   /* the at-open line: when it buys, the protection and until when the order waits (the instrument's own session) */
   const openLine = () => {
@@ -638,11 +654,11 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     </div>${limLine()}${openLine()}`;
   };
   const body = () => `
-    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num" data-tkpx><small>${t(side === 'SELL' ? 'px.sellAt' : 'px.buyAt')}</small> ${pxC(sym, fillPx())}</b></div>
+    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num" data-tkpx><small>${t('tk.pxHead')}</small> ${pxC(sym, fillPx())}</b></div>
     ${side === 'SELL' ? `<p class="tk-short">${t('tk.short')}</p>` : ''}
     ${useSig ? `<p class="tk-sig">${icon('signals', 'icon-xs')}${t('term.tkFromSig')}</p>` : ''}
     <p class="sheet-label">${t('inv.howMuch')}</p>
-    <div class="chips tk-chips tk-pre${presets.map((v) => money(v, c)).join('').replace(/<[^>]+>/g, '').length > 34 ? ' is-2x2' : ''}">${presets.map((v) => `<button type="button" class="chip" data-amt="${v}" aria-pressed="${st.risk == null && st.amount === v}">${money(v, c)}</button>`).join('')}</div>
+    <div class="chips tk-chips tk-pre${presets.map((v) => money(v, c)).join('').replace(/<[^>]+>/g, '').length > 34 ? ' is-2x2' : ''}">${presets.map((v) => `<button type="button" class="chip${v > freeNow() ? ' is-off' : ''}" data-amt="${v}" aria-disabled="${v > freeNow()}" aria-pressed="${st.risk == null && st.amount === v}">${money(v, c)}</button>`).join('')}</div>
     <label class="tk-in"><span>${t('inv.own', { c })}</span><input class="jin num" inputmode="numeric" autocomplete="off" data-in="amount" value="${amtIn(st.amount)}"></label>
     <div id="tk-out">${preview()}</div>
     <details class="tk-adv"><summary>${t('inv.adv')}${icon('chev-down', 'icon-xs')}</summary>
@@ -664,6 +680,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     <p class="risk-line">${t('risk.line')}</p>
     <div class="sheet-cta tk-cta">
     <p class="tk-block" id="tk-block" ${blocked() ? '' : 'hidden'}>${icon('clock', 'icon-xs')}<span>${t('term.closedWhy', { h: F.esc(M.hours(sym)) })}</span></p>
+    <p class="tk-pxl num" data-pxl>${pxLine()}</p>
     <button type="button" class="btn btn-primary btn-block tk-go" data-go ${blocked() ? 'disabled' : ''}>${goText()}</button></div>`;
   openSheet({
     small: true, label: t('term.ticket'),
@@ -682,10 +699,15 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         st.auto = true; st.risk = null; resize(); upd();
       };
       document.addEventListener('pulse:prof', onStyle);
+      /* A8: after "Dobít peněženku" the ticket below refreshes (button back to "Koupit za …") */
+      const onWal = () => { if (!root.isConnected) { document.removeEventListener('pulse:wallet', onWal); return; } upd(); };
+      document.addEventListener('pulse:wallet', onWal);
       const upd = () => {
         root.querySelector('#tk-out').innerHTML = preview();
         const go = root.querySelector('[data-go]');
         go.textContent = goText();
+        const pl = root.querySelector('[data-pxl]'); if (pl) pl.innerHTML = pxLine();
+        root.querySelectorAll('[data-amt]').forEach((b) => { const off = +b.dataset.amt > freeNow(); b.classList.toggle('is-off', off); b.setAttribute('aria-disabled', String(off)); });
         go.disabled = blocked();
         root.querySelector('#tk-block').hidden = !blocked();
         root.querySelectorAll('[data-amt]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk == null && +b.dataset.amt === st.amount)));
@@ -704,6 +726,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const va = ev.target.closest('[data-seg-name="tvalid"]');
         if (ty) { st.type = ty.dataset.otype; root.querySelectorAll('[data-otype]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.otype === st.type))); root.querySelector('#tk-limf').hidden = !isLim(); applyRisk(); haptic(); upd(); }
         if (va) { ev.preventDefault(); ev.stopPropagation(); st.valid = va.dataset.id; segMove(root, 'tvalid', st.valid); haptic(); upd(); }
+        if (a && +a.dataset.amt > freeNow()) { haptic(); return; }
         if (a) { st.risk = null; st.auto = false; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = amtIn(st.amount); haptic(); upd(); }
         if (r) { st.risk = +r.dataset.risk; st.auto = false; applyRisk(); haptic(); upd(); }
         /* a one-off leverage for THIS ticket: never reaches the global profile handler */
@@ -720,6 +743,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const dt = ev.target.closest('[data-tkdet]'); if (dt) st.detOpen = !dt.parentElement.open;
         const goB = ev.target.closest('[data-go]');
         if (!goB || goB.disabled) return;
+        if (short()) { loadSheet(ctx, 'dep'); return; }
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
         if (mktOpen()) {
           const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: capPx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen && useSig ? sig.id : null, valid: 'sess', sig: sigW, atOpen: true });
@@ -890,6 +914,7 @@ export function loadSheet(ctx, mode = 'dep') {
           if (!r.ok) { toast(t(`ld.err.${r.reason}`, { v: money(free(), c) })); return; }
           haptic(20); closeTopSheet();
           toast(t(m === 'dep' ? 'ld.done' : 'ld.doneWd', { v: money(amt, c) }));
+          document.dispatchEvent(new CustomEvent('pulse:wallet'));
           setTimeout(() => ctx.rerender({ soft: true }), 380);
         }
       });

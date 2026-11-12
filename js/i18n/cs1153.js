@@ -16,4 +16,15 @@ export default {
   'rb.myDone': 'Tvůj obchod',
   /* A6 Dnes header while today's prices are not on this device yet */
   'dh.todayWait': 'Dnes …',
+  /* A2 the main button = the money that leaves my wallet; the price of one unit on the small line above it */
+  'tk.goNow': 'Koupit za {a}', 'tk.goNowSell': 'Prodat za {a}', 'tk.goNow0': 'Koupit', 'tk.goNowSell0': 'Prodat',
+  'tk.goOpen': 'Koupit při otevření za {a}', 'tk.goOpenSell': 'Prodat při otevření za {a}', 'tk.goOpen0': 'Koupit při otevření', 'tk.goOpenSell0': 'Prodat při otevření',
+  'tk.goLim': 'Nastavit nákup za {a}', 'tk.goLimSell': 'Nastavit prodej za {a}', 'tk.goLim0': 'Nastavit nákup', 'tk.goLimSell0': 'Nastavit prodej',
+  'tk.pxNow': 'cena teď {v} za kus',
+  'tk.pxOpen': 'nejvýš {v} za kus · burza otevře {d}', 'tk.pxOpenSell': 'nejníž {v} za kus · burza otevře {d}',
+  'tk.pxLim': 'až cena klesne na {v}', 'tk.pxLimSell': 'až cena stoupne na {v}',
+  /* A8 not enough free money */
+  'tk.topup': 'Dobít peněženku',
+  'tk.freeShort': 'Volné peníze: {v} – nestačí',
+  'tk.pxHead': 'cena za kus',
 };
