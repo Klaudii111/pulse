@@ -38,3 +38,6 @@
 .tk-clamp-m { color: var(--ink-2); font-size: 12.5px; line-height: 1.35; max-width: 34ch; }
 /* fixer D (P2-01): no price yet -> quiet grey, no number */
 .rx-me.tone-wait { color: var(--ink-3); font-weight: 500; }
+
+/* fixer D (P1-01): a hidden "Zpět" on onboarding step 1 stays hidden (v1153 sets display:flex) */
+.onb-back[hidden] { display: none !important; }
