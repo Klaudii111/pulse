@@ -33,4 +33,8 @@ export default {
   'al.aria': 'Koláč: hodnota účtu {v}, co v ní máš podle druhu trhu',
   'al.rule': 'Obchody v hodnotě teď (vklad + výsledek), čekající nákupy a volné peníze dávají dohromady hodnotu účtu.',
   'po.inWait': 'z toho {v} čeká na nákup',
+  /* K1-13: Historie = moje obchody, srovnání s ostatními zavřené dole */
+  'hi.cmMore': 'Porovnat s ostatními (nepovinné)',
+  'hi.sub': 'Moje uzavřené obchody',
+  'pd.moreOpts': 'Další možnosti',
 };

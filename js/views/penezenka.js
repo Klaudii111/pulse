@@ -220,13 +220,14 @@ export function renderHistory(ctx) {
   return head + `
   <h2 class="d-h hi-h">${t('hi.mine')}</h2>
   ${mine(ctx)}
-  <section class="d-block"><h2 class="d-h">${t('cm.title')}</h2>${people()}${shareBox()}</section>
   ${(() => {
     /* 1.13.4: the old manual journal only as a small collapsed block at the bottom (never next to the wallet's numbers) */
     const jb = journalBody(ctx);
     const n = jb ? D.journalRows(ctx.data).filter((r) => !r.e.wallet).length : 0;
     return jb ? `<details class="hi-legacy" id="hi-legacy"><summary>${t('hi.legacy')}<span class="num"> · ${n}</span>${icon('chev-down', 'icon-xs')}</summary><div class="hi-journal">${jb}</div></details>` : '';
   })()}
+  ${/* K1-13: the page is about my trades – comparing with other people is optional, one closed block at the bottom */ ''}
+  <details class="hi-cm" id="hi-cm"><summary>${t('hi.cmMore')}${icon('chev-down', 'icon-xs')}</summary><section class="d-block"><h2 class="d-h">${t('cm.title')}</h2>${people()}${shareBox()}</section></details>
   <p class="disclaimer">${icon('info')}${F.esc(t('disclaimer'))}</p>`;
 }
 export function mountHistory(el, ctx) {

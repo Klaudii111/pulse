@@ -19,3 +19,18 @@
 .al-rule { margin-top: 8px; }
 /* K2-16: Portfolio tabs Otevřené / Čekající / Historie show their counts on the phone too */
 .p2-tabs .seg-btn .seg-count { display: inline-grid; }
+/* K1-13: comparing with others = one closed block at the bottom of Historie */
+.hi-cm { margin: 18px 0 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.hi-cm > summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-3); min-height: 44px; }
+.hi-cm > summary::-webkit-details-marker { display: none; }
+.hi-cm[open] > summary .icon { transform: rotate(180deg); }
+/* K1-20: trade page – one primary, one secondary, the rest under "Další možnosti" */
+.pd-acts2 { display: grid; gap: 8px; }
+.pd-more { margin-top: 4px; }
+.pd-more > summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--ink-3); min-height: 44px; }
+.pd-more > summary::-webkit-details-marker { display: none; }
+.pd-more[open] > summary .icon { transform: rotate(180deg); }
+.pd-more .pd-acts { margin-top: 4px; }
+/* K3-08: names get two lines instead of a one-line cut; the money column keeps its width */
+.pf-row .pf-n b, .rb-c .rb-n { white-space: normal; overflow: hidden; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word; }
+.pf-row .pf-v { flex-shrink: 0; }

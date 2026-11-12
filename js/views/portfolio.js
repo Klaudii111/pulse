@@ -314,8 +314,10 @@ function eqSvg(box, h, c) {
   const first = h.base != null ? h.base : vs[0], last = vs[vs.length - 1];
   if (h.base != null) vs.push(h.base);
   let lo = Math.min(...vs), hi = Math.max(...vs);
-  /* a calm scale: a few crowns never fill the whole height (at least 0,2 % of the value) */
-  const minSpan = Math.abs(last) * 0.002 || 1;
+  /* a calm scale: a few crowns never fill the whole height – K1-15: at least ±1 % of the account value around the day's
+     start (Dnes) / 0,4 % of the value otherwise, so a 0,3 % move looks small */
+  const minSpan = Math.abs(last) * (h.range === 'd' ? 0.02 : 0.004) || 1;
+  if (h.range === 'd' && h.base != null) { lo = Math.min(lo, h.base - minSpan / 2); hi = Math.max(hi, h.base + minSpan / 2); }
   if (hi - lo < minSpan) { const m = (hi + lo) / 2; lo = m - minSpan / 2; hi = m + minSpan / 2; }
   const pad = { l: 2, r: 2, t: 10, b: 18 };
   const t0 = pts[0].t, t1 = pts[pts.length - 1].t, span = Math.max(1, t1 - t0);
@@ -616,7 +618,11 @@ function actionsHtml(ctx, p, sm, closed) {
   items.push(`<button type="button" class="btn btn-secondary" data-action="pd-share" data-id="${F.esc(p.id)}">${icon('share', 'icon-sm')}<span>${t('pd.a.share')}</span></button>`);
   if (closed) items.push(`<a class="btn btn-secondary" href="#/historie">${icon('history', 'icon-sm')}<span>${t('hi.title')}</span></a>`);
   const bar0 = closed ? '' : `<div class="pd-cta" id="pd-cta"><button type="button" class="btn btn-primary btn-block pd-close" data-action="pos-close" data-id="${F.esc(p.id)}"><span>${t('pd.a.close')}</span><b class="num" data-d="ctaV">${sg(p.pnl, c)}</b></button></div>`;
-  return `${bar0}<section class="pd-acts" aria-label="${F.esc(t('pd.acts'))}">${items.join('')}</section>`;
+  if (closed) return `${bar0}<section class="pd-acts" aria-label="${F.esc(t('pd.acts'))}">${items.join('')}</section>`;
+  /* K1-20: one primary (Ukončit obchod, the bar), one secondary (Upravit stop / cíl), the rest under a closed "Další možnosti" */
+  const [lv, ...rest] = items;
+  return `${bar0}<section class="pd-acts2" aria-label="${F.esc(t('pd.acts'))}">${lv.replace('class="btn btn-secondary"', 'class="btn btn-secondary btn-block"')}
+    <details class="pd-more"><summary>${t('pd.moreOpts')}${icon('chev-down', 'icon-xs')}</summary><div class="pd-acts">${rest.join('')}</div></details></section>`;
 }
 
 /* the side list on desktop (same rows as Portfolio, compact) */

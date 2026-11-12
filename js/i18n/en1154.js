@@ -33,4 +33,17 @@ export default {
   'al.aria': 'Donut: account value {v}, what is in it by kind of market',
   'al.rule': 'Trades at their value now (deposit + result), waiting buys and free money add up to the account value.',
   'po.inWait': 'of which {v} waits to buy',
+  /* K2-17: one word for one thing in English */
+  'wl.deps': 'Total deposited',
+  'acc.inPlay': 'In trades',
+  'dh.split': 'Free {f} · In trades {u}',
+  'dh.split3': 'Free {f} · In trades {u} · Open trades profit/loss {o}',
+  'ts.split': 'Free {f} · In trades {u}',
+  'th.VEHRE.t': 'In trades',
+  'th.VEHRE.s': 'In trades = money in open trades + money set aside for waiting buys. Free = the rest you can invest right now.',
+  'tour.n6.s': 'Free = you can invest. In trades = money in trades and waiting buys.',
+  /* K1-13: History = my trades, comparing with others closed at the bottom */
+  'hi.cmMore': 'Compare with others (optional)',
+  'hi.sub': 'My closed trades',
+  'pd.moreOpts': 'More options',
 };

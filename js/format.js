@@ -33,8 +33,9 @@ export const spct = (v, dec = 1) => signed(v, dec) + pctSep() + '%';
 /* 1.13.2 ONE rule for the % of my money: 1 decimal; when the money is not 0 but the % rounds to 0, show ±0,1 % (never "0,00 %") */
 export function mpct(v, money = null) {
   if (v == null || !Number.isFinite(v)) return '–';
-  let x = Math.round(v * 10) / 10;
-  if (x === 0 && money != null && Math.abs(money) >= 0.5) x = money < 0 ? -0.1 : 0.1;
+  const x = Math.round(v * 10) / 10;
+  /* 1.15.0 (K2-11): money that is not 0 but under 0,05 % is "<0,1 %" – never a rounded-up −0,1 % (−2 Kč on 100 000 Kč) */
+  if (x === 0 && money != null && Math.abs(money) >= 0.5) return `<${num(0.1, 1)}${pctSep()}%`;
   return spct(x, 1);
 }
 export const sr = (v, dec = 2) => signed(v, dec) + '\u00a0R';
