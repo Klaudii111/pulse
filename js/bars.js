@@ -248,7 +248,17 @@ export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v),
   const compact = () => !!fbEl()?.classList.contains('is-compact');
   const fbData = () => {
     const saved = lastGood(key);
-    if (saved) return saved;
+    /* K2-13: saved bars of ANOTHER period (5D kept, 1D chosen) are cut to the chosen period, so the axis matches the chip */
+    if (saved) {
+      const T = TFS.find((x) => x.id === curTf(tfKey)) || TFS[0];
+      if (saved.range === T.range || !saved.bars?.length) return saved;
+      const lastT = saved.bars[saved.bars.length - 1].t;
+      const day0 = (() => { const x = new Date(lastT); x.setHours(0, 0, 0, 0); return +x; })();
+      const from = { '1d': day0, '5d': lastT - 7 * 86400000, '1mo': lastT - 31 * 86400000, '6mo': lastT - 183 * 86400000, '1y': lastT - 366 * 86400000 }[T.range] ?? -Infinity;
+      const cut = saved.bars.filter((b) => b.t >= from);
+      if (cut.length >= 2) return { ...saved, bars: cut };
+      if (T.range !== '1d') return saved; // 1D: a single candle of today is no 1D chart – the prices-only fallback below
+    }
     const pts = (typeof path === 'function' ? path() || [] : []).concat(Live.history(key));
     const c = pointCandles(pts);
     return c ? { key, tf: 'pts', range: 'pts', ms: c.ms, src: '', delayed: false, bars: c.bars, built: true } : null;

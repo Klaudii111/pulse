@@ -239,3 +239,7 @@ body::after { content: none; display: none; }
 .pf-chg > span:not(.pf-dot), .sty-c3 > span { position: relative; padding-left: 0.9em; }
 .pf-chg > .pf-dot { display: none; }
 .pf-chg > span:not(.pf-dot) ~ span:not(.pf-dot)::before, .sty-c3 > span + span::before { content: '·'; position: absolute; left: 0.3em; top: 0; color: var(--ink-3); font-weight: 400; }
+
+/* ---------- 1.15.0 polish: the daily robot's small "?" gets the same invisible 44 px tap area as every other small control ---------- */
+.den-q { position: relative; }
+.den-q::after { content: ''; position: absolute; z-index: 1; left: 50%; top: 50%; width: 44px; height: 44px; border-radius: 50%; transform: translate(-50%, -50%); }

@@ -115,12 +115,15 @@
   </div>
   <script>
     (function () {
+      /* 1.15.0: the splash stays until the app has drawn its first screen (js/app.js hides it) - a new user no longer looks at an
+         empty background while the code loads. Here only: reduced motion / ?nosplash = no splash; a reload in the same session
+         shows the logo only when loading takes longer than ~0,45 s; a 6 s fallback when the app never starts. */
       var el = document.getElementById('splash'), seen = false, rm = false;
       try { seen = sessionStorage.getItem('pulse.splash') === '1'; sessionStorage.setItem('pulse.splash', '1'); } catch (e) {}
       try { rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-      if (seen || rm || /[?&]nosplash/.test(location.search)) { el.remove(); return; }
-      setTimeout(function () { el.classList.add('out'); }, 1200);
-      setTimeout(function () { el.remove(); }, 1650);
+      if (rm || /[?&]nosplash/.test(location.search)) { el.remove(); return; }
+      if (seen) { var inn = el.querySelector('.splash-in'); if (inn) { inn.style.opacity = '0'; inn.style.transition = 'opacity .3s ease .45s'; requestAnimationFrame(function () { requestAnimationFrame(function () { inn.style.opacity = '1'; }); }); } }
+      setTimeout(function () { if (el.isConnected) { el.classList.add('out'); setTimeout(function () { el.remove(); }, 450); } }, 6000);
     })();
   </script>
 

@@ -140,4 +140,9 @@ export default {
   "mt5.whatS": "MetaTrader 5 is a widely used trading platform. You enter a PULSE signal (entry, stop and target) there by hand – on a demo account with fictional money you try it without risk.",
   "mt5.s4": "Copy the order in the signal detail and enter it in MT5 by hand.",
   "info.r3": "The app never places anything for you at a real broker. Robot for me trades only with fictional money inside the app, and only when you switch it on. The app does not know your financial situation – every real trading decision is yours alone.",
+  /* 1.15.0 release check: the four Czech texts of this layer that had no English twin (the old English still said "at 10:45 pm") */
+  "jak.s1.s": "During US trading hours it checks hundreds of shares and funds every 20 minutes and sends a signal as soon as the entry is right.",
+  "term.auto.fill": "{sym}: your waiting order went through – {side} at {v} (fictional money)",
+  "term.auto.fillReopen": "{sym}: your waiting order went through while the app was closed – {side} at {v}",
+  "term.auto.expired": "{sym}: the waiting order at {v} expired, the money is free again",
 };
