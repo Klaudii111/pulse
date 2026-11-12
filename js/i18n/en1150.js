@@ -107,4 +107,15 @@ export default {
   "next.session.s": "From the US open it checks the market every 20 minutes (first check at {scan}) and sends a signal the moment the entry is right.",
   "sig.preview.t": "Found by the robot during the session (data up to 15 min delayed). Confirmed or cancelled after the close.",
   'rs.no': 'Not met yet',
+  /* 1.15.0 MetaTrader: new FX pairs (market picker) */
+  "ip.USDCAD": "how many Canadian dollars 1 US dollar costs",
+  "ip.GBPJPY": "how many yen 1 pound costs",
+  "ip.EURJPY": "how many yen 1 euro costs",
+  "ip.CHFJPY": "how many yen 1 Swiss franc costs",
+  "ip.AUDJPY": "how many yen 1 Australian dollar costs",
+  "ip.EURCHF": "how many Swiss francs 1 euro costs",
+  "ip.GBPCHF": "how many Swiss francs 1 pound costs",
+  "ip.EURGBP": "how many pounds 1 euro costs",
+  "ip.USDZAR": "how many South African rand 1 US dollar costs – exotic currency, large swings",
+  "ip.EURTRY": "how many Turkish lira 1 euro costs – exotic currency, the lira has weakened for years",
 };

@@ -43,6 +43,7 @@ export const name = (k) => { const it = get(k); return it ? (lang() === 'cs' ? i
 /* 1.13.9: the class of the main non-share markets before instruments.json is known (first visit, slow network) –
    so Bitcoin is never shown as "burza zavřená" for the first seconds */
 const BASE_CLS = { BTCUSD: 'crypto', ETHUSD: 'crypto', SOLUSD: 'crypto', EURUSD: 'fx', GBPUSD: 'fx', USDJPY: 'fx', USDCHF: 'fx', AUDUSD: 'fx', USDCAD: 'fx', NZDUSD: 'fx', USDCZK: 'fx', EURCZK: 'fx',
+  GBPJPY: 'fx', EURJPY: 'fx', CHFJPY: 'fx', AUDJPY: 'fx', EURCHF: 'fx', GBPCHF: 'fx', EURGBP: 'fx', USDZAR: 'fx', EURTRY: 'fx',
   XAUUSD: 'commodity', XAGUSD: 'commodity', US500: 'index', US100: 'index', US30: 'index', DE40: 'index', UK100: 'index', JP225: 'index' };
 export function cls(k) {
   const it = get(k);
@@ -88,7 +89,7 @@ export function levKind(k) {
   const c = cls(k);
   if (c === 'etf') return 'stock';
   if (c === 'commodity' && k === 'XAUUSD') return 'gold';
-  if (c === 'fx') return FX_MAJOR.includes(k) ? 'fxMajor' : 'fx';
+  if (c === 'fx') return FX_MAJOR.includes(k) || retailLev(k) >= 30 ? 'fxMajor' : 'fx';
   return c;
 }
 
@@ -155,10 +156,13 @@ const SPREAD_PCT = { stock: 0.05, etf: 0.05, crypto: 0.15, index: 0.02, fx: 0.01
 /* full spread in price units at price px */
 export function spread(k, px) {
   if (SPREAD_PT[k] != null) return SPREAD_PT[k];
+  /* 1.15.0: typical spread of the owner's MT5 broker (instruments.json "spread", price units) – GBPJPY 0.025, USDZAR 0.0076, EURTRY 0.0198 */
+  const srv = +get(k)?.spread;
+  if (srv > 0) return srv;
   return (px || 0) * (SPREAD_PCT[cls(k)] ?? 0.05) / 100;
 }
 /* overnight fee per night as a share of the traded amount (benchmark rate of the instrument currency + 2.5 % a year / 360) */
-const BENCH = { USD: 4.0, EUR: 2.0, CZK: 3.5, GBP: 4.0, JPY: 0.5, CHF: 0.5, AUD: 3.6 };
+const BENCH = { USD: 4.0, EUR: 2.0, CZK: 3.5, GBP: 4.0, JPY: 0.5, CHF: 0.5, AUD: 3.6, CAD: 2.75, ZAR: 7.0, TRY: 40 }; /* 1.15.0: CAD, ZAR, TRY (orientational) */
 export function swapRate(k, side) {
   const b = BENCH[ccy(k)] ?? 3;
   const yearly = side === 'SELL' ? 2.5 : b + 2.5;
@@ -176,6 +180,8 @@ export function decimals(k, px) {
 /* ---------- TradingView symbol for the candlestick chart ---------- */
 const TV = { US500: 'SP:SPX', US100: 'NASDAQ:NDX', US30: 'DJ:DJI', DE40: 'XETR:DAX', UK100: 'FTSE:UKX', JP225: 'TVC:NI225',
   EURUSD: 'FX:EURUSD', GBPUSD: 'FX:GBPUSD', USDJPY: 'FX:USDJPY', USDCHF: 'FX:USDCHF', AUDUSD: 'FX:AUDUSD', EURCZK: 'FX_IDC:EURCZK', USDCZK: 'FX_IDC:USDCZK',
+  USDCAD: 'FX:USDCAD', GBPJPY: 'FX:GBPJPY', EURJPY: 'FX:EURJPY', CHFJPY: 'FX:CHFJPY', AUDJPY: 'FX:AUDJPY', EURCHF: 'FX:EURCHF',
+  GBPCHF: 'FX:GBPCHF', EURGBP: 'FX:EURGBP', USDZAR: 'FX_IDC:USDZAR', EURTRY: 'FX_IDC:EURTRY',
   XAUUSD: 'OANDA:XAUUSD', XAGUSD: 'OANDA:XAGUSD', WTI: 'TVC:USOIL', BRENT: 'TVC:UKOIL', NATGAS: 'TVC:NATURALGAS',
   BTCUSD: 'COINBASE:BTCUSD', ETHUSD: 'COINBASE:ETHUSD', SOLUSD: 'COINBASE:SOLUSD',
   JPM: 'NYSE:JPM', V: 'NYSE:V', KO: 'NYSE:KO', PLTR: 'NASDAQ:PLTR', SPY: 'AMEX:SPY', DIA: 'AMEX:DIA', GLD: 'AMEX:GLD', QQQ: 'NASDAQ:QQQ' };

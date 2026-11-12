@@ -111,4 +111,15 @@ export default {
   "sig.preview.t": "Signál našel robot během obchodování (data se zpožděním do 15 min). Po zavření burzy ho potvrdí, nebo zruší.",
   "jak.s1.s": "Během obchodování v USA každých 20 minut prověří stovky akcií a fondů a signál pošle hned, jak je správný vstup.",
   'rs.no': 'Co zatím nesplňuje',
+  /* 1.15.0 MetaTrader: nové měnové páry (výběr trhu) */
+  "ip.USDCAD": "kolik kanadských dolarů stojí 1 americký",
+  "ip.GBPJPY": "kolik jenů stojí 1 libra",
+  "ip.EURJPY": "kolik jenů stojí 1 euro",
+  "ip.CHFJPY": "kolik jenů stojí 1 švýcarský frank",
+  "ip.AUDJPY": "kolik jenů stojí 1 australský dolar",
+  "ip.EURCHF": "kolik švýcarských franků stojí 1 euro",
+  "ip.GBPCHF": "kolik švýcarských franků stojí 1 libra",
+  "ip.EURGBP": "kolik liber stojí 1 euro",
+  "ip.USDZAR": "kolik jihoafrických randů stojí 1 dolar – exotická měna, velké výkyvy",
+  "ip.EURTRY": "kolik tureckých lir stojí 1 euro – exotická měna, lira dlouhodobě slábne",
 };

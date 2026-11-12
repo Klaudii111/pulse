@@ -132,7 +132,7 @@ export const CONFIG = {
     TOPUP: { CZK: [10000, 50000, 100000, 500000], EUR: [100, 500, 1000, 5000], USD: [100, 500, 1000, 5000] },
     /* Indicative FX used only to convert account currency to the instrument's
        USD/EUR price for a share count. Update as needed. Units per 1 USD. */
-    FX_PER_USD: { USD: 1, EUR: 0.864, CZK: 21.0, GBP: 0.76, JPY: 155, CHF: 0.82, AUD: 1.48 },
+    FX_PER_USD: { USD: 1, EUR: 0.864, CZK: 21.0, GBP: 0.76, JPY: 155, CHF: 0.82, AUD: 1.48, CAD: 1.42, ZAR: 16.6, TRY: 50 },
     /* Quote currency per symbol (default USD) */
     QUOTE_CCY: { DE40: 'EUR' },
   },

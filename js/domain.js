@@ -511,7 +511,13 @@ export function fxRates(data) {
   const f = data?.signals?.fx;
   /* 1.9.0: live USD/CZK and EUR/USD quotes (quotes.json) win; other currencies (GBP, JPY …) from the config */
   const uc = Live.quote('USDCZK')?.p, eu = Live.quote('EURUSD')?.p;
-  if (uc > 0 && eu > 0) return { ...CONFIG.CALC.FX_PER_USD, USD: 1, CZK: uc, EUR: 1 / eu, as_of: null, source: 'live' };
+  /* 1.15.0: the other quote currencies follow their live pair too (per 1 USD); config numbers only as the fallback */
+  const lv = () => { const o = {}; const q = (k) => Live.quote(k)?.p;
+    if (q('USDJPY') > 0) o.JPY = q('USDJPY'); if (q('USDCHF') > 0) o.CHF = q('USDCHF'); if (q('USDCAD') > 0) o.CAD = q('USDCAD');
+    if (q('USDZAR') > 0) o.ZAR = q('USDZAR'); if (q('GBPUSD') > 0) o.GBP = 1 / q('GBPUSD'); if (q('AUDUSD') > 0) o.AUD = 1 / q('AUDUSD');
+    if (q('EURTRY') > 0 && eu > 0) o.TRY = q('EURTRY') / eu;
+    return o; };
+  if (uc > 0 && eu > 0) return { ...CONFIG.CALC.FX_PER_USD, ...lv(), USD: 1, CZK: uc, EUR: 1 / eu, as_of: null, source: 'live' };
   if (f && f.USDCZK > 0 && f.EURCZK > 0) {
     return { ...CONFIG.CALC.FX_PER_USD, USD: 1, CZK: f.USDCZK, EUR: f.USDCZK / f.EURCZK, as_of: f.as_of || null, source: 'data' };
   }
