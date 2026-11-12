@@ -331,12 +331,31 @@ export function cardHtml(now = D.clock()) {
   }
 }
 
-/* Dnes mount: load once, then patch the card in place (no re-render of Dnes) */
-export function mount(el) {
-  const paint = () => { const c = el.querySelector('#den-card'); if (c && el.isConnected) c.outerHTML = cardHtml(D.clock()); };
-  load().then(paint).catch(() => {});
-  if (!Live.loaded()) { const off = Live.onLive(() => { if (!Live.loaded()) return; off(); if (el.isConnected && st.tried) paint(); }); setTimeout(off, 120000); }
-  const iv = setInterval(() => { if (!el.isConnected) { clearInterval(iv); return; } load(true).then(paint).catch(() => {}); }, 5 * 60000);
+/* Dnes mount. The card is part of the Dnes HTML (cardHtml); when the robot's file brings something new, Dnes is repainted
+   through the app's guarded automatic repaint (`repaint`: never under a finger, the reading position is kept, the same
+   HTML paints nothing).
+   1.15.3: ONE refresh timer and ONE "prices loaded" listener however often Dnes is painted. Every repaint (one a second
+   while prices tick) used to add another 5-minute timer that was never cleared (el = #view never leaves the document);
+   each of them fetched den.json and swapped the card in place for ever – also under a finger. */
+let cardTimer = null;
+let cardLiveOff = null;
+export function mount(el, repaint) {
+  const fresh = () => { if (document.getElementById('den-card')) repaint(); };
+  const had = st.at;
+  const tried = st.tried;
+  load().then((s) => { if (!tried || s.at !== had) fresh(); }).catch(() => {});
+  if (!Live.loaded() && !cardLiveOff) {
+    const stop = () => { off(); if (cardLiveOff === stop) cardLiveOff = null; };
+    const off = Live.onLive(() => { if (!Live.loaded()) return; stop(); if (st.tried) fresh(); });
+    cardLiveOff = stop;
+    setTimeout(stop, 120000);
+  }
+  if (!cardTimer) {
+    cardTimer = setInterval(() => {
+      if (!document.getElementById('den-card')) { clearInterval(cardTimer); cardTimer = null; return; }   // Dnes was left
+      load(true).then(fresh).catch(() => {});
+    }, 5 * 60000);
+  }
 }
 
 /* ---------- #/den ---------- */

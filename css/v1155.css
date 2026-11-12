@@ -60,4 +60,6 @@
 /* 1.15.3 smooth scrolling: the right column of an open trade's row keeps its width for everyday numbers (up to
    ±999 Kč · ±9,9 %) - a number that gains a digit no longer re-wraps the left column and changes the row's height
    (a row used to jump by 19 px on every such tick, and everything below it with it) */
-.pf-row[data-pid]:not(.is-compact) .pf-v { min-width: 110px; }
+/* in Czech crowns only (data-ccy on the row): in EUR / USD the result is 70-87 px wide and the row's own minimum
+   already holds it - 110 px there would only take room from the trade's name */
+.pf-row[data-pid][data-ccy="CZK"]:not(.is-compact) .pf-v { min-width: 110px; }

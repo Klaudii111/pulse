@@ -65,7 +65,7 @@ const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator
 const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', den: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
 
 const VIEWS = {
-  dnes: { title: 'nav.dnes', render: Home.render, mount: (el, c) => { Pf.dnesMount(el, c); Den.mount(el); }, actions: { ...Home.actions, ...Den.actions } },
+  dnes: { title: 'nav.dnes', render: Home.render, mount: (el, c) => { Pf.dnesMount(el, c); Den.mount(el, autoRender); }, actions: { ...Home.actions, ...Den.actions } },
   /* 1.15.1 the experimental daily robot (PULSE DEN) – its own page, never mixed with the tested signals */
   den: { title: 'den.h', render: Den.render, mount: Den.mountPage, actions: Den.actions },
   /* 1.15.0 Portfolio (#/portfolio = #/moje = #/zainvestovano) + the trade detail #/obchod/<id> */
@@ -187,29 +187,50 @@ function renderChrome() {
    Repaints the user asked for (a tap, a tab, a route) are never delayed. */
 const REST_MS = 200;        // the page counts as resting this long after the last scroll event / finger move
 const PRESS_MAX_MS = 4000;  // a press that has not moved for this long is neither a scroll nor a tap – never wait for ever
-const PICK_MAX_MS = 15000;  // an open picker (a focused select / input in the view) holds repaints at most this long
+const PICK_MAX_MS = 8000;   // an open picker (a focused select / input in the view) holds repaints at most this long
+const SHEET_WAIT_MS = 450;  // a sheet's closing animation
 let pressAt = 0;            // a finger (or the mouse button) went down / last moved; 0 = up
 let movedAt = 0;            // the last scroll event or finger move
 let pickAt = 0;             // a select / input in the view got the focus; 0 = none
 let autoFor = null;         // the route a postponed repaint is meant for
 let autoTimer = null;
 let paintedHtml = null;     // what the view shows now, as rendered
-const pageBusy = () => {
+/* a finger (or the mouse button) is down, or the page is still gliding */
+const pageMoving = () => {
   const n = Date.now();
-  return (pressAt > 0 && n - pressAt < PRESS_MAX_MS) || n - movedAt < REST_MS || (pickAt > 0 && n - pickAt < PICK_MAX_MS);
+  return (pressAt > 0 && n - pressAt < PRESS_MAX_MS) || n - movedAt < REST_MS;
 };
+/* … or a picker in the view is open: the view must not be replaced (its numbers may still be patched in place) */
+const pageBusy = () => pageMoving() || (pickAt > 0 && Date.now() - pickAt < PICK_MAX_MS);
 function autoRender() {
-  if (!pageBusy()) { autoFor = null; rerender({ soft: true, auto: true }); return; }
+  /* under an open sheet the screen below is repainted once the sheet is closed (the request is kept, not dropped) */
+  if (!pageBusy() && !sheetOpen()) { autoFor = null; rerender({ soft: true, auto: true }); return; }
   autoFor = route.name;
-  if (!autoTimer) autoTimer = setTimeout(autoFlush, REST_MS);
+  if (!autoTimer) autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : REST_MS);
 }
 function autoFlush() {
   autoTimer = null;
   if (!autoFor) return;
-  if (pageBusy()) { autoTimer = setTimeout(autoFlush, REST_MS); return; }
-  const name = autoFor; autoFor = null;
-  /* only the screen it was meant for and never under an open sheet (the next price repaints once the sheet is closed) */
-  if (name === route.name && !sheetOpen()) rerender({ soft: true, auto: true });
+  if (autoFor !== route.name) { autoFor = null; return; }   // the user went elsewhere: that screen was painted fresh
+  if (pageBusy() || sheetOpen()) { autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : REST_MS); return; }
+  autoFor = null;
+  rerender({ soft: true, auto: true });
+}
+/* the paint part of a price tick (the view, or its numbers patched in place, and the header): it waits while a finger
+   moves the page, like the repaints above; the trades themselves are checked on every price */
+let liveDue = false;
+let liveTimer = null;
+function livePaint() {
+  liveTimer = null;
+  if (!liveDue) return;
+  if (pageMoving()) { liveTimer = setTimeout(livePaint, REST_MS); return; }
+  liveDue = false;
+  if (['dnes', 'signaly'].includes(route.name)) { autoRender(); if (sheetOpen()) renderChrome(); }
+  else renderChrome();
+  /* 1.15.0: Peněženka's numbers follow the header on the same tick (one summary, one rounding) – they used to differ
+     by 1 Kč; patched in place, so a button being tapped is never replaced */
+  if (route.name === 'penezenka') Wal.paintHero(data);
+  document.dispatchEvent(new CustomEvent('pulse:live'));
 }
 function watchMoving() {
   const o = { passive: true, capture: true };
@@ -225,12 +246,21 @@ function watchMoving() {
   document.addEventListener('mouseup', () => { pressAt = 0; }, o);
   document.addEventListener('focusin', (ev) => { if (field(ev)) pickAt = Date.now(); }, o);
   document.addEventListener('focusout', (ev) => { if (field(ev)) pickAt = 0; }, o);
+  document.addEventListener('change', (ev) => { if (field(ev)) pickAt = 0; }, o);   // a value was chosen: the picker is closed
   window.addEventListener('blur', () => { pressAt = 0; });
   document.addEventListener('visibilitychange', () => { pressAt = 0; });
 }
 /* the block the user is looking at: the first one with a stable name that starts inside the viewport (or, when a tall
-   block fills it, the one spanning its top edge) and where it sits */
+   block fills it, the one spanning its top edge) and where it sits. A block that sticks to the screen (sticky / fixed, or
+   inside one – the desktop side columns) cannot tell where the content moved, so it is never taken. */
 const ANCHOR_SEL = '[data-pid], [data-oid], [data-cid], [data-sid], [data-id], section[id], article[id], div[id]';
+function pinned(n, root) {
+  for (let p = n; p && p !== root; p = p.parentElement) {
+    const pos = getComputedStyle(p).position;
+    if (pos === 'sticky' || pos === 'fixed') return true;
+  }
+  return false;
+}
 function anchorOf(root) {
   if (window.scrollY < 2) return null;
   const vh = window.innerHeight;
@@ -238,9 +268,10 @@ function anchorOf(root) {
   let pick = null;
   for (let i = 0; i < all.length; i++) {
     const b = all[i].getBoundingClientRect();
-    if (!b.height) continue;
-    if (b.top >= 0 && b.top < vh) { pick = [all[i], b.top]; break; }
-    if (b.top < 0 && b.bottom > 0) pick = [all[i], b.top];
+    if (!b.height || b.bottom <= 0 || b.top >= vh) continue;   // hidden, wholly above or below the viewport
+    if (pinned(all[i], root)) continue;
+    pick = [all[i], b.top];
+    if (b.top >= 0) break;   // starts inside the viewport; otherwise it spans the top edge and a later one may start inside
   }
   if (!pick) return null;
   const d = pick[0].dataset;
@@ -379,7 +410,7 @@ async function loadAll() {
   state.lastFetch = Date.now();
   if (results[5].status === 'rejected') data.paper = null; // missing paper.json -> the section hides
   if (results[6].status === 'rejected') data.health = null; // missing health.json -> no watchdog, behaviour as 1.10
-  Comm.load().then((d) => { if (d && route.name === 'historie' && !sheetOpen()) autoRender(); });
+  Comm.load().then((d) => { if (d && route.name === 'historie') autoRender(); });
   D.migratePreviewJournal(data);
   Live.onData();
   walletCheck();
@@ -467,19 +498,19 @@ async function poll() {
     data.signals = json;
     const paperChanged = await pollPaper();
     const healthChanged = await pollHealth();
-    if (paperChanged && !sheetOpen() && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) autoRender();
-    else if (healthChanged && !sheetOpen() && ['dnes', 'signaly', 'uceni'].includes(route.name) && !changed) autoRender();
+    if (paperChanged && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) autoRender();
+    else if (healthChanged && ['dnes', 'signaly', 'uceni'].includes(route.name) && !changed) autoRender();
     state.fromCache = cached;
     D.migratePreviewJournal(data);
     Live.onData();
     const walletClosed = walletCheck();
     renderChrome();
-    if (walletClosed && route.name === 'terminal' && !sheetOpen()) autoRender();
+    if (walletClosed && route.name === 'terminal') autoRender();
     if (changed) {
       checkAlerts();
       setTimeout(newSignalOffer, 600);
       const resDue = route.name === 'vysledky' && Date.now() - (window.__pulseResAt || 0) > 20000;
-    if (!sheetOpen() && (['dnes', 'signaly'].includes(route.name) || resDue)) { if (resDue) window.__pulseResAt = Date.now(); autoRender(); }
+    if (['dnes', 'signaly'].includes(route.name) || resDue) { if (resDue) window.__pulseResAt = Date.now(); autoRender(); }
     }
   } catch { /* offline – keep showing what we have */ }
 }
@@ -841,7 +872,7 @@ async function boot() {
   await iosInstallFirst();
   await gate();
   /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */
-  Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } if (!sheetOpen()) autoRender(); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
+  Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } autoRender(); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
   W.setAutoLev((sym) => B.selLev(sym));
@@ -871,20 +902,16 @@ async function boot() {
   Live.initLive(() => data);
   Live.onStatus(() => renderChrome());
   Live.onLive(() => {
-    const closed = walletCheck();
-    if (closed && route.name === 'terminal' && !sheetOpen()) autoRender();
+    const closed = walletCheck();   // the trades are checked on every price, whatever the finger does
+    if (closed && route.name === 'terminal') autoRender();
     checkAlerts();
-    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) autoRender();   // waits while a finger scrolls the page
-    else renderChrome();
-    /* 1.15.0: Peněženka's numbers follow the header on the same tick (one summary, one rounding) – they used to differ
-       by 1 Kč; patched in place, so a button being tapped is never replaced */
-    if (route.name === 'penezenka') Wal.paintHero(data);
-    document.dispatchEvent(new CustomEvent('pulse:live'));
+    liveDue = true;
+    if (!liveTimer) livePaint();    // 1.15.3: painting waits while a finger moves the page
   });
   setInterval(() => renderChrome(), 30000);
   /* 1.15.3: a wallet change that came by itself (another device, sync.js) waits for a resting page like every automatic
      repaint; the user's own buy / close repaints at once */
-  document.addEventListener('pulse:wallet', (ev) => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'portfolio', 'moje', 'obchod', 'signaly', 'penezenka', 'historie'].includes(route.name)) { if (ev.detail && ev.detail.auto) autoRender(); else rerender({ soft: true }); } });
+  document.addEventListener('pulse:wallet', (ev) => { syncTrades(); renderChrome(); if (['dnes', 'zainvestovano', 'portfolio', 'moje', 'obchod', 'signaly', 'penezenka', 'historie'].includes(route.name)) { if (ev.detail && ev.detail.auto) autoRender(); else if (!sheetOpen()) rerender({ soft: true }); } });
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {

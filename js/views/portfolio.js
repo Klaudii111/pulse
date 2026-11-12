@@ -95,7 +95,7 @@ export function row(p, sm, { compact = false, sel = false } = {}) {
   const w = B.whatIs(p.sym, p.name);
   const td = f.today;
   const sp = sparks.get(p.sym);
-  return `<a class="pf-row pf-t-${tone(p.pnl)}${compact ? ' is-compact' : ''}${sel ? ' is-sel' : ''}" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}" ${sel ? 'aria-current="true"' : ''}>
+  return `<a class="pf-row pf-t-${tone(p.pnl)}${compact ? ' is-compact' : ''}${sel ? ' is-sel' : ''}" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}" data-ccy="${F.esc(c)}" ${sel ? 'aria-current="true"' : ''}>
     ${monogram(p.sym, w.name)}
     <span class="pf-id"><span class="pf-n"><b>${F.esc(w.name)}</b>${w.name !== p.sym ? `<span class="ticker">${F.esc(p.sym)}</span>` : ''}${p.side === 'SELL' ? `<span class="side-tag sell">${t('tr.sell')}</span>` : ''}</span>
       <span class="pf-meta num">${F.esc(t('po.rowMeta', { d: whenText(p.openedAt), a: F.money(p.margin, c, 0) }))}${(p.lev || 1) > 1 ? ` · ${F.esc(levTxt(p.lev))}` : ''}</span>
