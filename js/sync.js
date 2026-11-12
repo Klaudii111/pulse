@@ -23,7 +23,7 @@ const ID_RE = /^[a-z2-7]{26}$/;
 /* the user's account (not device things such as the access code, theme, push permission, caches); 1.15.1: the language syncs too */
 export const SYNC_KEYS = ['wallet', 'journal', 'calc', 'levProfile', 'levOwn', 'autoCopy', 'watch', 'watchN', 'favs', 'follow',
   'onb', 'tourDone', 'lessonsDone', 'sim', 'share', 'cid', 'firstSeen', 'celebrated', 'refCode', 'invitedBy', 'proximityPct',
-  'proClient', 'faq3off', 'hint3', 'lang'];
+  'proClient', 'faq3off', 'hint3', 'styleOk', 'lang'];
 const SYNCED = new Set(SYNC_KEYS);
 const DEBOUNCE = 2000;
 const PULL_EVERY = 60000;

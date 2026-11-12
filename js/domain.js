@@ -8,6 +8,7 @@ import * as Live from './live.js';
 import { nextUsOpen } from './views/signals.js';
 import { priceOf, pnlAt, outcome, costs, nyCloseAfter, equityNow } from './wallet.js';
 import * as M from './market.js';
+import { styleTest } from './styles_data.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
 /* 1.13.0: a signal's price with its currency, 2 decimals ("164,47 $") */
@@ -226,6 +227,9 @@ const PROF_IDS = PROFILES.map((p) => p.id);
 export function profId() {
   const id = store.get('levProfile', null);
   if (PROF_IDS.includes(id)) return id;
+  /* 1.15.0: an id this version does not know (a newer / older app on another device) -> Konzervativně for now, never
+     written back (the other device keeps its choice; sync must not overwrite it with cons) */
+  if (typeof id === 'string' && id && id !== 'own') return PROF_IDS[0];
   const old = (store.get('calc', null) || {}).profile;
   const own = +store.get('levOwn', 0);
   const v = id === 'own' ? (own > 2 ? 'aggr' : 'bal') : old === 'aggressive' ? 'aggr' : PROF_IDS[0];
@@ -270,8 +274,10 @@ export function stakeCap(equity = null) { return niceRound(sizingBase(equity) * 
 /* 1.13.9: the worst case of ONE trade never goes above ~5 % of the wallet (the Agresivněji risk), whatever the leverage:
    up to 1:5 the deposit is the Konzervativně stake (1 % × leverage), above it the deposit shrinks by 5 / leverage
    (1:10 -> half, 1:20 -> a quarter), so 1:20 = the same trade size as 1:5 on the full deposit, just less money tied up */
-export const WORST_MAX = PROFILES[PROFILES.length - 1].pct;
-export const AGGR_LEV = +PROFILES[PROFILES.length - 1].lev || 20;
+/* 1.15.0: the Agresivněji style by id (five styles; never rely on the order) */
+const AGGR = PROFILES.find((p) => p.id === 'aggr') || PROFILES[PROFILES.length - 1];
+export const WORST_MAX = AGGR.pct;
+export const AGGR_LEV = +AGGR.lev || 20;
 /* at this leverage the trade ends after a move of 100 / lev % against it (1:20 -> 5 %) */
 export const wipePct = (lev) => 100 / Math.max(1, +lev || 1);
 export const levFactor = (lev) => Math.min(1, WORST_MAX / (BASE_PROF.pct * Math.max(1, +lev || 1)));
@@ -283,6 +289,14 @@ export function stakeFor(s = null, opt = {}) {
   if (typeof opt === 'number' || opt == null) opt = { equity: opt }; // old call shape stakeFor(s, equity)
   const ccy = walletCcy();
   const eq = sizingBase(opt.equity ?? null);
+  /* 1.15.0 STYLES: a style with a fixed share of the wallet (Odvážně 10 %, Naplno 20 %, Agresivněji 5 %) = that share,
+     whatever the stop distance and the leverage; opt.prof = another style than mine (the style sheet, the ticket) */
+  const sp = opt.prof ? prof(opt.prof) : prof();
+  if (sp.dep > 0) {
+    const st0 = STAKE_STEP[ccy] || 10;
+    const a0 = Math.floor(eq * sp.dep / st0 + 1e-9) * st0;
+    return a0 >= (DEP_MIN[ccy] || 0) ? a0 : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
+  }
   /* 1.13.5: the profile does not change the base deposit; 1.13.9: a leverage above 1:5 shrinks it (levFactor) so the
      worst case stays ~5 % of the wallet. lev = opt.lev, else the leverage of opt.prof / my profile for this symbol */
   const p = BASE_PROF;
@@ -310,13 +324,15 @@ export function stakeLimited(s, amount, opt = {}) {
   const eq = sizingBase(opt.equity ?? null);
   if (!(eq > 0) || !(amount > 0)) return false;
   const st = STAKE_STEP[walletCcy()] || 10;
+  /* 1.15.0: a fixed-share style (Odvážně / Naplno / Agresivněji): the share IS the rule, never a cap */
+  if ((opt.prof ? prof(opt.prof) : prof()).dep > 0) return false;
   const f = levFactor(opt.lev || 1);
   if ((opt.lev || 1) >= AGGR_LEV) return false; // 1:20: the 5 % deposit is the rule itself, not a cap
   return Math.abs(amount - stakeCap(eq)) < 0.5 || (f < 1 && Math.abs(amount - Math.floor(stakeCap(eq) * f / st + 1e-9) * st) < 0.5);
 }
 
 /* 1.13.5 Kalkulačka: the same leverage as the profiles = the market cap of the instrument (slider max LEVERAGE_MAX) */
-export const calcLevCap = (sig) => Math.max(1, profLevFor(PROFILES[PROFILES.length - 1], sig?.symbol));
+export const calcLevCap = (sig) => Math.max(1, profLevFor(AGGR, sig?.symbol));
 export function leverageCap(data, sig) {
   const c = CONFIG.CALC;
   return Math.max(c.LEVERAGE_MIN, Math.min(c.LEVERAGE_MAX, sig?.max_leverage ?? c.LEVERAGE_MAX, levelMaxLeverage(data)));
@@ -863,14 +879,44 @@ export function investBase(s, data, now = clock()) {
 /* THE money numbers of a signal for a deposit (card, detail, invest sheet – one function):
    maxLoss = the result at the stop (the trade is closed there; capped at the deposit), potential = at the robot's target.
    1.13.1: lev defaults to the user's profile and the deposit is sized from the same base price -> one number everywhere. */
-export function offerNums(s, data, { amount = null, lev = null, base = null, sl = null, tp = null, now = clock() } = {}) {
+export function offerNums(s, data, { amount = null, lev = null, base = null, sl = null, tp = null, now = clock(), prof: pid = null } = {}) {
   const ccy = walletCcy();
-  const L = lev ?? profileLev(s.symbol);
+  const L = lev ?? profLevFor(prof(pid), s.symbol);
   const px = base ?? investBase(s, data, now).px;
-  const a = amount ?? stakeFor(s, { lev: L, px });
+  const a = amount ?? stakeFor(s, { lev: L, px, prof: pid });
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
   const o = outcome({ side, entry: px, amount: a, lev: L, sl: sl ?? s.stop, tp: tp ?? s.target });
   return { amount: a, lev: L, ccy, base: px, maxLoss: o.atStop, potential: o.atTarget, potentialPct: o.atTarget != null && a > 0 ? (o.atTarget / a) * 100 : null };
+}
+/* 1.15.0 THE money model of one signal in one style – every screen (card, detail, Zainvestovat, ticket, Kalkulačka,
+   style sheet, Robot za mě) reads these numbers:
+   amount = the style's deposit (stakeFor), lev = the style's leverage capped by the market (capped = the cap is lower),
+   win = "když vyjde" at the signal's target (no target: the test's average winning trade of this horizon × the deposit,
+   est = true), loss = "když nevyjde" at the stop, or the WHOLE deposit when the margin stop-out (a move of 100 / lev %)
+   comes first (wiped = true), share / lossShare = % of the wallet. */
+export function styleNums(s, data, { prof: pid = null, base = null, now = clock(), lev = null } = {}) {
+  const p = prof(pid);
+  const ccy = walletCcy();
+  const L = lev ?? profLevFor(p, s.symbol);
+  const px = base ?? investBase(s, data, now).px;
+  const a = stakeFor(s, { prof: p.id, lev: L, px });
+  return { ...moneyAt({ side: s.action, base: px, amount: a, lev: L, sl: s.stop, tp: s.target, horizon: s.horizon, prof: p.id }),
+    risk: p.risk || 1, styleLev: p.lev, capped: L < p.lev, ccy };
+}
+/* the same numbers for ANY deposit and leverage (a typed amount in the ticket, the leverage slider in Kalkulačka) */
+export function moneyAt({ side, base, amount: a, lev: L, sl, tp, horizon = null, prof: pid = null }) {
+  const p = prof(pid);
+  const sd = side === 'SELL' ? 'SELL' : 'BUY';
+  const o = outcome({ side: sd, entry: base, amount: a, lev: L, sl, tp });
+  const tst = styleTest(p.id).hz;
+  const hz = tst[horizon] || tst.TYDEN;
+  const est = !(o.atTarget != null);
+  const win = est ? a * hz.win : o.atTarget;
+  /* no stop = nothing but the deposit limits the loss */
+  const loss = o.atStop != null ? o.atStop : -a;
+  const eq = sizingBase(null);
+  return { id: p.id, lev: L, amount: a, notional: a * L, base, win, est, loss, wiped: loss <= -a + 0.5, wipePct: 100 / Math.max(1, L), eq,
+    share: eq > 0 ? a / eq * 100 : null, lossShare: eq > 0 ? Math.abs(loss) / eq * 100 : null };
 }
 /* result of a CLOSED signal for the example deposit (leverage 1:1): money + % (= zhodnocení of the deposit) */
 /* 1.13.7: the SAME deposit (stakeFor) and the leverage of the chosen profile as an open signal's card -> Ukončené follow the profile */

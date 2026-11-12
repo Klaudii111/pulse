@@ -9,6 +9,7 @@ import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
 import * as Live from '../live.js';
 import * as Mkt from '../market.js';
 import * as B from '../brief.js';
+import * as Sty from '../styles.js';
 import * as W from '../wallet.js';
 import * as Sync from '../sync.js';
 
@@ -140,8 +141,8 @@ function myProfile() {
     <div class="mp-row"><div><p class="mp-l">${t('mp.cap')}</p><p class="mp-v num" data-mp-cap>${F.money(w ? W.equityNow() : D.calcState().account, c, 0)}</p><p class="mp-s">${t('mp.capS')}</p></div>
       <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topupShort')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
     <p class="mp-l">${t('mp.prof')}</p>
-    ${radio(D.PROFILES.map((p) => ({ id: p.id, t: `${t(`mb.p.${p.id}`)} · ${B.profShort(p.id)}`, s: t(`pf.long.${p.id}`) })), 'lev-prof', 'data-prof', rp.id)}
-    <p class="mp-sum" data-mp-stake="${stake}">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(D.profWorstPct(rp, 'AAPL'), 0) })}</span></p>
+    ${Sty.styleRow()}
+    <p class="mp-sum" data-mp-stake="${D.stakeFor(null, { prof: rp.id })}">${icon('info', 'icon-xs')}<span>${Sty.defLine(rp, D.stakeFor(null, { prof: rp.id }), c, rp.lev, true)}. ${Sty.honest(rp.id, c)}</span></p>
   </section>`;
 }
 

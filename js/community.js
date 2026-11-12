@@ -8,7 +8,8 @@ import * as B from './brief.js';
 
 const KEY = 'share';
 const SENT = 'shareSent';
-const PROF = { cons: 'konzervativne', bal: 'vyvazene', aggr: 'agresivneji', own: 'agresivneji' };
+/* 1.15.0: the server knows three labels; the two new leveraged styles (Odvážně, Naplno = 1:5) count as agresivneji */
+const PROF = { cons: 'konzervativne', bal: 'vyvazene', bold: 'agresivneji', full: 'agresivneji', aggr: 'agresivneji', own: 'agresivneji' };
 const KEY_RE = /^[A-Za-z0-9._^=-]{1,20}$/;
 const ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 export const NICK_RE = /^[\p{L}\p{N}_][\p{L}\p{N}_ .-]{0,19}$/u;

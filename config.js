@@ -118,10 +118,17 @@ export const CONFIG = {
        the profile only changes the LEVERAGE: Konzervativně bez páky · Vyváženě 1:2 · Agresivněji up to the market cap
        (akcie 1:5, indexy a zlato 1:20, krypto 1:2). pct = the nominal worst % of the wallet on a share (1 % × leverage);
        the real one is computed per signal. Labels: i18n "mb.p.<id>". */
+    /* 1.15.0 STYLES (Tom 12. 11., test VYZKUM/styly): five money styles ordered by risk (risk = the 1–5 meter).
+       cons / bal: the deposit is sized so the loss at the signal's stop is ~1 % of the wallet (max cap = 10 %), bal adds 1:2.
+       dep = a FIXED share of the wallet per trade (bold 10 %, full 20 %, aggr 5 %) with that leverage.
+       confirm = the first switch to it asks once (warning text from the test). Stored ids cons / bal / aggr are kept
+       (synced between devices); an unknown id falls back to cons. Order = the order in the style sheet. */
     RISK_PROFILES: [
-      { id: 'cons', pct: 1, lev: 1, cap: 0.1 },
-      { id: 'bal', pct: 2, lev: 2, cap: 0.1 },
-      { id: 'aggr', pct: 5, lev: 20, cap: 0.1 }, // 1.13.9: 1:20 on every market (demo); the deposit shrinks so the stop stays ~5 %
+      { id: 'cons', pct: 1, lev: 1, cap: 0.1, risk: 1 },
+      { id: 'bal', pct: 2, lev: 2, cap: 0.1, risk: 2 },
+      { id: 'bold', pct: 5, lev: 5, dep: 0.1, risk: 3, confirm: true },
+      { id: 'full', pct: 10, lev: 5, dep: 0.2, risk: 4, confirm: true },
+      { id: 'aggr', pct: 5, lev: 20, dep: 0.05, cap: 0.1, risk: 5, confirm: true }, // 1.13.9: 1:20 on every market (demo), deposit 5 % of the wallet
     ],
     LEVERAGE_MIN: 1,
     /* fallback max leverage when an instrument has no max_leverage (instruments.json) */

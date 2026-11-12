@@ -17,6 +17,7 @@ import * as W from './wallet.js';
 import { nyCloseAfter as nyCloseAfterMs } from './wallet.js';
 import * as H from './health.js';
 import * as M from './market.js';
+import * as S from './styles.js';
 
 /* ---------- 1 CO TO JE ---------- */
 const SECTOR = [
@@ -311,14 +312,14 @@ const sMoney = (v, c) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v
    (2 significant digits); when the default deposit hit its cap (10 % of the wallet) and so the loss is clearly below the
    profile's risk %, the EXACT amount + why ("−913 Kč", lim: true, p = the profile's %). capped = the whole deposit. */
 export const roundLoss = (v) => { const a = Math.abs(v); if (!(a > 0)) return 0; const st = Math.max(1, 10 ** (Math.floor(Math.log10(a)) - 1)); return Math.round(a / st) * st; };
-export function lossView(worst, amount, lev, ccy, { capped = false, deposit = null } = {}) {
+export function lossView(worst, amount, lev, ccy, { capped = false, deposit = null, prof = null } = {}) {
   if (worst == null || !Number.isFinite(+worst)) return null;
   const v = Math.abs(worst);
   const eq = D.sizingBase(null);
   const p = D.levWorstPct(lev);
   const nominal = eq * p / 100;
   const def = deposit ?? amount;
-  const lim = !capped && eq > 0 && def > 0 && Math.abs(def - amount) < 0.5 && D.stakeLimited(null, amount, { lev }) && v < nominal * 0.97;
+  const lim = !capped && eq > 0 && def > 0 && Math.abs(def - amount) < 0.5 && D.stakeLimited(null, amount, { lev, prof }) && v < nominal * 0.97;
   const exact = capped || lim;
   /* within 3 % of the profile's risk (the deposit is floored to 100 Kč / 10 €) = the risk itself: "≈ −1 000 Kč", never "≈ −990 Kč" */
   const r = exact ? Math.round(v) : roundLoss(nominal > 0 && Math.abs(v - nominal) <= nominal * 0.03 ? nominal : v);
@@ -331,6 +332,13 @@ export function lossView(worst, amount, lev, ccy, { capped = false, deposit = nu
 export const allTxt = (lv) => (lv && lv.wTxt != null ? t('mb.allW', { w: lv.wTxt }) : t('mb.all'));
 /* the reason after a capped loss: "≈ 6 % peněženky, vklad je omezený" (fallback without a wallet: "méně než 1 %, …") */
 export const limWhy = (lv) => (lv.wTxt != null ? t('mb.limW', { w: lv.wTxt }) : t('mb.limS', { p: lv.pTxt }));
+/* 1.15.0 STYLES: ONE text of the style numbers (card line, detail, Zainvestovat, ticket, Kalkulačka, style sheet):
+   win = "≈ +13 000 Kč" (2 significant digits), loss = lossView (≈ rounded; the whole deposit exact), note = why */
+export function styleTxt(n, ccy = D.walletCcy(), { deposit = null } = {}) {
+  const lv = lossView(n.loss, n.amount, n.lev, ccy, { capped: n.wiped, prof: n.id, deposit });
+  const w = Math.sign(n.win || 0) * roundLoss(n.win || 0);
+  return { lv, win: `≈ ${sMoney(w, ccy)}`, loss: lv ? lv.txt : '–', note: !lv ? '' : lv.capped ? allTxt(lv) : lv.lim ? limWhy(lv) : '' };
+}
 /* "max ≈ −1 000 Kč" · "max −913 Kč (≈ 0,9 % peněženky, vklad je omezený)" · "max −7 500 Kč (celý vklad)" */
 export function lossLine(lv) {
   if (!lv) return '';
@@ -449,71 +457,39 @@ export function ddLine(id, sym, on = true) {
 export function moneyBlock(m) {
   const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
-  const arg = { side: m.side, entry: m.base, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
   const mx = M.maxLev(m.sym) || 1;
-  const cols = profCols(m.sym).map((c) => { const a = m.amountFor ? m.amountFor(c) : m.amount; return { ...c, a, n: levNums({ ...arg, amount: a, lev: c.lev }) }; });
   const tk = m.ticket || null;
-  const onId = tk ? (cols.find((c) => c.id === tk.prof && c.lev === tk.lev) || {}).id || null : levProfile().id;
-  const sm = (v) => sMoney(v, m.ccy);
+  const pid = tk ? (tk.prof || levProfile().id) : levProfile().id;
+  const cols = profCols(m.sym).map((c) => ({ ...c, a: m.amountFor ? m.amountFor(c) : m.amount }));
   const wf = ok ? winFrac(bt.win_rate) : null;
-  const lvOf = (n, a) => lossView(n.worst, a, n.lev, m.ccy, { capped: n.capped, deposit: m.ticket ? (m.deposit ?? null) : a });
-  /* 1.13.8: the reason goes UNDER the amount (own line), so the label "Maximální možná ztráta" keeps its width on a phone */
-  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${allTxt(lv)}</small>` : lv.lim ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${limWhy(lv)}</small>` : lv.txt; };
-  const wCls = (n, a) => { const lv = lvOf(n, a); return lv && (lv.capped || lv.lim) ? ' has-why' : ''; };
-  const main = (key, a, lev, on, pid) => {
-    const n = levNums({ ...arg, amount: a, lev });
-    const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), lv: lvOf(n, a)?.v ?? 0, p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
-    const dep = m.depLine ? `<p class="sc-dep">${t('c.dep', { a: F.money(a, m.ccy, 0) })}</p>` : '';
-    if (!ok) {
-      const pp = n.best != null && a > 0 ? (n.best / a) * 100 : null;
-      return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
-        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down${wCls(n, a)}" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p>
-        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
-    }
-    return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
-      <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('cc.avgNa', { l: lev })}</small>`}</b></p>
-      ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
-      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down${wCls(n, a)}" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p></div>`;
+  const hz = m.s?.horizon || null;
+  const eqShare = (v) => { const r = Math.round(v * 10) / 10; return F.num(r, r < 1 && r > 0 ? 1 : 0); };
+  /* 1.15.0 STYLES: ONE main block per style (the chosen one shown) = the style's deposit and leverage, "když vyjde"
+     (at the target) and "když nevyjde" (at the stop, or the whole deposit when the stop-out comes first) – the same
+     D.moneyAt / B.styleTxt numbers as the card line, the ticket, Kalkulačka and the style sheet */
+  const main = (key, a, lev, on, id) => {
+    const n = D.moneyAt({ side: m.side, base: m.base, amount: a, lev, sl: m.sl, tp: m.tp, horizon: hz, prof: id });
+    const x = styleTxt(n, m.ccy, { deposit: tk ? (m.deposit ?? null) : a });
+    const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.loss), lv: x.lv?.v ?? 0, w: Math.round(n.win) }));
+    const dep = m.depLine ? `<p class="sc-dep sty-dep">${t('sty.depLine', { a: `<b class="nw num">${F.money(a, m.ccy, 0)}</b>`, l: levTxt(lev) })}${n.share != null ? ` <small>(${t('sty.ofW', { v: eqShare(n.share) })})</small>` : ''}</p>` : '';
+    return `<div class="mb-main sty-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
+      <div class="sty-big">
+        <p class="sty-k is-win"><span class="sty-kl">${t('sty.win')}${qh('POTOLD')}</span><b class="num up" data-win="${Math.round(n.win)}">${x.win}</b>${n.est ? `<small>${t('sty.winEst')}</small>` : ''}</p>
+        <p class="sty-k is-loss"><span class="sty-kl">${t('sty.loss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${x.lv?.v ?? ''}">${x.loss}</b>${x.note ? `<small>${x.note}</small>` : ''}</p>
+      </div>
+      ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}</div>`;
   };
-  const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
-  /* 1.13.3: a trade without a signal is sized by the deposit cap, not by the risk % -> its columns show the REAL share of
-     the wallet lost at worst (computed), never the profile's nominal "riziko 1 %" */
-  /* 1.13.4: the column = the profile's FIXED definition (riziko 1 % · bez páky); the real effect of THIS trade on the
-     wallet is one separate line under the main block ("Tento obchod: nejhůř −300 Kč = 0,3 % peněženky") */
-  const eq = D.sizingBase(null);
-  const pctTxt = (v) => { const r = Math.round(v * 10) / 10; return F.num(r, r < 1 ? 1 : 0); };
-  /* 1.13.7: in the invest sheet the columns only COMPARE (read-only) – the profile switch above is the one control */
-  const cell = (c) => `${tk ? `<div class="mb-col is-ro${c.id === onId ? ' is-on' : ''}" data-ro-prof="${c.id}"${c.id === onId ? ' aria-current="true"' : ''}>`
-    : `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">`}
-      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl mb-pdep" data-dep="${Math.round(c.a)}">${t('mb.depCol', { a: `<span class="nw">${F.money(c.a, m.ccy, 0)}</span>` })}</span><span class="mb-pl">${levTxt(c.lev)}</span></span>
-      <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
-      <span class="mb-pw num${c.n.capped ? ' is-all' : ''}" data-lv="${lvOf(c.n, c.a)?.v ?? ''}">${c.n.worst != null ? lvOf(c.n, c.a).txt : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span>${tk ? '</div>' : '</button>'}`;
-  const own = tk && !tk.ro ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
-      <span>${t('mb.own')}</span><b class="num mb-own-v">${onId ? '' : `1:${tk.lev}`}</b>${icon('chev-down', 'icon-xs')}</button>
+  const mains = tk ? main('cur', tk.amount, tk.lev, true, pid) : cols.map((c) => main(c.id, c.a, c.lev, c.id === pid, c.id)).join('');
+  const own = tk && !tk.ro ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b" data-action="lev-own-open" aria-expanded="${!!tk.open}">
+      <span>${t('mb.own')}</span><b class="num mb-own-v">1:${tk.lev}</b>${icon('chev-down', 'icon-xs')}</button>
     <div class="mb-own"${tk.open ? '' : ' hidden'}>${levChips(m.sym, tk.lev)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>` : '';
-  /* 1.13.4: the worst share of the deposit for the SELECTED profile (one note per column, the chosen one shown;
-     the invest sheet: exactly what it will buy) – never the maximum over all profiles under "Konzervativně" */
-  /* 1.13.5 ONE line per profile: "Tento obchod: nejhůř −1 000 Kč (13 % vkladu, 1 % peněženky)" – the chosen one shown;
-     the invest sheet: exactly what it will buy. The whole account in the test is a separate muted line (ddLine). */
-  const dPct = (a, worst) => (a > 0 && worst != null ? Math.round(Math.abs(worst) / a * 100) : null);
-  const note = (key, a, n, on) => {
-    const p = dPct(a, n.worst);
-    if (p == null) return '';
-    const w = eq > 0 ? Math.abs(n.worst) / eq * 100 : null;
-    return `<p class="mb-note" data-p="${key}" data-maxpct="${p}"${w != null ? ` data-realpct="${w.toFixed(2)}"` : ''}${on ? '' : ' hidden'}>${t(w != null ? 'mb.trade' : 'mb.trade0', { v: `<span class="nw">${lvOf(n, a)?.txt ?? sm(n.worst)}</span>`, p, w: w != null ? pctTxt(w) : '' })}</p>`;
-  };
-  let notes;
-  if (tk) {
-    const n = levNums({ ...arg, amount: tk.amount, lev: tk.lev });
-    notes = note('cur', tk.amount, n, true) + (m.s ? ddLine(onId, m.sym) : '');
-  } else {
-    notes = cols.map((c) => note(c.id, c.a, c.n, c.id === onId)).join('') + (m.s ? cols.map((c) => ddLine(c.id, m.sym, c.id === onId)).join('') : '');
-  }
-  const table = `<div class="mb-lev${tk ? ' is-ro' : ''}" style="--n:${cols.length}"${tk ? '' : ` role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"`}>
-      <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}${notes}<p class="mb-same">${t('mb.same')}</p>`;
-  return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${table}
-    <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
+  /* ONE honest line from the test per style (the chosen one shown) */
+  const hon = tk ? `<p class="mb-dd sty-hon" data-p="cur">${S.honest(pid, m.ccy)}</p>`
+    : cols.map((c) => `<p class="mb-dd sty-hon" data-p="${c.id}"${c.id === pid ? '' : ' hidden'}>${S.honest(c.id, m.ccy)}</p>`).join('');
+  /* "Porovnat styly" opens the style sheet with THIS signal's numbers for all five */
+  const cmp = m.s ? `<button type="button" class="btn btn-ghost btn-small sty-cmp" data-action="style-compare" data-id="${F.esc(m.s.id)}">${t('sty.cmp')}${icon('chev-right', 'icon-xs')}</button>` : '';
+  return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${own}${hon}${cmp}
+    <p class="sc-note">${t('sty.note')}</p></div>`;
 }
 /* 1.11.2 "Příklady pák" (invest sheet): this signal / instrument and this deposit at 1:1 … 1:30 – the same numbers (levNums) */
 export function levExamples(m) {
@@ -558,28 +534,23 @@ export function levExamples(m) {
 /* 1.13.6 invest sheet: ONE money line above "Podrobnosti ▾" (same levNums as the card line) + a profile switch for this
    sheet only (data-lev: the ticket handler takes it, the global profile stays) */
 export function tkMoneyLine(m) {
-  const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
-  const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
-  const x = levNums({ side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, lev: m.lev, bt: ok ? bt : null });
-  const sm = (v) => sMoney(v, m.ccy);
+  /* 1.15.0: the same D.moneyAt / styleTxt as the card line (exactly what this ticket will buy) */
+  const n = D.moneyAt({ side: m.side, base: m.base, amount: m.amount, lev: m.lev, sl: m.sl, tp: m.tp, horizon: m.s?.horizon || null, prof: m.prof || null });
+  const x = styleTxt(n, m.ccy, { deposit: m.deposit ?? null });
   const nw = (v) => `<span class="nw">${v}</span>`;
-  const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa', { l: m.lev })) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
-  const lv = lossView(x.worst, m.amount, m.lev, m.ccy, { capped: x.capped, deposit: m.deposit ?? null });
-  const loss = lossLine(lv);
-  return `<p class="cc-ml tk-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> → <span class="${ok && x.avg == null ? 'mb-na' : 'up'}">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+  return `<p class="cc-ml tk-ml sty-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-win="${Math.round(n.win)}" data-loss="${Math.round(n.loss)}" data-lv="${x.lv ? x.lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> <span class="sty-ml-l">${m.lev > 1 ? `1:${m.lev}` : t('mb.noLev')}</span> → <span class="up">${t('sty.cWin', { v: nw(x.win) })}</span> · <span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${n.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
 }
 /* 1.13.9 one short honest line where 1:20 can be chosen: a real EU broker gives 1:20 on shares only to professional clients */
 export const euNote = (sym = null) => `<p class="why-s pf-eu">${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })}${!sym || ['stock', 'crypto'].includes(M.levKind(sym)) ? ` ${t(sym && M.levKind(sym) === 'crypto' ? 'pf.euCrypto' : 'pf.eu')}` : ''}</p>`;
-export function tkProfSwitch(sym, prof, lev) {
-  const cols = profCols(sym);
-  return `<div class="pf-sw tk-pf" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${cols.map((c) => `<button type="button" class="pf-sw-b tk-pf-b" role="radio" aria-checked="${c.id === prof && c.lev === lev}" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}</button>`).join('')}</div></div>${lev >= 20 ? euNote(sym) : ''}`;
+/* 1.15.0: the ticket's style = the ONE style row (the sheet "Vyber styl"; a choice there is global and the ticket follows) */
+export function tkProfSwitch(sym, prof, lev, sigId = null) {
+  return `${S.styleRow({ sigId, cls: 'tk-pf' })}${lev >= 20 ? euNote(sym) : ''}`;
 }
 /* card / detail: the block for the deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {
   const n = D.offerNums(s, data, { now });
-  /* 1.13.5: ONE deposit for all profile columns (D.stakeFor = the Konzervativně stake); the profile changes the leverage */
-  /* 1.13.9: each profile column with ITS deposit (1:20 = a quarter of the stake, D.stakeFor) */
-  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, amountFor: (c) => D.stakeFor(s, { lev: c.lev, px: n.base }), depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target }) };
+  /* 1.15.0: each style with ITS deposit (D.stakeFor with that style = D.styleNums) */
+  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, amountFor: (c) => D.stakeFor(s, { prof: c.id, lev: c.lev, px: n.base }), depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target }) };
 }
 /* the motivating but true line, once per strategy: the whole robot account in the test */
 export function testLine(s, data) {
@@ -607,6 +578,7 @@ export function syncLev() {
   document.querySelectorAll('.cc-money [data-p]').forEach((x) => { x.hidden = x.dataset.p !== pid; });
   document.querySelectorAll('.cc-chip, .pf-sw-b:not(.tk-pf-b)').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.prof === pid)));
   document.querySelectorAll('[data-pfeu]').forEach((x) => { x.hidden = pid !== 'aggr'; });
+  S.syncRows();
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
     mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', x.dataset.p === pid));
@@ -615,9 +587,12 @@ export function syncLev() {
   });
 }
 /* 1.13.5 ONE profile switch above a list of signal cards (Dnes "Můžeš koupit", Signály, the new-signal sheet) */
+/* 1.15.0: the style row for screens that only import brief.js (Signály) */
+export const styleRow = (o) => S.styleRow(o);
+/* 1.15.0: same name and call as before, renders the ONE style row "Styl: Odvážně ▾" (sheet "Vyber styl") */
 export function profSwitch() {
   const pid = levProfile().id;
-  return `<div class="pf-sw" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"><span class="pf-sw-l">${t('pf.sw')}</span><div class="pf-sw-g">${D.PROFILES.map((p) => `<button type="button" class="pf-sw-b" role="radio" aria-checked="${p.id === pid}" data-action="lev-prof" data-prof="${p.id}">${t(`mb.p.${p.id}`)}</button>`).join('')}</div></div><p class="why-s pf-eu" data-pfeu${pid === 'aggr' ? '' : ' hidden'}>${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })} ${t('pf.eu')}</p>`;
+  return `${S.styleRow()}<p class="why-s pf-eu" data-pfeu${pid === 'aggr' ? '' : ' hidden'}>${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })} ${t('pf.eu')}</p>`;
 }
 /* "Vlastní páka ▾" opens / closes the chip list of its block */
 export function toggleOwn(el) {
@@ -721,25 +696,18 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
    Everything else (profile table, Příklady pák, warnings, test line, full reasoning) lives in the detail. */
 export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true } = {}) {
   const n = D.offerNums(s, data, { now });
-  const bt = H.strat(data, s.horizon)?.backtest || null;
-  const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
   const pid = levProfile().id;
   const cols = profCols(s.symbol);
-  const side = s.action === 'SELL' ? 'SELL' : 'BUY';
-  const sm = (v) => sMoney(v, n.ccy);
-  /* 1.13.5: each line = the ONE deposit (D.stakeFor) with that profile's leverage – the same deposit as the detail, the sheet and the robot */
+  /* 1.15.0 STYLES: each line = THE style numbers (D.styleNums: deposit, leverage, když vyjde, když nevyjde) – the same as
+     the detail, the Zainvestovat sheet, Kalkulačka, the style sheet and Robot za mě; the chosen style's line is shown */
   const line = (c) => {
-    /* 1.13.9: the deposit of THIS profile (the same D.stakeFor as the sheet and the robot) */
-    const a = D.stakeFor(s, { lev: c.lev, px: n.base });
-    const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev: c.lev, bt: ok ? bt : null });
+    const x0 = D.styleNums(s, data, { prof: c.id, base: n.base, now });
+    const x = styleTxt(x0, n.ccy);
     const nw = (v) => `<span class="nw">${v}</span>`;
-    const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa', { l: c.lev })) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
-    const lv = lossView(x.worst, a, c.lev, n.ccy, { capped: x.capped });
-    const loss = lossLine(lv);
-    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(a, n.ccy, 0)}</b> → <span class="${ok && x.avg == null ? 'mb-na' : 'up'}">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+    return `<p class="cc-ml sty-ml num" data-p="${c.id}" data-l="${x0.lev}" data-a="${x0.amount}" data-win="${Math.round(x0.win)}" data-loss="${Math.round(x0.loss)}" data-lv="${x.lv ? x.lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(x0.amount, n.ccy, 0)}</b> <span class="sty-ml-l">${x0.lev > 1 ? `1:${x0.lev}` : t('mb.noLev')}</span> → <span class="up">${t('sty.cWin', { v: nw(x.win) })}</span> · <span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${x0.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
   };
-  /* the three profile chips only on the first card of a list (and in the detail / sheet) */
-  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · ${c.lev > 1 ? `1:${c.lev}` : t('mb.noLev')}</small></button>`).join('')}</div>` : '';
+  /* chips: the old three profile chips are gone – ONE style row above a list (profSwitch) */
+  const chips = withChips ? S.styleRow({ sigId: s.id }) : '';
   return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${cols.map(line).join('')}</div>`, chips, n };
 }
 /* 1.13.9: the pill also says until when the entry is valid (D.entryWindowEnd): "Vstup dnes 15:30–22:00" ·

@@ -87,7 +87,8 @@ body::after { content: none; display: none; }
 /* text that sits right on the waves (page heading, back link, subtitle, trade-page heading): a soft local shade
    behind the text only - the waves stay bright around it */
 .page-head, .pd-head { position: relative; isolation: isolate; }
-.page-head::before, .pd-head::before { content: ''; position: absolute; z-index: -1; inset: -16px -28px -12px; pointer-events: none;
+/* the dark veil behind a page title reaches exactly to the screen edge (was -28 px: 12 px wider than a phone -> the whole page could slide sideways) */
+.page-head::before, .pd-head::before { content: ''; position: absolute; z-index: -1; inset: -16px calc(-1 * var(--gutter, 16px)) -12px; pointer-events: none;
   background: radial-gradient(85% 100% at 30% 45%, rgba(2, 10, 13, 0.76), rgba(2, 10, 13, 0.5) 55%, rgba(2, 10, 13, 0) 100%); }
 
 /* ---------- cards: translucent glass fill, 1 px light edge, inner highlight (no blur on lists) ---------- */
