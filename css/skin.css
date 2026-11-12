@@ -232,3 +232,10 @@ body::after { content: none; display: none; }
   .wl-hero { background: #08171B; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .trade-btns { background: var(--sk-solid); }
 }
+
+/* ---------- 1.15.0 polish: a "·" between two facts never dangles at the end of a wrapped line ----------
+   the dot is drawn by the fact that FOLLOWS it; when that fact starts a new line, the dot falls into the clipped strip on the left */
+.pf-chg, .sty-c3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; margin-left: -0.9em; clip-path: inset(0 0 0 0.9em); }
+.pf-chg > span:not(.pf-dot), .sty-c3 > span { position: relative; padding-left: 0.9em; }
+.pf-chg > .pf-dot { display: none; }
+.pf-chg > span:not(.pf-dot) ~ span:not(.pf-dot)::before, .sty-c3 > span + span::before { content: '·'; position: absolute; left: 0.3em; top: 0; color: var(--ink-3); font-weight: 400; }

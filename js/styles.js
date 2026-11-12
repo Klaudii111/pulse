@@ -97,7 +97,7 @@ export function openPicker({ sigId = null } = {}) {
       <span class="sty-c1"><b class="sty-cn">${nm(p.id)}</b>${meter(p.risk || 1)}${on ? `<span class="sty-on">${icon('check', 'icon-xs')}${t('sty.on')}</span>` : ''}</span>
       <span class="sty-c2">${defLine(p, c.amount, ccy, c.lev, !!c.typ)}</span>
       ${c.capped ? `<span class="sty-c2 sty-cap">${t('sty.cap', { v: c.lev, s: p.lev })}</span>` : ''}
-      <span class="sty-c3 num"><span class="up">${t('sty.cWin', { v: sp(c.win) })}</span> · <span class="down">${t('sty.cLoss', { v: sp(c.loss) })}${c.note ? ` <small>(${c.note})</small>` : ''}</span></span>
+      <span class="sty-c3 num"><span class="up">${t('sty.cWin', { v: sp(c.win) })}</span><span class="down">${t('sty.cLoss', { v: sp(c.loss) })}${c.note ? ` <small>(${c.note})</small>` : ''}</span></span>
       <span class="sty-c4${p.risk >= 3 ? ' is-warn' : ''}">${honest(p.id, ccy)}</span>
     </button>`;
   };

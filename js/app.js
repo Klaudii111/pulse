@@ -156,6 +156,8 @@ function renderChrome() {
     const sm = W.summary(data);
     const eq = W.parts(sm).eq;
     pill = `<a class="bal-pill" href="#/penezenka" aria-label="${F.esc(t('u.pill', { v: F.money(eq, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num" data-eq="${eq}">${F.money(eq, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
+    /* 1.15.0: "Kapitál" in Nastavení is the same number as the pill, on the same tick (it used to lag by one price update) */
+    document.querySelectorAll('[data-mp-cap]').forEach((n) => { const v = F.money(eq, sm.w.ccy, 0); if (n.textContent !== v) n.textContent = v; });
   } catch { /* storage blocked: keep the badge */ }
   document.querySelectorAll('[data-slot="badge"]').forEach((el) => { if (el.innerHTML !== pill) el.innerHTML = pill; });
   const ls = Live.status();
