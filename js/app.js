@@ -175,6 +175,89 @@ function renderChrome() {
   if (meta) meta.textContent = fresh ? t('chrome.data', { time: F.dmTime(new Date(fresh)) }) : '';
 }
 
+/* ---------- 1.15.3 smooth scrolling on phones ----------
+   A repaint the app does by itself (a new price every second, fresh data, a change from another device) replaces the
+   whole view. While a finger is on the screen or the page is still gliding that drops frames, and putting the scroll
+   position back (window.scrollTo) fights the finger: on iPhone it stops the glide and can leave the fixed bottom bar
+   painted in the middle of the screen. So:
+   · such repaints wait until the finger is up and the page rests (autoRender) – nothing is replaced under a finger,
+   · a repaint that would show exactly the same HTML does nothing,
+   · after it the block the user was looking at stays where it was (Safari has no scroll anchoring of its own) and the
+     scroll position is touched only when the repaint really moved it.
+   Repaints the user asked for (a tap, a tab, a route) are never delayed. */
+const REST_MS = 200;        // the page counts as resting this long after the last scroll event / finger move
+const PRESS_MAX_MS = 4000;  // a press that has not moved for this long is neither a scroll nor a tap – never wait for ever
+const PICK_MAX_MS = 15000;  // an open picker (a focused select / input in the view) holds repaints at most this long
+let pressAt = 0;            // a finger (or the mouse button) went down / last moved; 0 = up
+let movedAt = 0;            // the last scroll event or finger move
+let pickAt = 0;             // a select / input in the view got the focus; 0 = none
+let autoFor = null;         // the route a postponed repaint is meant for
+let autoTimer = null;
+let paintedHtml = null;     // what the view shows now, as rendered
+const pageBusy = () => {
+  const n = Date.now();
+  return (pressAt > 0 && n - pressAt < PRESS_MAX_MS) || n - movedAt < REST_MS || (pickAt > 0 && n - pickAt < PICK_MAX_MS);
+};
+function autoRender() {
+  if (!pageBusy()) { autoFor = null; rerender({ soft: true, auto: true }); return; }
+  autoFor = route.name;
+  if (!autoTimer) autoTimer = setTimeout(autoFlush, REST_MS);
+}
+function autoFlush() {
+  autoTimer = null;
+  if (!autoFor) return;
+  if (pageBusy()) { autoTimer = setTimeout(autoFlush, REST_MS); return; }
+  const name = autoFor; autoFor = null;
+  /* only the screen it was meant for and never under an open sheet (the next price repaints once the sheet is closed) */
+  if (name === route.name && !sheetOpen()) rerender({ soft: true, auto: true });
+}
+function watchMoving() {
+  const o = { passive: true, capture: true };
+  const press = () => { pressAt = Date.now(); };
+  const lift = (ev) => { pressAt = ev.touches && ev.touches.length ? Date.now() : 0; };
+  const field = (ev) => !!ev.target && /^(SELECT|INPUT|TEXTAREA)$/.test(ev.target.tagName || '') && !!ev.target.closest('#view');
+  window.addEventListener('scroll', () => { movedAt = Date.now(); }, o);   // capture: rows that scroll sideways too
+  document.addEventListener('touchstart', press, o);
+  document.addEventListener('touchmove', () => { pressAt = movedAt = Date.now(); }, o);
+  document.addEventListener('touchend', lift, o);
+  document.addEventListener('touchcancel', lift, o);
+  document.addEventListener('mousedown', press, o);
+  document.addEventListener('mouseup', () => { pressAt = 0; }, o);
+  document.addEventListener('focusin', (ev) => { if (field(ev)) pickAt = Date.now(); }, o);
+  document.addEventListener('focusout', (ev) => { if (field(ev)) pickAt = 0; }, o);
+  window.addEventListener('blur', () => { pressAt = 0; });
+  document.addEventListener('visibilitychange', () => { pressAt = 0; });
+}
+/* the block the user is looking at: the first one with a stable name that starts inside the viewport (or, when a tall
+   block fills it, the one spanning its top edge) and where it sits */
+const ANCHOR_SEL = '[data-pid], [data-oid], [data-cid], [data-sid], [data-id], section[id], article[id], div[id]';
+function anchorOf(root) {
+  if (window.scrollY < 2) return null;
+  const vh = window.innerHeight;
+  const all = root.querySelectorAll(ANCHOR_SEL);
+  let pick = null;
+  for (let i = 0; i < all.length; i++) {
+    const b = all[i].getBoundingClientRect();
+    if (!b.height) continue;
+    if (b.top >= 0 && b.top < vh) { pick = [all[i], b.top]; break; }
+    if (b.top < 0 && b.bottom > 0) pick = [all[i], b.top];
+  }
+  if (!pick) return null;
+  const d = pick[0].dataset;
+  const k = ['pid', 'oid', 'cid', 'sid', 'id'].find((x) => d[x] != null);
+  const sel = k ? `[data-${k}="${CSS.escape(d[k])}"]` : `#${CSS.escape(pick[0].id)}`;
+  return { sel, idx: Array.prototype.indexOf.call(root.querySelectorAll(sel), pick[0]), top: pick[1] };
+}
+function keepPlace(root, a, scrollY) {
+  const n = a ? root.querySelectorAll(a.sel)[a.idx] : null;
+  if (n) {
+    const d = n.getBoundingClientRect().top - a.top;
+    if (Math.abs(d) >= 1) window.scrollBy(0, d);
+    return;
+  }
+  if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+}
+
 function rerender(opts = {}) {
   const v = VIEWS[route.name];
   const el = document.getElementById('view');
@@ -182,13 +265,20 @@ function rerender(opts = {}) {
   const scrollY = window.scrollY;
   const firstData = !!data.signals && !el.dataset.hadData;
   const c = ctx({ softRender: !!opts.soft && !firstData });
-  el.innerHTML = v.render(c);
+  const html = v.render(c);
+  const auto = !!opts.auto && !firstData && currentView === v;
+  /* nothing new to show: the screen stays as it is (no flash, no layout, nothing replaced under a finger) */
+  if (auto && html === paintedHtml) { renderChrome(); return; }
+  const anchor = auto ? anchorOf(el) : null;
+  el.innerHTML = html;
+  paintedHtml = html;
   if (data.signals) el.dataset.hadData = '1';
   if (!opts.soft || firstData) {
     el.classList.remove('is-enter'); void el.offsetWidth; el.classList.add('is-enter');
   }
-  if (opts.soft) window.scrollTo(0, scrollY);
+  if (opts.soft && !auto && Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
   v.mount && v.mount(el, c);
+  if (auto) keepPlace(el, anchor, scrollY);
   currentView = v;
   renderChrome();
   afterRender(el, !opts.soft || firstData);
@@ -289,7 +379,7 @@ async function loadAll() {
   state.lastFetch = Date.now();
   if (results[5].status === 'rejected') data.paper = null; // missing paper.json -> the section hides
   if (results[6].status === 'rejected') data.health = null; // missing health.json -> no watchdog, behaviour as 1.10
-  Comm.load().then((d) => { if (d && route.name === 'historie' && !sheetOpen()) rerender({ soft: true }); });
+  Comm.load().then((d) => { if (d && route.name === 'historie' && !sheetOpen()) autoRender(); });
   D.migratePreviewJournal(data);
   Live.onData();
   walletCheck();
@@ -377,19 +467,19 @@ async function poll() {
     data.signals = json;
     const paperChanged = await pollPaper();
     const healthChanged = await pollHealth();
-    if (paperChanged && !sheetOpen() && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) rerender({ soft: true });
-    else if (healthChanged && !sheetOpen() && ['dnes', 'signaly', 'uceni'].includes(route.name) && !changed) rerender({ soft: true });
+    if (paperChanged && !sheetOpen() && ['dnes', 'robot', 'vysledky'].includes(route.name) && !changed) autoRender();
+    else if (healthChanged && !sheetOpen() && ['dnes', 'signaly', 'uceni'].includes(route.name) && !changed) autoRender();
     state.fromCache = cached;
     D.migratePreviewJournal(data);
     Live.onData();
     const walletClosed = walletCheck();
     renderChrome();
-    if (walletClosed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
+    if (walletClosed && route.name === 'terminal' && !sheetOpen()) autoRender();
     if (changed) {
       checkAlerts();
       setTimeout(newSignalOffer, 600);
       const resDue = route.name === 'vysledky' && Date.now() - (window.__pulseResAt || 0) > 20000;
-    if (!sheetOpen() && (['dnes', 'signaly'].includes(route.name) || resDue)) { if (resDue) window.__pulseResAt = Date.now(); rerender({ soft: true }); }
+    if (!sheetOpen() && (['dnes', 'signaly'].includes(route.name) || resDue)) { if (resDue) window.__pulseResAt = Date.now(); autoRender(); }
     }
   } catch { /* offline – keep showing what we have */ }
 }
@@ -729,7 +819,8 @@ async function boot() {
   if (ref && /^[A-Z0-9-]{4,20}$/i.test(ref) && ref !== store.get('refCode')) store.set('invitedBy', ref.toUpperCase());
   document.querySelectorAll('[data-slot="appname"]').forEach((el) => { el.textContent = CONFIG.APP_NAME; });
   P.initInstall();
-  P.onInstallChange(() => { if (['dnes', 'signaly', 'nastaveni'].includes(route.name)) rerender({ soft: true }); });
+  watchMoving();   // 1.15.3: automatic repaints wait while a finger scrolls the page
+  P.onInstallChange(() => { if (['dnes', 'signaly', 'nastaveni'].includes(route.name)) autoRender(); });
   /* 1.13.1: one leverage profile for every money number (cards, detail, sheet, robot-for-me) – set before the first render */
   D.setLevOf((sym) => B.selLev(sym));
   W.setAutoLev((sym) => B.selLev(sym));
@@ -750,7 +841,7 @@ async function boot() {
   await iosInstallFirst();
   await gate();
   /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */
-  Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } if (!sheetOpen()) rerender({ soft: true }); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
+  Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } if (!sheetOpen()) autoRender(); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
   W.setAutoLev((sym) => B.selLev(sym));
@@ -781,9 +872,9 @@ async function boot() {
   Live.onStatus(() => renderChrome());
   Live.onLive(() => {
     const closed = walletCheck();
-    if (closed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
+    if (closed && route.name === 'terminal' && !sheetOpen()) autoRender();
     checkAlerts();
-    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
+    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) autoRender();   // waits while a finger scrolls the page
     else renderChrome();
     /* 1.15.0: Peněženka's numbers follow the header on the same tick (one summary, one rounding) – they used to differ
        by 1 Kč; patched in place, so a button being tapped is never replaced */
@@ -791,7 +882,9 @@ async function boot() {
     document.dispatchEvent(new CustomEvent('pulse:live'));
   });
   setInterval(() => renderChrome(), 30000);
-  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'portfolio', 'moje', 'obchod', 'signaly', 'penezenka', 'historie'].includes(route.name)) rerender({ soft: true }); });
+  /* 1.15.3: a wallet change that came by itself (another device, sync.js) waits for a resting page like every automatic
+     repaint; the user's own buy / close repaints at once */
+  document.addEventListener('pulse:wallet', (ev) => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'portfolio', 'moje', 'obchod', 'signaly', 'penezenka', 'historie'].includes(route.name)) { if (ev.detail && ev.detail.auto) autoRender(); else rerender({ soft: true }); } });
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {

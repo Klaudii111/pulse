@@ -183,7 +183,7 @@ async function run() {
     if (timer == null) timer = setTimeout(() => { timer = null; sync(); }, 30000);
   }
   if (changed) {
-    document.dispatchEvent(new CustomEvent('pulse:wallet'));
+    document.dispatchEvent(new CustomEvent('pulse:wallet', { detail: { auto: true } }));   // 1.15.3: not the user's own tap
     try { rerenderFn(); } catch { /* ignore */ }
   }
 }
