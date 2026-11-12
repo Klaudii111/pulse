@@ -1,1 +1,30 @@
 /* 1.15.0 release round (A): Dnes, Signály, signal detail, styles, daily robot – fixes after the client's-eyes review. Skin tokens only (no hard colours). */
+
+/* A1 "Robot ukončil – ukončit taky?" (Dnes) */
+.rx-card { border: 1px solid var(--gold-line); background: var(--sk-card); border-radius: var(--r-card); padding: 14px 14px 6px; margin-bottom: 14px; }
+.rx-h { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--ink); }
+.rx-h .icon-sm { color: var(--gold); flex: none; }
+.rx-sub { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-3); }
+.rx-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.rx-row.is-extra { display: none; }
+.rx-card.is-all .rx-row.is-extra { display: grid; }
+.rx-main { display: flex; gap: 10px; align-items: center; min-width: 0; color: inherit; text-decoration: none; }
+.rx-id { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.rx-n { font-size: 15px; overflow-wrap: anywhere; }
+.rx-s { font-size: 12.5px; color: var(--ink-3); }
+.rx-me { font-size: 13px; font-weight: 600; }
+.rx-me.tone-up { color: var(--up); } .rx-me.tone-down { color: var(--down); } .rx-me.tone-flat { color: var(--ink-2); }
+.rx-b { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.rx-b .btn { white-space: nowrap; }
+.rx-keep { color: var(--ink-3); }
+.rx-more { border-top: 1px solid var(--line); }
+
+/* A1 Signály → Ukončené: the robot's own ended trades */
+.rb-list { display: flex; flex-direction: column; gap: 8px; }
+.rb-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--r-card); background: var(--sk-card); border: 1px solid var(--line); }
+.rb-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rb-n { font-size: 15px; }
+.rb-s { font-size: 12.5px; color: var(--ink-3); }
+.rb-my { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--gold); min-height: 32px; }
+.rb-v { font-size: 15px; } .rb-v.up { color: var(--up); } .rb-v.down { color: var(--down); }
+.dh-wait { color: var(--ink-4); font-weight: 500; }

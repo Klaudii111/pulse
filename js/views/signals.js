@@ -10,6 +10,7 @@ import { icon, il, seg, segMove, ladder, pill, skCard, liveState, haptic, monogr
 import * as B from '../brief.js';
 import * as H from '../health.js';
 import { offLine } from './learn.js';
+import * as W from '../wallet.js';
 
 const seen = new Set(); // ladders animate only the first time a card appears
 
@@ -260,8 +261,42 @@ export function buyable(data, now, hz = 'ALL') {
 function mineOpen(data, now, hz) {
   return openIn(data, hz).filter((x) => D.sigPhase(x, now) === 'open' && ['mine', 'order'].includes(D.cardState(x, data, now).code));
 }
+/* 1.15.0 (A1) the robot's own ended trades (paper.json closed[]) whose signal is no longer in signals / history:
+   listed in "Ukončené" so the tab never says 0 while the robot ended trades today. Horizon = the id's prefix (DNY-, MESIC-…). */
+const twin = (id) => String(id || '').replace(/-\d+$/, '');
+export function robotEnded(data, hz = 'ALL', now = D.clock()) {
+  const cl = data?.paper?.closed;
+  if (!Array.isArray(cl) || !cl.length) return [];
+  const known = new Set(D.allOpen(data).concat(data?.history?.signals || []).map((x) => twin(x.id)));
+  const vis = VISIBLE_HZ();
+  const wl = W.get() || {};
+  const opn = wl.positions || [];
+  const mine = opn.concat(wl.closed || []);
+  return cl.filter((x) => x && x.signal_id && !known.has(twin(x.signal_id)))
+    .map((x) => {
+      const h = String(x.signal_id).split('-')[0];
+      const my = mine.find((p) => p.sigId && twin(p.sigId) === twin(x.signal_id));
+      const at = Date.parse(x.closed_at || 0);
+      return { rb: true, id: x.signal_id, symbol: x.symbol, horizon: h, at: Number.isFinite(at) ? at : 0, pct: Number.isFinite(+x.pnl_pct) && x.pnl_pct != null ? +x.pnl_pct : null, my: my || null, open: !!(my && opn.includes(my)) };
+    })
+    .filter((x) => vis.includes(x.horizon) && (hz === 'ALL' || x.horizon === hz))
+    .sort((a, b) => b.at - a.at);
+}
+function rbWhen(ms, now) {
+  if (!ms) return '';
+  const same = new Date(ms).toDateString() === new Date(+now).toDateString();
+  return `${same ? t('fmt.today') : F.dm(new Date(ms))} ${F.time(new Date(ms))}`;
+}
+function rbRow(x, now, i) {
+  const w = B.whatIs(x.symbol, null);
+  const tn = x.pct == null ? '' : x.pct > 0 ? 'up' : x.pct < 0 ? 'down' : '';
+  const link = x.my ? `<a class="rb-my link" href="#/obchod/${F.esc(x.my.id)}">${t(x.open ? 'rb.myOpen' : 'rb.myDone')}${icon('chev-right', 'icon-xs')}</a>` : '';
+  return `<div class="rb-row" style="--i:${Math.min(i, 10)}">${monogram(x.symbol, w.name)}<span class="rb-id"><b class="rb-n">${F.esc(w.name)}</b>
+    <span class="rb-s num">${F.esc(t('rb.when', { d: rbWhen(x.at, now) }))}</span>${link}</span>
+    <b class="rb-v num ${tn}">${x.pct != null ? F.spct(x.pct, 1) : '–'}</b></div>`;
+}
 function phaseList(data, hz, ph, now) {
-  if (ph === 'closed') return D.closedSignals(data, now).filter((x) => hz === 'ALL' || x.horizon === hz);
+  if (ph === 'closed') return D.closedSignals(data, now).filter((x) => hz === 'ALL' || x.horizon === hz).concat(robotEnded(data, hz, now));
   if (ph === 'open') return buyable(data, now, hz);
   return openIn(data, hz).filter((x) => D.sigPhase(x, now) === ph);
 }
@@ -288,6 +323,10 @@ function sigBody(ctx) {
   }
   const shown = list.slice(0, 60);
   /* 1.13.7: the profile is chosen in the control row above (sgControls) – no second switch above the list */
+  if (ph === 'closed') {
+    const sig = shown.filter((x) => !x.rb), rb = shown.filter((x) => x.rb);
+    return `${sig.length ? `<div class="sc-list" data-list="closed">${sig.map((x, i) => B.compact(x, { data, now, i })).join('')}</div>` : ''}${rb.length ? `<h2 class="hz-group rb-h">${t('rb.h')}<small class="num">${rb.length}</small></h2><div class="rb-list">${rb.map((x, i) => rbRow(x, now, i)).join('')}</div>` : ''}`;
+  }
   return `${off}<div class="sc-list" data-list="${ph}">${shown.map((x, i) => B.compact(x, { data, now, i })).join('')}</div>${mineHtml}`;
 }
 

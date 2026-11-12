@@ -243,6 +243,13 @@ export const actions = {
   'h-close'(el, ev, ctx) { closeConfirm(ctx, el.dataset.id); },
   'h-term'(el) { store.set('termSym', el.dataset.sym); window.__pulseGo('#/terminal'); },
   'ts-go'(el) { window.__pulseGo(el.dataset.href); },
+  'rx-keep'(el, ev, ctx) {
+    P.followOff(el.dataset.id);
+    const row = el.closest('.rx-row');
+    if (row) row.remove();
+    ctx.rerender({ soft: true });
+  },
+  'rx-all'(el) { const c = el.closest('.rx-card'); if (c) c.classList.add('is-all'); el.remove(); },
 };
 
 /* ---------- 1.15.1 Dnes = three questions, in this order (owner 12. 11.: "přijdeš do appky a aby bylo jasné, jaké
@@ -336,9 +343,41 @@ function heroKolik(ctx) {
   return `<a class="d-hero d2-hero" id="acc-card" href="#/portfolio">
     <span class="d-hero-l"><span class="d-k">${t('ts.kolik')}${icon('chev-right', 'icon-xs')}</span>
       <span class="d-hero-v num" data-eq="${p.eq}">${F.money(p.eq, c, 0)}</span>
-      <span class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.mpct(hd.todayPct, sm.today) })}</span>
+      ${sm.todayReady === false ? `<span class="d-hero-ch dh-wait">${t('dh.todayWait')}</span>` /* 1.15.0 (A6): prices of my trades not on this device yet */
+        : `<span class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.mpct(hd.todayPct, sm.today) })}</span>`}
       <span class="d-hero-s num" data-free="${p.free}" data-inplay="${p.inPlay}">${t('ts.split', { f: F.money(p.free, c, 0), u: F.money(p.inPlay, c, 0) })}</span></span>
   </a>`;
+}
+
+/* 1.15.0 (A1) "Robot ukončil – ukončit taky?": my open trades whose robot trade has ended (P.robotExits), minus the ones
+   I chose to keep ("Nechat"). The money figure is the same summary row as in "Jak se daří" below (never a second calculation). */
+export function robotExitCard(ctx) {
+  const sm = W.summary(ctx.data);
+  const c = sm.w.ccy;
+  const now = +ctx.now();
+  const list = P.robotExits(ctx.data, sm.w).filter((x) => !P.isFollowOff(x.pos.id))
+    .map((x) => ({ ...x, row: sm.rows.find((r) => r.id === x.pos.id) })).filter((x) => x.row);
+  if (!list.length) return '';
+  const n = list.length;
+  const nm = (x) => B.whatIs(x.pos.sym, x.pos.name).name;
+  const title = n === 1 ? t('rx.t1', { n: nm(list[0]) }) : t('rx.tN', { n, u: F.unit('trade', n) });
+  const rows = list.map((x, i) => {
+    const r = x.row;
+    const when = x.at ? whenText(x.at, now) : '';
+    const res = x.pnlPct != null ? ` (${F.spct(x.pnlPct, 1)})` : '';
+    const mt = D.moneyTone(r.pnl, c, r.pnlPct);
+    const mine = mt.zero ? `±${F.money(0, c, 0)}` : mt.text;
+    return `<div class="rx-row${i >= 3 ? ' is-extra' : ''}" data-rx="${F.esc(r.id)}">
+      <a class="rx-main" href="#/obchod/${F.esc(r.id)}">${monogram(r.sym, nm(x))}<span class="rx-id"><b class="rx-n">${F.esc(nm(x))}</b>
+        <span class="rx-s num">${F.esc(when ? t('rx.when', { d: when, r: res }) : t('rx.when0', { r: res }))}</span>
+        <span class="rx-me num tone-${mt.tone}">${F.esc(t('rx.me', { v: mine }))}</span></span></a>
+      <span class="rx-b"><button type="button" class="btn btn-primary btn-small" data-action="h-close" data-id="${F.esc(r.id)}">${t('rx.close')}</button>
+        <button type="button" class="btn btn-ghost btn-small rx-keep" data-action="rx-keep" data-id="${F.esc(r.id)}">${t('rx.keep')}</button></span>
+    </div>`;
+  }).join('');
+  const more = n > 3 ? `<button type="button" class="alert-more rx-more" data-action="rx-all">${t('rx.all', { n })}</button>` : '';
+  return `<section class="d-block rx-card" id="rx-card" aria-labelledby="rx-h"><h2 class="d-h rx-h" id="rx-h">${icon('robot', 'icon-sm')}<span>${F.esc(title)}</span></h2>
+    <p class="rx-sub">${t('rx.sub')}</p><div class="rx-list">${rows}</div>${more}</section>`;
 }
 
 export function render(ctx) {
@@ -354,7 +393,7 @@ export function render(ctx) {
   const mine = `<section class="d-block d-mine-top d2-mine" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/portfolio">${t('ts.mineH')}${icon('chev-right', 'icon-xs')}</a></h2>${dnesBlock(ctx)}</section>`;
   return head + `<div class="d2-grid">
   ${heroKolik(ctx)}
-  <div class="d2-sigcol">${todayBlock(ctx)}${Den.cardHtml(now)}</div>
+  <div class="d2-sigcol">${robotExitCard(ctx)}${todayBlock(ctx)}${Den.cardHtml(now)}</div>
   ${mine}
   <div class="d2-more">${paths()}${B.statsRow(ctx.data, now)}</div>
   </div>
