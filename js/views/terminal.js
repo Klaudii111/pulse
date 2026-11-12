@@ -77,7 +77,7 @@ export function bigAcc(sm) {
     <p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('acc.big')}</p>
     <p class="big-acc-v num">${money(sm.equity, c, 0)}</p>
     <div class="big-acc-row num"><span>${t('acc.free')} <b>${money(Math.max(0, sm.free), c, 0)}</b></span><span>${t('acc.inPlay')} <b>${money(sm.used + sm.reserved, c, 0)}</b></span></div>
-    <div class="big-acc-btns"><button type="button" class="btn btn-secondary btn-small" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('u.acc.load')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('u.acc.wd')}</button></div>
+    <div class="big-acc-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('u.acc.load')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('u.acc.wd')}</button></div>
   </section>`;
 }
 

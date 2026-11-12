@@ -444,10 +444,23 @@ export function levExamples(m) {
       <td class="num down">${n.worst != null ? (n.capped ? `${sm(n.worst)}<small class="lx-all">${t('mb.all')}</small>` : sm(n.worst)) : '–'}</td>
       <td class="num">${F.num(w, w % 1 ? 1 : 0)} %</td></tr>`;
   }).join('');
+  /* 1.11.3: phones get one 2-line card per leverage instead of the wide table (same levNums numbers, no sideways scroll) */
+  const sn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.num(Math.abs(v), 0);
+  const kv = (k, v, cls = '') => `<span class="lx-kv"><span class="lx-k">${k}</span> <b class="num ${cls}">${v}</b></span>`;
+  const cards = rows.map((lev) => {
+    const n = levNums({ ...arg, lev });
+    const off = lev > mx, on = lev === m.sel;
+    const w = 100 / lev;
+    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}" aria-disabled="true"` : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}" role="radio" aria-checked="${on}"`;
+    const worst = n.worst != null ? `${sn(n.worst)}${n.capped ? ` <small class="lx-allc">(${t('mb.all')})</small>` : ''}` : '–';
+    return `<button type="button" class="lx-row${off ? ' is-off' : ''}${on ? ' is-on' : ''}" ${act}>
+      <span class="lx-r1"><b class="num">1:${lev}</b> · ${t('lx.r.n', { v: `<span class="num">${F.money(n.notional, m.ccy, 0)}</span>` })}${off ? `<small class="lx-offc">${t(lev <= pro && !M.isPro() ? 'lx.onlyPro' : 'lx.never')}</small>` : ''}</span>
+      <span class="lx-r2">${ok ? kv(t('lx.k.avg'), n.avg != null ? `≈ ${sn(n.avg)}` : '–', 'up') : ''}${kv(t('lx.k.tp'), n.best != null ? sn(n.best) : '–', 'up')}${kv(t('lx.k.sl'), worst, 'down')}${kv(t(m.side === 'SELL' ? 'lx.k.wipeSell' : 'lx.k.wipe'), `${m.side === 'SELL' ? '+' : '−'}${F.num(w, w % 1 ? 1 : 0)} %`)}</span></button>`;
+  }).join('');
   return `<details class="lx"${m.exOpen ? ' open' : ''}><summary data-lx>${t('lx.title')}${icon('chev-down', 'icon-xs')}</summary>
     <p class="lx-sub">${t('lx.sub', { a: F.money(m.amount, m.ccy, 0) })}</p>
     <div class="lx-wrap"><table class="lx-tab"><thead><tr><th scope="col">${t('lx.c.lev')}</th><th scope="col">${t('lx.c.n')}</th><th scope="col">${t('lx.c.avg')}</th><th scope="col">${t('lx.c.tp')}</th><th scope="col">${t('lx.c.sl')}</th><th scope="col">${t(m.side === 'SELL' ? 'lx.c.wipeSell' : 'lx.c.wipe')}</th></tr></thead>
-    <tbody>${tr}</tbody></table></div><p class="lev-why" hidden></p><p class="lx-note">${t(ok ? 'lx.note' : 'lx.noteOld')}</p></details>`;
+    <tbody>${tr}</tbody></table></div><div class="lx-cards" role="radiogroup" aria-label="${F.esc(t('lx.title'))}">${cards}</div><p class="lev-why" hidden></p><p class="lx-note">${t(ok ? 'lx.note' : 'lx.noteOld')}</p></details>`;
 }
 /* card / detail: the block for the example deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {

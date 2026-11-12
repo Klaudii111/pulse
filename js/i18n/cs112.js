@@ -39,4 +39,6 @@ export default {
   'pro.offDone': 'Vypnuto: páky jako pro drobné investory v EU.',
   'th.PAKAMT.t': 'Páka u brokerů (MetaTrader)',
   'th.STOPOUT.s': 'Stop-out – když ztráta spolkne celý vklad, obchod se sám zavře. Víc než vklad neztratíš.',
+  /* 1.11.3 Příklady pák na telefonu: karta na každou páku */
+  'lx.r.n': 'obchoduješ za {v}', 'lx.k.avg': 'průměrně', 'lx.k.tp': 'cíl', 'lx.k.sl': 'stop', 'lx.k.wipe': 'vklad zmizí při', 'lx.k.wipeSell': 'vklad zmizí při',
 };

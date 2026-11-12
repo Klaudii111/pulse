@@ -39,4 +39,6 @@ export default {
   'pro.offDone': 'Off: EU retail leverage.',
   'th.PAKAMT.t': 'Leverage at brokers (MetaTrader)',
   'th.STOPOUT.s': 'Stop-out – when the loss eats the whole deposit, the trade closes by itself. You cannot lose more than the deposit.',
+  /* 1.11.3 leverage examples on phones: one card per leverage */
+  'lx.r.n': 'you trade {v}', 'lx.k.avg': 'average', 'lx.k.tp': 'target', 'lx.k.sl': 'stop', 'lx.k.wipe': 'deposit gone at', 'lx.k.wipeSell': 'deposit gone at',
 };

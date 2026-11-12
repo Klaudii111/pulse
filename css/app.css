@@ -2747,3 +2747,59 @@ body::after {
 /* 1.11.2: the Obchodovat button keeps the account line on one row; the desktop sidebar lets the background through */
 .d-trade { padding: 0 16px; gap: 6px; }
 @media (min-width: 1024px) { :root:not([data-theme='light']) .sidebar { background: rgba(5, 7, 13, 0.62); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); } }
+
+/* ===================== 1.11.3 – Příklady pák as cards on phones, account bar in the new look, contrast ===================== */
+.lx { container-type: inline-size; }
+.lx-cards { display: grid; gap: 6px; padding: 8px 10px 2px; }
+.lx-row {
+  display: grid; gap: 4px; width: 100%; min-height: 44px; padding: 9px 12px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line);
+  transition: border-color .2s, background .2s;
+}
+.lx-r1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 13.5px; color: var(--ink-2); line-height: 1.3; }
+.lx-r1 > b, .tk-out .lx-r1 > b { font-size: 14.5px; font-weight: 720; color: var(--ink); }
+.lx-r1 .num { color: var(--ink); font-weight: 620; }
+.lx-r2 { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; line-height: 1.35; }
+.lx-kv { white-space: nowrap; }
+.lx-k { color: var(--ink-3); }
+.lx-kv b, .tk-out .lx-kv b { font-size: 12.5px; font-weight: 660; color: var(--ink); }
+.lx .lx-kv b.up { color: var(--up); } .lx .lx-kv b.down { color: var(--down); }
+.lx-allc { font-size: 11px; font-weight: 600; color: var(--down); }
+.lx-offc { flex-basis: 100%; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.lx-row.is-on { border-color: rgba(217, 183, 121, 0.6); background: linear-gradient(180deg, rgba(217, 183, 121, 0.18), rgba(217, 183, 121, 0.06)); box-shadow: inset 3px 0 0 var(--gold), 0 4px 14px rgba(217, 183, 121, 0.1); }
+.lx-row.is-off { cursor: help; background: transparent; border-style: dashed; }
+.lx-row.is-off .lx-r1, .lx-row.is-off .lx-r1 > b, .lx-row.is-off .lx-r1 .num, .lx-row.is-off .lx-k, .lx .lx-row.is-off .lx-kv b { color: var(--ink-3); }
+.lx-row.is-off .lx-r2 { opacity: .8; }
+.lx-row:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.lx-row:active { transform: scale(0.99); }
+.lx-wrap { display: none; }
+@container (min-width: 600px) { .lx-wrap { display: block; } .lx-cards { display: none; } }
+:root[data-theme='light'] .lx-row { background: rgba(255, 255, 255, 0.7); }
+:root[data-theme='light'] .lx-row.is-on { background: color-mix(in srgb, var(--gold) 12%, #fff); }
+:root[data-theme='light'] .lx-row.is-off { background: transparent; }
+
+/* account bar on Obchodovat: glass card with the gradient border, gold primary button (as Můj účet on Dnes) */
+.big-acc {
+  border: 1px solid transparent;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(217, 183, 121, 0.10) 0%, rgba(217, 183, 121, 0) 55%) padding-box,
+    linear-gradient(180deg, rgba(22, 26, 40, 0.94), rgba(12, 15, 24, 0.94)) padding-box,
+    linear-gradient(135deg, rgba(238, 214, 167, 0.6), rgba(139, 92, 246, 0.22) 45%, rgba(52, 211, 153, 0.28)) border-box;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.big-acc-k { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.big-acc-k .icon { color: var(--gold); }
+.big-acc-row { color: var(--ink-2); }
+.big-acc-btns .btn { padding: 0 16px; }
+:root[data-theme='light'] .big-acc {
+  background: linear-gradient(#fff, #fff) padding-box, linear-gradient(135deg, rgba(154, 118, 49, 0.55), rgba(139, 92, 246, 0.2), rgba(23, 116, 74, 0.3)) border-box;
+  box-shadow: 0 6px 20px rgba(30, 26, 18, 0.06);
+}
+
+/* contrast (WCAG AA, measured on the rendered aurora 390x844): quiet text and the loss red one step lighter in the dark theme */
+:root:not([data-theme='light']) { --ink-3: #9d9b95; --down: #ef786e; }
+.mb-avg b small { opacity: 1; }
+.mb-col.is-on .mb-pl, .lx-row.is-on .lx-k { color: var(--ink-2); }
+/* detail "Páka" table: rows over the EU cap stay readable (grey text instead of 55 % opacity) */
+.levtab tr.is-over td, .levtab tr.is-over td.up, .levtab tr.is-over td.down { opacity: 1; color: var(--ink-3); }
+.levtab tr.is-over td small { opacity: 1; }
