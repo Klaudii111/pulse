@@ -55,4 +55,6 @@ export default {
   'tk.clamp': 'Your style would put in {w}, you have {f} free – putting in {v}.',
   'tk.clampOwn': 'You entered {w}, you have {f} free – putting in {v}.',
   'rx.meWait': 'you now …',
+  /* P1-07: one trade -> singular */
+  'rx.sub1': 'The robot has left this trade. Leave too?',
 };

@@ -382,7 +382,7 @@ export function robotExitCard(ctx) {
   }).join('');
   const more = n > 3 ? `<button type="button" class="alert-more rx-more" data-action="rx-all">${t('rx.all', { n })}</button>` : '';
   return `<section class="d-block rx-card" id="rx-card" aria-labelledby="rx-h"><h2 class="d-h rx-h" id="rx-h">${icon('robot', 'icon-sm')}<span>${F.esc(title)}</span></h2>
-    <p class="rx-sub">${t('rx.sub')}</p><div class="rx-list">${rows}</div>${more}</section>`;
+    <p class="rx-sub">${t(n === 1 ? 'rx.sub1' : 'rx.sub')}</p><div class="rx-list">${rows}</div>${more}</section>`;
 }
 
 export function render(ctx) {

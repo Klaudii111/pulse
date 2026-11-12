@@ -45,4 +45,7 @@ export default {
   'tk.clamp': 'Styl by vložil {w}, volných peněz máš {f} – vkládáš {v}.',
   'tk.clampOwn': 'Zadal jsi {w}, volných peněz máš {f} – vkládáš {v}.',
   'rx.meWait': 'ty teď …',
+  /* P1-07: one trade -> singular */
+  'rx.sub1': 'Robot z obchodu vystoupil. Chceš taky?',
+  'rx.sub': 'Robot z těchto obchodů vystoupil. Chceš taky?',
 };
