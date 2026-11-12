@@ -22,14 +22,16 @@ export function render(ctx) {
   const s = current(ctx);
   if (!s) return head + `<div class="empty"><h3>${t('calc.none.t')}</h3><p>${t('calc.none.s')}</p></div>`;
   const cs = D.calcState();
-  const cap = D.leverageCap(ctx.data, s);
-  const lev = Math.min(cs.leverage, cap);
+  const cap = D.calcLevCap(s);
+  /* 1.13.5: the page opens on the leverage of MY profile for this market (the slider can still try another one) */
+  const lev = Math.min(D.profLevFor(D.prof(), s.symbol), cap);
+  if (cs.leverage !== lev) D.saveCalc({ leverage: lev });
   const C = CONFIG.CALC;
   const ticks = [];
   for (let i = C.LEVERAGE_MIN; i <= C.LEVERAGE_MAX; i++) ticks.push(i);
   const lockPct = ((C.LEVERAGE_MAX - cap) / (C.LEVERAGE_MAX - C.LEVERAGE_MIN)) * 100;
   const fillPct = ((lev - C.LEVERAGE_MIN) / (C.LEVERAGE_MAX - C.LEVERAGE_MIN)) * 100;
-  const capReason = D.leverageText(ctx.data, s);
+  const capReason = t('calc.capMkt', { v: cap });
 
   return head + `<div class="calc-layout">
     <div class="calc-inputs">
@@ -51,12 +53,13 @@ export function render(ctx) {
       <section class="field">
         <p class="field-l">${t('calc.profile')}</p>
         <div class="profiles" role="radiogroup" aria-label="${t('calc.profile')}">
-          ${C.RISK_PROFILES.map((p) => `<button type="button" class="profile" role="radio" aria-checked="${p.id === cs.profile}" data-action="profile" data-id="${p.id}">
+          ${C.RISK_PROFILES.map((p) => { const pl = Math.min(D.profLevFor(p, s.symbol), cap); const x = D.positionAt(s, { account: cs.account, ccy: cs.ccy, leverage: pl }); return `<button type="button" class="profile" role="radio" aria-checked="${p.id === cs.profile}" data-action="profile" data-id="${p.id}">
             <span class="profile-t">${t(`mb.p.${p.id}`)}<span class="radio-dot"></span></span>
-            <span class="profile-v num" style="display:block">${F.pct(p.pct, 0)}</span>
-            <span class="profile-s">${t('calc.perTrade')}</span>
-          </button>`).join('')}
+            <span class="profile-v num" style="display:block">1:${pl}</span>
+            <span class="profile-s num">${t('calc.worstAcc', { v: F.pct(Math.round(x.lossPct * 10) / 10, Math.round(x.lossPct * 10) / 10 < 1 ? 1 : 0) })}</span>
+          </button>`; }).join('')}
         </div>
+        <p class="field-s">${t('calc.sameDep')}</p>
       </section>
 
       <section class="field">
@@ -75,10 +78,10 @@ export function render(ctx) {
 
 function output(ctx, s) {
   const cs = D.calcState();
-  const prof = CONFIG.CALC.RISK_PROFILES.find((p) => p.id === cs.profile);
-  const lev = Math.min(cs.leverage, D.leverageCap(ctx.data, s));
+  const lev = Math.min(cs.leverage, D.calcLevCap(s));
   const fx = D.fxRates(ctx.data);
-  const r = D.computePosition(s, { account: cs.account, ccy: cs.ccy, leverage: lev, riskPct: prof.pct, fx });
+  /* 1.13.5: one deposit for every profile (D.stakeFor) – the leverage only makes the trade bigger */
+  const r = D.positionAt(s, { account: cs.account, ccy: cs.ccy, leverage: lev, fx });
   const rate = r.quote === cs.ccy ? '' : t('calc.rate', { q: r.quote, v: F.num((fx[cs.ccy] || 1) / (fx[r.quote] || 1), 2), c: cs.ccy }) + (fx.as_of ? t('calc.rateFrom', { date: F.dm(fx.as_of) }) : t('calc.rateApprox'));
   return `<div class="result-card">
     <p class="result-hero-l">${t('calc.size')}</p>
@@ -90,8 +93,7 @@ function output(ctx, s) {
       <div><p class="rg-l">${t('calc.loss')}</p><p class="rg-v num down">${F.money(-r.loss, cs.ccy)}</p><p class="rg-s num">${t('calc.ofAcc', { v: F.spct(-r.lossPct, 2) })}</p></div>
       <div><p class="rg-l">${t('calc.gain')}</p><p class="rg-v num up">+${F.money(r.gain, cs.ccy)}</p><p class="rg-s num">${t('calc.ofAcc', { v: F.spct(r.gainPct, 2) })}</p></div>
     </div>
-    ${r.limited ? `<div class="callout warn">${icon('alert')}<div>${t('calc.limited', { lev, risk: F.pct(prof.pct, 0), need: F.num(r.needLev, 1), real: F.pct(r.lossPct, 2) })}</div></div>`
-      : `<div class="callout">${icon('info')}<div>${t('calc.levNote')}</div></div>`}
+    <div class="callout">${icon('info')}<div>${t('calc.levNote5', { a: F.money(r.deposit, cs.ccy, 0), n: F.money(r.notional, cs.ccy, 0), lev: lev > 1 ? `1:${lev}` : t('mb.noLev') })}</div></div>
     <p class="jnote" style="margin-top:12px">${F.esc(t('calc.foot', { rate }))}</p>
   </div>`;
 }
@@ -108,7 +110,7 @@ export function mount(el, ctx) {
   if (ctx.params.get('s')) D.saveCalc({ signalId: s.id });
   /* 1.13.0: the capital is the wallet (read-only here; Dobít / Vybrat in Nastavení → Můj profil) */
   const lev = el.querySelector('#lev');
-  const cap = D.leverageCap(ctx.data, s);
+  const cap = D.calcLevCap(s);
   lev?.addEventListener('input', () => {
     let v = +lev.value;
     if (v > cap) { v = cap; lev.value = cap; haptic(20); }
@@ -142,7 +144,7 @@ export const actions = {
     D.setProf(el.dataset.id);
     const s = current(ctx);
     if (s) {
-      const v = Math.min(D.profLevFor(D.prof(), s.symbol), D.leverageCap(ctx.data, s));
+      const v = Math.min(D.profLevFor(D.prof(), s.symbol), D.calcLevCap(s));
       D.saveCalc({ leverage: v });
       const lv = document.getElementById('lev'); if (lv) { lv.value = v; lv.setAttribute('aria-valuetext', `${v}×`); }
       const lt = document.getElementById('lev-val'); if (lt) lt.textContent = `${v}×`;

@@ -271,7 +271,8 @@ function sigBody(ctx) {
     if (ph === 'open') return (off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`) + mineHtml;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `${off}<div class="sc-list" data-list="${ph}">${list.slice(0, 60).map((x, i, arr) => B.compact(x, { data, now, i, chips: i === B.firstMoneyIdx(arr, data, now) })).join('')}</div>${mineHtml}`;
+  const shown = list.slice(0, 60);
+  return `${off}${B.firstMoneyIdx(shown, data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list" data-list="${ph}">${shown.map((x, i) => B.compact(x, { data, now, i })).join('')}</div>${mineHtml}`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {

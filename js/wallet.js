@@ -138,6 +138,14 @@ export function summary(data) {
   return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
     totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
+/* 1.13.5 the displayed split that always adds up: Peněženka (equity, rounded once from the unrounded parts) =
+   Volné + Ve hře + Otevřené obchody; the rounding remainder goes to "Otevřené" (header, Dnes, Peněženka, Obchodovat) */
+export function parts(sm) {
+  const eq = Math.round(sm.equity);
+  const inPlay = Math.round(sm.used + sm.reserved);
+  const free = Math.max(0, Math.round(sm.cash));
+  return { eq, free, inPlay, open: eq - free - inPlay };
+}
 /* the wallet (Peněženka = equity) with the last known data – header, Dnes, Více, Nastavení and the sizing read this one number */
 export const equityNow = () => summary(lastData).equity;
 

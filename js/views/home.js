@@ -109,9 +109,9 @@ export function accountCard(ctx) {
   /* 1.13.0 ONE hero: balance, today's change in colour, small Volné / Ve hře (= in trades + waiting buys) */
   return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
     <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
-      <p class="d-hero-v num">${F.money(sm.equity, c, 0)}</p>
+      <p class="d-hero-v num" data-eq="${W.parts(sm).eq}">${F.money(W.parts(sm).eq, c, 0)}</p>
       <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.mpct(v, sm.today); })() })}${sm.rows.length ? `<small class="d-hero-incl">${t('dh.inclOpen')}</small>` : ''}</p>
-      <p class="d-hero-s num">${t(Math.abs(sm.open) >= 0.5 ? 'dh.split3' : 'dh.split', { f: F.money(Math.max(0, sm.cash), c, 0), u: F.money(sm.used + sm.reserved, c, 0), o: (sm.open > 0 ? '+' : '') + F.money(sm.open, c, 0) })}</p></a>
+      ${(() => { const p = W.parts(sm); return `<p class="d-hero-s num" data-free="${p.free}" data-inplay="${p.inPlay}" data-open="${p.open}">${t(p.open !== 0 ? 'dh.split3' : 'dh.split', { f: F.money(p.free, c, 0), u: F.money(p.inPlay, c, 0), o: (p.open > 0 ? '+' : '') + F.money(p.open, c, 0) })}</p>`; })()}</a>
     <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
 }
@@ -261,7 +261,7 @@ export function render(ctx) {
   ${B.statsRow(ctx.data, now)}</div>
   <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
-    ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true, chips: i === B.firstMoneyIdx(sigs, ctx.data, now) })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
+    ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
   </section>
   <section class="d-block d-c3" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   </div>

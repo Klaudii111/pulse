@@ -182,10 +182,10 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       <p class="d-ctitle"><span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span><span>${t(`c.type.${s.horizon}`)}</span>${s.exit_date ? `<span class="num">${F.esc(B.lenText(s, now))}</span>` : ''}<span class="sc-no num">#${D.sigNo(s)}</span></p>
       ${whyTop ? `<p class="cc-why d-why"><b>${t('c.why')}</b> ${F.esc(whyTop)}</p>` : ''}
       ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : ''}
-      ${(() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`; })()}
+      ${D.sigPhase(s, now) === 'closed' ? `<p class="bc-todo is-big b-todo tone-flat d-ended">${icon('close', 'icon-xs')}<span>${t('det.sigEnded')}</span></p>` : (() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return (cs.my?.closed && cs.cta ? `${B.myLine(cs)}<p class="d-reentry">${t('det.reentry')}</p>` : '') + (en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`); })()}
       ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
-      ${cs.my ? B.myLine(cs) : ''}
+      ${cs.my && !(cs.my.closed && cs.cta) ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
       ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
     </div>`;
@@ -229,7 +229,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${brief}
       ${moneySec}
       ${chartHtml}
-      ${live ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
+      ${live && D.sigPhase(s, now) !== 'closed' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
       <details class="d-adv" id="d-adv"><summary><span><b>${t('det.adv')}</b><small>${t('det.advS')}</small></span>${icon('chev-down', 'icon-sm')}</summary>
       ${moneyOpen ? `<div id="d-lx">${lxHtml()}</div><p class="mb-cap">${icon('shield', 'icon-xs')}<span>${F.esc(B.levWhy(s.symbol, M.maxLev(s.symbol)))}</span></p>` : ''}
       ${statusHtml}
@@ -387,7 +387,7 @@ function ctaHtml(ctx, s) {
   const cs = D.cardState(s, ctx.data, ctx.now());
   if (!cs.cta) return `<p class="inv-note">${F.esc(cs.text)}</p>`;
   const lim = cs.cta === 'limit';
-  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${t('sc.invest')}</button>
+  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${t(cs.my?.closed ? 'sc.investAgain' : 'sc.invest')}</button>
     <p class="risk-line">${t('risk.line')}</p>`;
 }
 
@@ -455,9 +455,8 @@ function brokerButton() {
 
 function openBroker(ctx, s) {
   const cs = D.calcState();
-  const prof = CONFIG.CALC.RISK_PROFILES.find((p) => p.id === cs.profile);
-  const lev = Math.min(cs.leverage, D.leverageCap(ctx.data, s));
-  const pos = D.computePosition(s, { account: cs.account, ccy: cs.ccy, leverage: lev, riskPct: prof.pct, fx: D.fxRates(ctx.data) });
+  const lev = Math.min(cs.leverage, D.calcLevCap(s));
+  const pos = D.positionAt(s, { account: cs.account, ccy: cs.ccy, leverage: lev, fx: D.fxRates(ctx.data) });
   const summary = [
     `${s.symbol} (${s.name})`,
     t('sum.side', { v: t(`side.${s.action}.long`) }),

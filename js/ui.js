@@ -218,21 +218,21 @@ export function groupInput(inp) {
   return v;
 }
 
-/* 1.13.3: a toast never covers the button the user is about to press: when it would overlap a visible primary
-   action (card Zainvestovat, Koupit / Prodat …) it moves under the top bar */
-const CTA_SEL = '.btn-primary, .cc-go, .btn-invest, .trade-btn, .d-cta .btn';
-function dodgeCta(root, el) {
+/* 1.13.5 ONE toast position everywhere: at the bottom – above the tab bar (phone) / bottom-right (desktop, CSS).
+   It never covers the button the user is about to press: over an open sheet it sits right above the sheet's bottom
+   button (Zainvestovat / Koupit hned …), on a page above a primary action it would overlap. Never at the top. */
+const CTA_SEL = '.btn-primary, .cc-go, .btn-invest, .trade-btn, .d-cta .btn, .tk-go, .sheet-cta .btn';
+function liftOver(root, el, scope) {
   const r = el.getBoundingClientRect();
   if (!r.height) return;
-  const hit = [...document.querySelectorAll(`#view ${CTA_SEL.split(', ').join(', #view ')}`)].some((b) => {
+  let top = Infinity;
+  scope.querySelectorAll(CTA_SEL).forEach((b) => {
     const q = b.getBoundingClientRect();
-    return q.height > 0 && q.bottom > r.top - 4 && q.top < r.bottom + 4 && q.right > r.left && q.left < r.right;
+    if (!(q.height > 0) || q.bottom <= 0 || q.top >= window.innerHeight) return;
+    if (q.bottom > r.top - 4 && q.top < r.bottom + 4 && q.right > r.left && q.left < r.right) top = Math.min(top, q.top);
   });
-  if (!hit) return;
-  const tb = document.querySelector('.topbar');
-  const top = tb && tb.getBoundingClientRect().height ? tb.getBoundingClientRect().bottom : 12;
-  root.style.top = `${Math.round(top + 8)}px`; root.style.bottom = 'auto';
-  root.classList.add('is-top');
+  if (top === Infinity || top < window.innerHeight * 0.4) return;
+  root.style.bottom = `${Math.round(window.innerHeight - top + 8)}px`;
 }
 
 export function toast(msg, { action = null, timeout = 3000 } = {}) {
@@ -242,14 +242,11 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top');
   const sh = [...document.querySelectorAll('.sheet.is-open:not(.is-closing)')].pop();
   if (sh) {
+    /* the sheet covers the tab bar: the toast goes on top of it, at its bottom edge */
+    root.classList.add('is-over');
     const r = sh.getBoundingClientRect();
-    if (r.top >= 72) root.style.bottom = `${Math.round(window.innerHeight - r.top + 8)}px`;
-    else {
-      const hd = sh.querySelector('.sheet-head');
-      root.style.top = `${Math.round((hd ? hd.getBoundingClientRect().bottom : r.top + 56) + 6)}px`;
-      root.style.bottom = 'auto';
-      root.classList.add('is-over');
-    }
+    if (r.bottom < window.innerHeight - 4) root.style.bottom = `${Math.round(window.innerHeight - r.bottom + 12)}px`;
+    else root.style.bottom = 'calc(var(--sab) + 14px)';
   }
   const el = document.createElement('div');
   el.className = 'toast';
@@ -258,7 +255,7 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   el.innerHTML = `<span>${msg}</span>${action ? `<button class="btn btn-primary" type="button">${F.esc(action.label)}</button>` : ''}`;
   if (action) el.querySelector('button').addEventListener('click', () => { action.fn(); hide(); });
   root.append(el);
-  if (!sh) dodgeCta(root, el);
+  liftOver(root, el, sh || document.getElementById('view') || document.body);
   let timer = setTimeout(hide, timeout);
   function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); } }, 260); }
   return hide;

@@ -142,7 +142,8 @@ function renderChrome() {
   let pill = badge;
   try {
     const sm = W.summary(data);
-    pill = `<a class="bal-pill" href="#/penezenka" aria-label="${F.esc(t('u.pill', { v: F.money(sm.equity, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num">${F.money(sm.equity, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
+    const eq = W.parts(sm).eq;
+    pill = `<a class="bal-pill" href="#/penezenka" aria-label="${F.esc(t('u.pill', { v: F.money(eq, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num" data-eq="${eq}">${F.money(eq, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
   } catch { /* storage blocked: keep the badge */ }
   document.querySelectorAll('[data-slot="badge"]').forEach((el) => { if (el.innerHTML !== pill) el.innerHTML = pill; });
   const ls = Live.status();
@@ -239,7 +240,7 @@ function newSignalOffer() {
   if (!s) return;
   openSheet({ small: true, label: t('nsig.t'), html: `<div class="sheet-head"><div><p class="sheet-title">${t('nsig.t')}</p><p class="sheet-sub">${t('nsig.s')}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-    <div class="sheet-body">${B.compact(s, { data, now: now(), notNow: true, chips: true })}</div>`,
+    <div class="sheet-body">${B.firstMoneyIdx([s], data, now()) === 0 ? B.profSwitch() : ''}${B.compact(s, { data, now: now(), notNow: true })}</div>`,
     onMount(el) { el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); } });
 }
 
@@ -454,7 +455,7 @@ const GLOBAL = {
   'lev-prof'(el) {
     if (!el.isConnected || el.closest('#tk')) return;
     B.setLevProfile(el.dataset.prof);
-    if (el.closest('.mp')) toast(t('mp.profDone', { p: t(`mb.p.${el.dataset.prof}`), s: B.profShort(el.dataset.prof) }));
+    /* 1.13.5: no toast in Nastavení – the selected profile is visible right there */
     if (!sheetOpen()) rerender({ soft: true });
   },
   /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */

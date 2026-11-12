@@ -3266,3 +3266,36 @@ body::after {
 .hi-legacy > summary .icon { margin-left: 2px; transition: transform .2s; }
 .hi-legacy[open] > summary .icon { transform: rotate(180deg); }
 .hi-legacy .hi-journal { margin-top: 10px; }
+
+/* 1.13.5 ONE profile switch above a list of signal cards (no chips on the cards) */
+.pf-sw { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.pf-sw-l { flex: none; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.pf-sw-g { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 3px; max-width: 440px; border-radius: 12px; background: var(--raise-2); border: 1px solid var(--line); }
+.pf-sw-b { height: 32px; padding: 0 4px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); background: transparent; border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.pf-sw-b[aria-checked='true'] { color: var(--gold-hi); background: var(--gold-soft); box-shadow: inset 0 0 0 1px var(--gold-line); }
+.sheet-body > .pf-sw { margin-top: 2px; }
+.sc-list { align-items: start; }
+/* money never breaks inside an amount ("max −CZK 2,000") */
+.nw { white-space: nowrap; }
+/* profile columns: the same deposit named in every column */
+.mb-pdep { white-space: normal; }
+.mb-same { font-size: 11.5px; line-height: 1.4; color: var(--ink-3); margin-top: 4px; }
+.tk-out .mb p.mb-same, .tk-out .mb p.mb-dd { display: block; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+.mb .mb-dd[hidden] { display: none !important; }
+.mb-dd { font-size: 11.5px; }
+/* the execution price: KOUPIT / PRODAT and the ticket head show the same ask / bid */
+.trade-btn .tpx-l { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; opacity: .75; margin-bottom: -3px; }
+.tk-side b small { font-size: 12px; font-weight: 600; opacity: .8; margin-right: 2px; }
+/* presets: 4 in a row, or 2 x 2 when the labels are long (EN "CZK 10,000") */
+.tk-pre { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tk-pre.is-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tk-pre .chip { justify-content: center; padding: 0 6px; white-space: nowrap; }
+/* detail: my trade closed, the signal still open · a closed signal */
+.d-reentry { margin: 4px 0 10px; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+.d-ended { display: flex; align-items: center; gap: 6px; }
+/* Robot / Výsledky: no second "Zatím žádný uzavřený obchod" */
+.res-empty-s { margin: 10px 2px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+/* one toast position: bottom above the tab bar (phone), bottom-right (desktop); never at the top */
+@media (min-width: 1100px) {
+  .toast-root { justify-items: end; padding-right: 28px; }
+}

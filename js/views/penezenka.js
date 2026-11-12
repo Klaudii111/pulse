@@ -52,12 +52,14 @@ export function renderWallet(ctx) {
   const wds = Math.abs((s.w.cash || []).filter((r) => r.k === 'wd').reduce((a, r) => a + r.amount, 0));
   const tot = D.moneyTone(s.total, c, s.totalPct);
   const rows = ledger(s.w);
+  const pt = W.parts(s);
   return head + `
   <section class="big-acc wl-hero" id="wl-hero"><p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('wl.title')}<span class="demo-chip">${t('badge.paperShort')}</span></p>
-    <p class="big-acc-v num">${F.money(s.equity, c, 0)}</p>
-    <div class="wl-split num">
-      <span><small>${t('wl.free')}</small><b>${F.money(Math.max(0, s.free), c, 0)}</b></span>
-      <span><small>${t('acc.inPlay')}</small><b>${F.money(s.used + s.reserved, c, 0)}</b>${s.rows.length ? `<em class="${tone(s.open)}">${t('wl.now', { v: sm(s.open, c) })}</em>` : ''}</span>
+    <p class="big-acc-v num" data-eq="${pt.eq}">${F.money(pt.eq, c, 0)}</p>
+    <div class="wl-split num" data-free="${pt.free}" data-inplay="${pt.inPlay}" data-open="${pt.open}">
+      <span><small>${t('wl.free')}</small><b>${F.money(pt.free, c, 0)}</b></span>
+      <span><small>${t('acc.inPlay')}</small><b>${F.money(pt.inPlay, c, 0)}</b></span>
+      ${s.rows.length || pt.open !== 0 ? `<span><small>${t('acc.open')}</small><b class="${tone(pt.open)}">${sm(pt.open, c)}</b></span>` : ''}
     </div>
     ${s.reserved > 0 ? `<p class="wl-inplay num">${t('zi.split', { a: F.money(s.used, c, 0), b: F.money(s.reserved, c, 0) })}</p>` : ''}
     <div hidden>

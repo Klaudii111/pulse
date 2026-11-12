@@ -143,7 +143,7 @@ function myProfile() {
       <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topupShort')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
     <p class="mp-l">${t('mp.prof')}</p>
     ${radio(D.PROFILES.map((p) => ({ id: p.id, t: `${t(`mb.p.${p.id}`)} · ${B.profShort(p.id)}`, s: t(`pf.long.${p.id}`) })), 'lev-prof', 'data-prof', rp.id)}
-    <p class="mp-sum" data-mp-stake="${stake}">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(rp.pct, 0) })}</span></p>
+    <p class="mp-sum" data-mp-stake="${stake}">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(D.profWorstPct(rp, 'AAPL'), 0) })}</span></p>
   </section>`;
 }
 

@@ -80,7 +80,7 @@ export function walletCard(ctx) {
 export function bigAcc(sm) {
   const c = sm.w.ccy;
   return `<section class="wl-line" id="big-acc" aria-label="${F.esc(t('acc.big'))}">
-    <a class="wl-line-l" href="#/penezenka">${icon('wallet', 'icon-xs')}<span class="wl-line-k">${t('acc.big')}</span><b class="num big-acc-v">${money(sm.equity, c, 0)}</b><span class="num big-acc-row">${t('acc.free')} ${money(Math.max(0, sm.free), c, 0)}</span></a>
+    <a class="wl-line-l" href="#/penezenka">${icon('wallet', 'icon-xs')}<span class="wl-line-k">${t('acc.big')}</span><b class="num big-acc-v">${money(W.parts(sm).eq, c, 0)}</b><span class="num big-acc-row">${t('acc.free')} ${money(W.parts(sm).free, c, 0)}</span></a>
     <button type="button" class="btn btn-secondary btn-small" data-action="w-load">${t('wl.topupShort')}</button>
   </section>`;
 }
@@ -333,8 +333,8 @@ export function render(ctx) {
       <div class="tv-box" id="t-tv" ${cmode === 'tv' ? '' : 'hidden'}></div>
       <a class="link verify-link" href="${verifyUrl(sym)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
       <div class="trade-btns" id="t-btns">
-        <button type="button" class="trade-btn buy" data-action="t-ticket" data-side="BUY"><span>${t('term.buy')}</span><b class="num" data-tpx="BUY">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'BUY')) : '–'}</b></button>
-        <button type="button" class="trade-btn sell" data-action="t-ticket" data-side="SELL"><span>${t('term.sell')}</span><b class="num" data-tpx="SELL">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'SELL')) : '–'}</b></button>
+        <button type="button" class="trade-btn buy" data-action="t-ticket" data-side="BUY"><span>${t('term.buy')}</span><small class="tpx-l">${t('px.buyAt')}</small><b class="num" data-tpx="BUY">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'BUY')) : '–'}</b></button>
+        <button type="button" class="trade-btn sell" data-action="t-ticket" data-side="SELL"><span>${t('term.sell')}</span><small class="tpx-l">${t('px.sellAt')}</small><b class="num" data-tpx="SELL">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'SELL')) : '–'}</b></button>
       </div>
       ${closedNote(sym)}
       <p class="trade-hint">${t('term.hint2', { lev: M.maxLev(sym) })}</p>
@@ -537,7 +537,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const goText = () => (mktOpen() ? t(side === 'SELL' ? 'inv.goAtOpenSell' : 'inv.goAtOpen', { d: sess().o ? openWhen(sess().o) : '' })
     : atOpen() ? t(side === 'SELL' ? 'inv.goOpenSell' : 'inv.goOpen', { v: pxC(sym, st.limit || 0) })
     : isLim() ? t(side === 'SELL' ? 'inv.goLimSell' : 'inv.goLim', { v: pxC(sym, st.limit || 0) })
-    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, q.p) }));
+    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, fillPx()) }));
   const blocked = () => false;
   /* the at-open line: when it buys, the protection and until when the order waits (the instrument's own session) */
   const openLine = () => {
@@ -553,7 +553,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, amountFor: (col) => D.stakeFor(sizeSig(), { prof: col.id, lev: col.lev, px: basePx() }), depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
       ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
@@ -561,11 +561,11 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     </div>${limLine()}${openLine()}`;
   };
   const body = () => `
-    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num" data-tkpx>${pxC(sym, q.p)}</b></div>
+    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num" data-tkpx><small>${t(side === 'SELL' ? 'px.sellAt' : 'px.buyAt')}</small> ${pxC(sym, fillPx())}</b></div>
     ${side === 'SELL' ? `<p class="tk-short">${t('tk.short')}</p>` : ''}
     ${useSig ? `<p class="tk-sig">${icon('signals', 'icon-xs')}${t('term.tkFromSig')}</p>` : ''}
     <p class="sheet-label">${t('inv.howMuch')}</p>
-    <div class="chips tk-chips">${presets.map((v) => `<button type="button" class="chip" data-amt="${v}" aria-pressed="${st.risk == null && st.amount === v}">${money(v, c)}</button>`).join('')}</div>
+    <div class="chips tk-chips tk-pre${presets.map((v) => money(v, c)).join('').replace(/<[^>]+>/g, '').length > 34 ? ' is-2x2' : ''}">${presets.map((v) => `<button type="button" class="chip" data-amt="${v}" aria-pressed="${st.risk == null && st.amount === v}">${money(v, c)}</button>`).join('')}</div>
     <label class="tk-in"><span>${t('inv.own', { c })}</span><input class="jin num" inputmode="numeric" autocomplete="off" data-in="amount" value="${amtIn(st.amount)}"></label>
     <div id="tk-out">${preview()}</div>
     <details class="tk-adv"><summary>${t('inv.adv')}${icon('chev-down', 'icon-xs')}</summary>
@@ -623,7 +623,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (lv) {
           ev.stopPropagation();
           /* a profile column = that profile's risk and leverage (deposit re-sized); a broker chip = only the leverage */
-          if (lv.dataset.prof) { st.prof = lv.dataset.prof; st.auto = true; st.risk = null; }
+          /* 1.13.5: the deposit stays (the typed one, or the one stake for all profiles) – the profile changes the leverage */
+          if (lv.dataset.prof) st.prof = lv.dataset.prof;
           st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd();
         }
         /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */

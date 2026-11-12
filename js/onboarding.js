@@ -81,7 +81,8 @@ function profCards() {
   const r = avgR();
   const sm = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${F.money(Math.abs(v), cs.ccy, 0)}`;
   return D.PROFILES.map((p) => {
-    const loss = cap * p.pct / 100;
+    /* 1.13.5: the same deposit for every profile, the leverage makes the loss ~1 / 2 / 5 % on a share */
+    const loss = cap * D.profWorstPct(p, 'AAPL') / 100;
     const ex = r != null ? t('onb.p.ex', { c: F.money(cap, cs.ccy, 0), a: sm(loss * r), l: sm(-loss) }) : t('onb.p.ex0', { c: F.money(cap, cs.ccy, 0), l: sm(-loss) });
     return `<button type="button" role="radio" class="onb-pc is-${p.id}" data-prof="${p.id}" aria-checked="${p.id === id}">
       <span class="onb-pc-h"><b>${t(`mb.p.${p.id}`)}</b><small>${B.profShort(p.id)}</small></span>

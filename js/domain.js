@@ -262,24 +262,32 @@ export function sizingBase(equity = null) {
   return Math.max(0, Math.floor(eq / step) * step);
 }
 /* the cap per trade ("Výchozí vklad až …" in Nastavení) */
-export function stakeCap(equity = null, id = null) { return niceRound(sizingBase(equity) * (prof(id).cap ?? 0.1)); }
+/* 1.13.5: ONE deposit for every profile = the Konzervativně stake (risk 1 % at the stop, no leverage, max 10 % of the wallet).
+   The profile changes only the LEVERAGE (Konzervativně bez páky · Vyváženě 1:2 · Agresivněji up to the market cap),
+   so the worst case grows with it: ~1 % · ~2 % · ~5 % of the wallet on a share (capped at the deposit). */
+export const BASE_PROF = PROFILES[0];
+export function stakeCap(equity = null) { return niceRound(sizingBase(equity) * (BASE_PROF.cap ?? 0.1)); }
+/* the worst share of the wallet a profile risks on one instrument (nominal: 1 % × its leverage, the deposit caps it) */
+export const profWorstPct = (p, sym = 'AAPL') => BASE_PROF.pct * profLevFor(p, sym);
 /* opt.prof = another profile than mine (the comparison columns); its leverage unless opt.lev says otherwise */
 export function stakeFor(s = null, opt = {}) {
   if (typeof opt === 'number' || opt == null) opt = { equity: opt }; // old call shape stakeFor(s, equity)
   const ccy = walletCcy();
   const eq = sizingBase(opt.equity ?? null);
-  const p = prof(opt.prof || null);
-  const cap = stakeCap(eq, p.id);
+  /* 1.13.5: the profile and the leverage do NOT change the deposit (opt.prof / opt.lev kept for old call shapes) */
+  const p = BASE_PROF;
+  const cap = stakeCap(eq);
   let a = cap;
-  const lev = opt.lev ?? (s?.symbol ? (opt.prof ? profLevFor(p, s.symbol) : profileLev(s.symbol)) : 1);
   const px = opt.px > 0 ? opt.px : s?.entry;
   if (s && px > 0 && s.stop > 0 && px !== s.stop) {
-    const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px) / Math.max(1, lev);
+    const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px);
     if (want < cap) { const step = 10 ** Math.max(0, Math.floor(Math.log10(want)) - 3); a = Math.floor(want / step + 1e-9) * step; }
   }
   return a >= (DEP_MIN[ccy] || 0) ? a : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
 }
 
+/* 1.13.5 Kalkulačka: the same leverage as the profiles = the market cap of the instrument (slider max LEVERAGE_MAX) */
+export const calcLevCap = (sig) => Math.max(1, Math.min(CONFIG.CALC.LEVERAGE_MAX, profLevFor(PROFILES[PROFILES.length - 1], sig?.symbol)));
 export function leverageCap(data, sig) {
   const c = CONFIG.CALC;
   return Math.max(c.LEVERAGE_MIN, Math.min(c.LEVERAGE_MAX, sig?.max_leverage ?? c.LEVERAGE_MAX, levelMaxLeverage(data)));
@@ -305,6 +313,22 @@ export function computePosition(sig, { account, ccy, leverage, riskPct, fx: fxIn
     marginPct: (notional / leverage / account) * 100,
     units, quote, limited, needLev, stopDist: stopDist * 100,
   };
+}
+
+/* 1.13.5 Kalkulačka + broker hand-off: the SAME deposit as the cards (stakeFor), the profile's leverage makes the trade bigger */
+export function positionAt(sig, { account, ccy, leverage, fx: fxIn = null }) {
+  const stopDist = Math.abs(sig.entry - sig.stop) / sig.entry;
+  const targetDist = Math.abs(sig.target - sig.entry) / sig.entry;
+  const lev = Math.max(1, leverage || 1);
+  const deposit = stakeFor(sig, { equity: account, px: sig.entry });
+  const notional = deposit * lev;
+  const loss = Math.min(deposit, notional * stopDist);
+  const gain = notional * targetDist;
+  const quote = CONFIG.CALC.QUOTE_CCY[sig.symbol] || 'USD';
+  const fx = fxIn || CONFIG.CALC.FX_PER_USD;
+  const units = (notional * ((fx[quote] || 1) / (fx[ccy] || 1))) / sig.entry;
+  return { deposit, notional, margin: deposit, loss, gain, lossPct: loss / account * 100, gainPct: gain / account * 100,
+    marginPct: deposit / account * 100, units, quote, stopDist: stopDist * 100, lev };
 }
 
 /* ---------- Bot runs / empty states ---------- */

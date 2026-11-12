@@ -68,13 +68,15 @@ const byHz = (hist, hz) => hist.filter((x) => (hz === 'ALL' ? VISIBLE_HZ().inclu
 let histAll = false;
 let histMonth = 'ALL';
 
-function tiles(perf, hz, hist, showR) {
+function tiles(perf, hz, hist, showR, anyClosed = true) {
   const s = perf.by_horizon[hz] || perf.by_horizon.ALL;
   const arr = byHz(hist, hz);
   const w = arr.filter((x) => x.result_r > 0).length;
   const wr = arr.length ? w / arr.length : 0;
   const avgPct = arr.length ? arr.reduce((a, x) => a + (x.result_pct || 0), 0) / arr.length : 0;
   /* no closed trade yet: 0 % would read like a failure -> say plainly that results come after the first close */
+  /* 1.13.5: no closed trade at all -> the headline already says it once; here only the plain "when" line */
+  if (!arr.length && !anyClosed) return `<p class="res-empty-s">${t('res.none.s')}</p>`;
   if (!arr.length) return `<div class="res-empty">${icon('clock')}<div><p class="card-t">${t('res.none.t')}</p><p class="card-s">${t('res.none.s')}</p></div></div>`;
   return `<div class="tiles">
     <div class="tile tile-ring">${ring(wr, `<b class="num" data-count="${(wr * 100).toFixed(2)}" data-dec="0" data-signed="0" data-count-key="wr-${hz}">${F.pct(wr * 100, 0)}</b>`, { size: 76, stroke: 6, cls: 'gold' })}
@@ -192,8 +194,8 @@ export function render(ctx) {
         <tbody>${series.filter((_, i) => i % 5 === 0).map((p) => { const v = heroVals(series, p); return `<tr><td>${F.dm(p.date)}</td><td>${F.spct(v.bot)}</td><td>${F.spct(v.spy)}</td></tr>`; }).join('')}</tbody></table>
     </section>
     <div class="results-side">
-      ${seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('hz.ALL') }, ...VISIBLE_HZ().map((x) => ({ id: x, label: F.HZ_LABEL[x] }))], active: hz })}
-      <div id="stats">${tiles(perf, hz, hist, showR)}</div>
+      ${seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('u.tab.ALL') }, ...VISIBLE_HZ().map((x) => ({ id: x, label: t(`u.tab.${x}`) }))], active: hz })}
+      <div id="stats">${tiles(perf, hz, hist, showR, nClosed > 0)}</div>
       <p class="honest">${icon('info', 'icon-xs')} ${t('res.honest')}</p>
     </div>
   </div>
@@ -228,7 +230,7 @@ export function unmount() { chart && chart.destroy(); chart = null; }
 function refreshLower(ctx) {
   const root = document.getElementById('view');
   const hz = store.get('resHz', 'ALL');
-  root.querySelector('#stats').innerHTML = tiles(ctx.data.performance, hz, ctx.data.history.signals, D.showR(ctx.data));
+  root.querySelector('#stats').innerHTML = tiles(ctx.data.performance, hz, ctx.data.history.signals, D.showR(ctx.data), ctx.data.history.signals.some((x) => VISIBLE_HZ().includes(x.horizon)));
   root.querySelector('#res-lower').innerHTML = lower(ctx.data.performance, ctx.data.history.signals, hz, D.showR(ctx.data));
 }
 

@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.13.4',
+  APP_VERSION: '1.13.5',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -114,13 +114,14 @@ export const CONFIG = {
   /* Calculator */
   CALC: {
     DEFAULT_ACCOUNT: { CZK: 100000, EUR: 4000, USD: 4500 },
-    /* 1.13.2 ONE profile = risk at the stop + leverage + the largest deposit per trade (share of the wallet).
-       Konzervativně 1 % bez páky · Vyváženě 2 % páka až 1:2 · Agresivněji 4 % páka až do zákonného stropu trhu
-       (akcie 1:5, zlato 1:20, krypto 1:2). Labels: i18n "mb.p.<id>". */
+    /* 1.13.5 ONE deposit for all profiles (the first row: risk 1 % at the stop, no leverage, max 10 % of the wallet);
+       the profile only changes the LEVERAGE: Konzervativně bez páky · Vyváženě 1:2 · Agresivněji up to the market cap
+       (akcie 1:5, indexy a zlato 1:20, krypto 1:2). pct = the nominal worst % of the wallet on a share (1 % × leverage);
+       the real one is computed per signal. Labels: i18n "mb.p.<id>". */
     RISK_PROFILES: [
       { id: 'cons', pct: 1, lev: 1, cap: 0.1 },
-      { id: 'bal', pct: 2, lev: 2, cap: 0.2 },
-      { id: 'aggr', pct: 4, lev: 'max', cap: 0.25 },
+      { id: 'bal', pct: 2, lev: 2, cap: 0.1 },
+      { id: 'aggr', pct: 5, lev: 'max', cap: 0.1 },
     ],
     LEVERAGE_MIN: 1,
     /* fallback max leverage when an instrument has no max_leverage (instruments.json) */
