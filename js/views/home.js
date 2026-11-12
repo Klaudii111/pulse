@@ -370,7 +370,7 @@ export function robotExitCard(ctx) {
     const res = x.pnlPct != null ? ` (${F.spct(x.pnlPct, 1)})` : '';
     /* P2-01: no price on this device yet -> a quiet "ty teď …" (never a wrong number for the first second), like "Dnes …" */
     const wait = r.live === false || r.today === null;
-    const mt = wait ? { tone: 'flat wait' } : D.moneyTone(r.pnl, c, r.pnlPct);
+    const mt = wait ? { tone: 'wait' } : D.moneyTone(r.pnl, c, r.pnlPct);
     const mine = wait ? '' : mt.zero ? `±${F.money(0, c, 0)}` : mt.text;
     return `<div class="rx-row${i >= 3 ? ' is-extra' : ''}" data-rx="${F.esc(r.id)}">
       <a class="rx-main" href="#/obchod/${F.esc(r.id)}">${monogram(r.sym, nm(x))}<span class="rx-id"><b class="rx-n">${F.esc(nm(x))}</b>
