@@ -71,7 +71,7 @@ function heroHtml(sm) {
     <div class="pf-rrow"><div class="range-chips pf-ranges" role="group" aria-label="${F.esc(t('po.rangeAria'))}">${P.RANGES.map((r) => `<button type="button" class="range-chip" data-pf-range="${r.id}" aria-pressed="${r.id === P.curRange()}">${t(`po.r.${r.id}`)}</button>`).join('')}</div></div>
     <p class="pf-cnote num" id="pf-cnote"></p>
     <div class="pf-split num" data-free="${h.free}" data-inplay="${h.inPlay}">
-      <a href="#/penezenka"><small>${t('acc.inPlay')}${B.qh('VEHRE')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b></a>
+      <a href="#/penezenka"><small>${t('acc.inPlay')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b></a>
       <a href="#/penezenka"><small>${t('acc.free')}</small><b data-pf="free">${F.money(h.free, c, 0)}</b></a>
       <a href="#pf-open" data-action="pf-jump"><small>${t('po.nOpen')}</small><b data-pf="n">${h.n}</b></a>
     </div>
@@ -85,7 +85,7 @@ export function row(p, sm, { compact = false, sel = false } = {}) {
   const w = B.whatIs(p.sym, p.name);
   const td = f.today;
   const sp = sparks.get(p.sym);
-  return `<a class="pf-row tone-${tone(p.pnl)}${compact ? ' is-compact' : ''}${sel ? ' is-sel' : ''}" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}" ${sel ? 'aria-current="true"' : ''}>
+  return `<a class="pf-row pf-t-${tone(p.pnl)}${compact ? ' is-compact' : ''}${sel ? ' is-sel' : ''}" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}" ${sel ? 'aria-current="true"' : ''}>
     ${monogram(p.sym, w.name)}
     <span class="pf-id"><span class="pf-n"><b>${F.esc(w.name)}</b>${w.name !== p.sym ? `<span class="ticker">${F.esc(p.sym)}</span>` : ''}${p.side === 'SELL' ? `<span class="side-tag sell">${t('tr.sell')}</span>` : ''}</span>
       <span class="pf-meta num">${F.esc(t('po.rowMeta', { d: whenText(p.openedAt), a: F.money(p.margin, c, 0) }))}${(p.lev || 1) > 1 ? ` · ${F.esc(levTxt(p.lev))}` : ''}</span>
@@ -228,7 +228,7 @@ function patchRows(root, sm) {
       if (vEl) vEl.dataset.v = String(f.value);
       const pn = set('pnl', `${sg(p.pnl, c)} · ${F.mpct(p.pnlPct, p.pnl)}`); if (pn) pn.className = `pf-res ${tone(p.pnl)}`;
       const td = set('today', t('po.rowToday', { v: sg(f.today ?? 0, c) })); if (td) td.className = `pf-td ${tone(f.today ?? 0)}`;
-      el.classList.remove('tone-up', 'tone-down', 'tone-flat'); el.classList.add(`tone-${tone(p.pnl)}`);
+      el.classList.remove('pf-t-up', 'pf-t-down', 'pf-t-flat'); el.classList.add(`pf-t-${tone(p.pnl)}`);
     });
   });
 }
@@ -322,8 +322,9 @@ function kolikHtml(p, sm) {
 /* the signal's plain state for me (open trade) */
 function sigSentence(ctx, p, s) {
   const f = P.sourceOf(p, W.get());
-  if (f.kind === 'own' || !s) return t('pd.st.own');
+  if (f.kind === 'own') return t('pd.st.own');
   const rb = P.robotState(ctx.data, p);
+  if (!s) return t(rb?.k === 'holds' ? 'pd.st.holds0' : 'pd.st.noSig');
   const ended = s.status !== 'open' || (s.intraday_hit && !s.live_hit);
   if (ended) return t('pd.st.ended', { why: t(`pd.end.${['target', 'stop'].includes(s.status) ? s.status : s.intraday_hit === 'target' || s.intraday_hit === 'stop' ? s.intraday_hit : 'time'}`) });
   if (rb?.k === 'closed') return t('pd.st.robotOut');
@@ -417,7 +418,7 @@ function actionsHtml(ctx, p, sm, closed) {
   }
   items.push(`<button type="button" class="btn btn-secondary" data-action="pd-term" data-sym="${F.esc(p.sym)}">${icon('chart', 'icon-sm')}<span>${t('pd.a.term')}</span></button>`);
   if (s) items.push(`<button type="button" class="btn btn-secondary" data-action="open-signal" data-id="${F.esc(s.id)}">${icon('signals', 'icon-sm')}<span>${t('pd.a.sig')}</span></button>`);
-  items.push(`<button type="button" class="btn btn-secondary" data-action="pd-share" data-id="${F.esc(p.id)}">${icon('share', 'icon-sm')}<span>${t('share.btn')}</span></button>`);
+  items.push(`<button type="button" class="btn btn-secondary" data-action="pd-share" data-id="${F.esc(p.id)}">${icon('share', 'icon-sm')}<span>${t('pd.a.share')}</span></button>`);
   if (closed) items.push(`<a class="btn btn-secondary" href="#/historie">${icon('history', 'icon-sm')}<span>${t('hi.title')}</span></a>`);
   const bar0 = closed ? '' : `<div class="pd-cta" id="pd-cta"><button type="button" class="btn btn-primary btn-block pd-close" data-action="pos-close" data-id="${F.esc(p.id)}"><span>${t('pd.a.close')}</span><b class="num" data-d="ctaV">${sg(p.pnl, c)}</b></button></div>`;
   return `${bar0}<section class="pd-acts" aria-label="${F.esc(t('pd.acts'))}">${items.join('')}</section>`;
@@ -435,11 +436,11 @@ function topHtml(p, sm, closed) {
   const c = sm.w.ccy;
   const f = P.facts(p, sm);
   if (closed) {
-    return `<section class="pd-top card tone-${tone(p.pnl)}"><p class="d-k">${t('pd.closedK', { d: whenText(p.closedAt) })}</p>
+    return `<section class="pd-top card pf-t-${tone(p.pnl)}"><p class="d-k">${t('pd.closedK', { d: whenText(p.closedAt) })}</p>
       <p class="pd-val num ${tone(p.pnl)}">${sg(p.pnl, c)} <small>(${F.mpct(p.pnlPct, p.pnl)})</small></p>
       <p class="pd-res num">${t('pd.closedS', { a: F.money(p.margin, c, 0), b: F.money(f.value, c, 0) })}</p></section>`;
   }
-  return `<section class="pd-top card tone-${tone(p.pnl)}"><p class="d-k">${t('pd.valK')}</p>
+  return `<section class="pd-top card pf-t-${tone(p.pnl)}"><p class="d-k">${t('pd.valK')}</p>
     <p class="pd-val num" data-d="value">${F.money(f.value, c, 0)}</p>
     <p class="pd-res num"><span class="${tone(p.pnl)}" data-d="pnl">${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})</span><span class="pd-res-l">${t('pd.resK')}</span></p>
     <p class="pd-res num"><span class="${tone(f.today ?? 0)}" data-d="today">${sg(f.today ?? 0, c)}</span><span class="pd-res-l">${t('pd.todayK')}</span></p></section>`;
@@ -544,7 +545,7 @@ export function mountTrade(el, ctx) {
   const marks = () => (f.order ? [] : [{ t: p0.entryT || p0.openedAt, v: p0.entry, cls: 'me', label: t(p0.side === 'SELL' ? 'pd.mk.sold' : 'pd.mk.bought') }]
     .concat(closed ? [{ t: p0.closedAt, v: p0.exit, cls: 'out', label: t('pd.mk.out') }] : []));
   const box = el.querySelector('#pd-bars');
-  if (box) pdBars = Bars.mount(box, 'pdb', p0.sym, { fmt: (v) => pxOf(p0.sym, v), tfKey: 'barsTf.pd', levels, marks, path: () => (D.allOpen(ctx.data).find((x) => x.symbol === p0.sym)?.price_path || []) });
+  if (box) pdBars = Bars.mount(box, 'pdb', p0.sym, { fmt: (v) => pxOf(p0.sym, v), tfKey: 'barsTf.pd', levels, marks, fit: 'bars', path: () => (D.allOpen(ctx.data).find((x) => x.symbol === p0.sym)?.price_path || []) });
   if (!closed && !f.order) {
     /* today's range + the reasons file load once, then the sections repaint */
     const dr = drCache.get(p0.sym);

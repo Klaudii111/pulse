@@ -114,7 +114,7 @@ const tLabel = (ms, d) => (d.ms >= 86400000 ? F.dm(new Date(ms)) : d.range === '
 
 /* SVG chart. levels = [{ v, label, cls }] (signal detail: entry / stop / target) */
 /* 1.15.0 marks = [{ t, v, cls, label }] (Portfolio: where I bought / sold) – drawn on the candle of that time when it is on screen */
-export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.price(v), marks = [] } = {}) {
+export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.price(v), marks = [], fit = 'all' } = {}) {
   if (!box) return;
   const w = box.clientWidth || 340, h = box.clientHeight || 220;
   /* 1.13.6: a flat zero-volume bar (a filler for a closed hour) is no candle – dropped (the newest bar stays) */
@@ -124,7 +124,12 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   const lv = levels.filter((x) => x.v > 0);
   /* a mark is on screen when its time falls inside the drawn candles (from the first candle's start to now) */
   const mk = (marks || []).filter((m) => m && m.v > 0 && m.t >= ks[0].t && m.t <= Date.now() + 60000);
-  let lo = Math.min(...ks.map((k) => k.l), ...lv.map((x) => x.v), ...mk.map((m) => m.v)), hi = Math.max(...ks.map((k) => k.h), ...lv.map((x) => x.v), ...mk.map((m) => m.v));
+  /* 1.15.0 fit 'bars' (trade detail): the scale follows the candles (+ levels within 1,5× their range) – a far stop / target
+     stays visible as a line at the edge with ↑ / ↓ and its price, so the candles never shrink into a flat line */
+  const inFit = (v, a, b) => fit !== 'bars' || (v >= a - (b - a) * 0.75 && v <= b + (b - a) * 0.75);
+  const kLo = Math.min(...ks.map((k) => k.l), ...mk.map((m) => m.v)), kHi = Math.max(...ks.map((k) => k.h), ...mk.map((m) => m.v));
+  const lvIn = lv.filter((x) => inFit(x.v, kLo, kHi));
+  let lo = Math.min(kLo, ...lvIn.map((x) => x.v)), hi = Math.max(kHi, ...lvIn.map((x) => x.v));
   const span = (hi - lo) || hi * 0.001 || 1; lo -= span * 0.06; hi += span * 0.06;
   const pad = { l: 4, r: 70, t: 10, b: 20 };
   const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
@@ -152,7 +157,11 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
      off each other (min 13 px, inside the plot); the hi / lo axis labels are left out where they would touch any label */
   const nowY = Y(last.c);
   const top = pad.t + 6, bot = h - pad.b - 6, GAP = 13, PILL = 16;
-  const ll = lv.map((x) => ({ x, y0: Y(x.v), y: Y(x.v) })).sort((a, b) => a.y0 - b.y0);
+  const edge = (x) => (x.v > hi ? { ...x, v0: x.v, v: hi - (hi - lo) * 0.01, label: `${x.label} ↑ ${fmt(x.v)}` } : x.v < lo ? { ...x, v0: x.v, v: lo + (hi - lo) * 0.01, label: `${x.label} ↓ ${fmt(x.v)}` } : x);
+  const all0 = lv.map(edge);
+  /* a level outside the scale: its dashed line at the edge, the label (name ↑ / ↓ price) inside the plot on the left */
+  const outL = all0.filter((x) => x.v0 != null);
+  const ll = all0.filter((x) => x.v0 == null).map((x) => ({ x, y0: Y(x.v), y: Y(x.v) })).sort((a, b) => a.y0 - b.y0);
   for (let pass = 0; pass < 4; pass++) {
     ll.forEach((l) => { if (Math.abs(l.y - nowY) < PILL) l.y = l.y0 <= nowY ? nowY - PILL : nowY + PILL; });
     ll.forEach((l, i) => { if (i && l.y < ll[i - 1].y + GAP) l.y = ll[i - 1].y + GAP; });
@@ -160,6 +169,7 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
     ll.forEach((l) => { if (l.y < top) l.y = top; });
   }
   const lab = ll.map(({ x, y }) => `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(x.v).toFixed(1)}" y2="${Y(x.v).toFixed(1)}" class="br-lv ${x.cls || ''}"/><text x="${w - pad.r + 8}" y="${(y + 4).toFixed(1)}" class="ck-ax br-lvt ${x.cls || ''}" data-lvl="1">${F.esc(x.label)}</text>`).join('');
+  const outLab = outL.map((x, i) => { const top = x.v0 > hi; const y = top ? pad.t + 12 + i * 13 : h - pad.b - 6 - i * 13; return `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(x.v).toFixed(1)}" y2="${Y(x.v).toFixed(1)}" class="br-lv ${x.cls || ''}"/><text x="${pad.l + 4}" y="${y.toFixed(1)}" class="ck-ax br-lvt br-lvo ${x.cls || ''}" data-lvl="1">${F.esc(x.label)}</text>`; }).join('');
   const taken = ll.map((l) => l.y).concat(nowY);
   const free = (yc) => taken.every((y) => Math.abs(y - yc) >= GAP + 1);
   const hiY = pad.t + 4, loY = h - pad.b - 6;
@@ -167,7 +177,7 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   const mki = (m) => { let i = 0; for (let j = 0; j < ks.length; j++) if (ks[j].t <= m.t) i = j; return i; };
   const marksSvg = mk.map((m) => { const x = X(mki(m)), y = Y(m.v); const lx = x > w - pad.r - 40 ? x - 6 : x + 8; return `<g class="br-mk ${m.cls || ''}" data-mark="${F.esc(m.cls || '')}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5" class="br-mk-o"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" class="br-mk-i"/>${m.label ? `<text x="${lx.toFixed(1)}" y="${(y - 8).toFixed(1)}" class="br-mk-t"${x > w - pad.r - 40 ? ' text-anchor="end"' : ''}>${F.esc(m.label)}</text>` : ''}</g>`; }).join('');
   box.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${F.esc(t('bars.aria', { k: d.key }))}">
-    ${grid}${lab}${body}${marksSvg}
+    ${grid}${lab}${outLab}${body}${marksSvg}
     <line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(last.c).toFixed(1)}" y2="${Y(last.c).toFixed(1)}" class="ck-last"/>
     <rect x="${w - pad.r + 4}" y="${(Y(last.c) - 9).toFixed(1)}" width="${pad.r - 6}" height="18" rx="5" class="br-now ${up ? 'up' : 'down'}"/>
     <text x="${w - pad.r + 9}" y="${(Y(last.c) + 4).toFixed(1)}" class="ck-lab br-nowt">${F.esc(fmt(last.c))}</text>
@@ -230,7 +240,7 @@ function fbHtml(key, d, fmt, reason, compact) {
    the chart never goes blank: candles from the last bars saved on this device, else built from the signal's price_path
    and the prices collected since the app opened, plus the last-price block; a new try every 30 s.
    Returns { refresh() – live tick, reload(), destroy(), ok() }. onFail() is called once on the first failure. */
-export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v), onFail, tfKey = 'barsTf', type = null, path = null, marks = [] } = {}) {
+export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v), onFail, tfKey = 'barsTf', type = null, path = null, marks = [], fit = 'all' } = {}) {
   let d = null, gone = false, seq = 0, fb = false, retryT = null, failed = false;
   const box = () => root.querySelector(`#${prefix}-box`);
   const fbEl = () => root.querySelector(`#${prefix}-fb`);
@@ -247,12 +257,12 @@ export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v),
     if (gone || !box()) return;
     if (fb) {
       const fd = fbData();
-      if (fd) { box().hidden = false; draw(box(), fd, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks }); } else box().hidden = true;
+      if (fd) { box().hidden = false; draw(box(), fd, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks, fit }); } else box().hidden = true;
       const f = fbEl(); if (f) { f.hidden = false; f.innerHTML = fbHtml(key, fd, fmt, failReason(key), compact()); }
       const s = srcEl(); if (s) s.textContent = fd ? (fd.built ? t('bars.fb.built') : t('bars.fb.saved', { t: F.dmTime(new Date(fd.saved)) })) : '';
       return;
     }
-    if (d) draw(box(), d, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks });
+    if (d) draw(box(), d, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks, fit });
   };
   const load = async () => {
     const my = ++seq;

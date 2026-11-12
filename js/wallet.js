@@ -137,7 +137,8 @@ export function summary(data) {
   const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + c.pnl - (c.openedAt < t0 ? (w.dayOpen[c.id] ?? 0) : 0), 0);
   const fees = w.cash.filter((c) => c.k === 'swap' && c.at >= t0).reduce((a, c) => a + c.amount, 0);
   /* 1.15.0: one equity snapshot per day (refreshed at most every 30 min) – the Portfolio chart's real history from now on */
-  if (snapDue(w, equity)) dirty = true;
+  /* only a value made of real prices is kept (every open trade has a price on this device) */
+  if (rows.every((r) => r.live) && snapDue(w, equity)) dirty = true;
   if (dirty) save(w);
   const today = realized + openChg + fees;
   const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);

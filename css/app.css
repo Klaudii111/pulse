@@ -3662,7 +3662,8 @@ body::before, body::after, :root[data-theme='light'] body::before, :root[data-th
 .pf-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .pf-split a { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px; border-radius: var(--r-tile); background: var(--raise-2); border: 1px solid var(--line); color: inherit; text-decoration: none; }
 .pf-split small { display: flex; align-items: center; gap: 4px; font-size: 11.5px; line-height: 1.25; color: var(--ink-3); }
-.pf-split b { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-split b { font-size: 15px; font-weight: 650; line-height: 1.2; overflow-wrap: anywhere; }
+@media (max-width: 420px) { .pf-split { gap: 6px; } .pf-split a { padding: 9px 8px; } .pf-split b { font-size: 13.5px; } }
 /* --- trade rows --- */
 .pf-list { display: grid; gap: 8px; }
 .pf-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; border-radius: 16px; background: var(--raise); border: 1px solid var(--line); color: inherit; text-decoration: none; transition: border-color .15s var(--ease), background .15s var(--ease); }
@@ -3767,7 +3768,8 @@ body::before, body::after, :root[data-theme='light'] body::before, :root[data-th
 .pd-close b { font-variant-numeric: tabular-nums; }
 .pd-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .pd-acts .btn { justify-content: flex-start; gap: 8px; min-width: 0; text-align: left; }
-.pd-acts .btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-acts .btn { height: auto; min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
+.pd-acts .btn span { white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
 .pd-tl { list-style: none; margin: 0; padding: 0; display: grid; }
 .pd-tl li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: baseline; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.4; }
 .pd-tl li:first-child { border-top: 0; }
@@ -3790,6 +3792,7 @@ body::before, body::after, :root[data-theme='light'] body::before, :root[data-th
 .br-mk-t { font-size: 10.5px; font-weight: 650; fill: var(--gold); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
 .br-mk.out .br-mk-t { fill: var(--ink-2); }
 .br-lv.ent { stroke: var(--gold); } .br-lvt.ent { fill: var(--gold); }
+.br-lvo { paint-order: stroke; stroke: var(--raise); stroke-width: 3px; }
 .br-lv.ext { stroke: var(--ink-2); } .br-lvt.ext { fill: var(--ink-2); }
 /* Obchodovat: my position chip · signal detail: "Máš v portfoliu" */
 .pd-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }

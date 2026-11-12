@@ -258,7 +258,9 @@ export function timeline(data, p, w) {
     if (rb.k === 'closed') { const b = Date.parse(rb.x.closed_at || 0); if (b) ev.push({ at: b, k: 'robotOut' }); }
   }
   if (p.closedAt != null) ev.push({ at: p.closedAt, k: 'closed', why: p.why, v: p.pnl });
-  return ev.filter((e) => e.at > 0).sort((a, b) => a.at - b.at);
+  /* a time the data could not give (missing / unparsable) is left out, never shown as 1. 1. */
+  const lo = Math.min(p.openedAt || Date.now(), w.createdAt || Date.now()) - 60 * 86400000;
+  return ev.filter((e) => Number.isFinite(e.at) && e.at > lo).sort((a, b) => a.at - b.at);
 }
 
 /* store key for the chosen range of the account chart */
