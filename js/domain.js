@@ -6,7 +6,7 @@ import { LESSONS } from './lessons.js';
 import { t, L } from './i18n/index.js';
 import * as Live from './live.js';
 import { nextUsOpen } from './views/signals.js';
-import { priceOf, pnlAt, outcome, costs, nyCloseAfter } from './wallet.js';
+import { priceOf, pnlAt, outcome, costs, nyCloseAfter, equityNow } from './wallet.js';
 import * as M from './market.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
@@ -207,7 +207,7 @@ export function calcState() {
   return {
     ccy,
     /* 1.13.0: the capital IS the wallet (Peněženka) once it exists – Kalkulačka, cards and the robot read one number */
-    account: walletBalance() || (Number.isFinite(s.account) && s.account > 0 ? s.account : c.DEFAULT_ACCOUNT[ccy]),
+    account: walletEquity() || (Number.isFinite(s.account) && s.account > 0 ? s.account : c.DEFAULT_ACCOUNT[ccy]),
     leverage: Number.isFinite(s.leverage) ? s.leverage : 2,
     profile: c.RISK_PROFILES.some((p) => p.id === s.profile) ? s.profile : c.RISK_PROFILES[0].id,
     signalId: s.signalId || null,
@@ -216,6 +216,8 @@ export function calcState() {
 /* the stored values only (calcState().account is the wallet once it exists – never write that back as "typed") */
 export const saveCalc = (patch) => { const c = calcState(); store.set('calc', { ...c, account: +(store.get('calc', {}) || {}).account || c.account, ...patch }); };
 function walletBalance() { const w = store.get('wallet', null); return w && w.v === 1 && w.balance > 0 ? Math.round(w.balance) : 0; }
+/* 1.13.1: Peněženka = volné + ve hře + otevřený zisk/ztráta (W.summary equity), the same number everywhere */
+export function walletEquity() { if (!walletBalance()) return 0; try { const e = equityNow(); return e > 0 ? e : walletBalance(); } catch { return walletBalance(); } }
 /* 1.13.0 "Můj profil": risk Opatrně 1 % / Odvážně 3 % (CONFIG.CALC.RISK_PROFILES) */
 export function riskProf() {
   const cs = calcState();
@@ -230,15 +232,34 @@ export function niceRound(v) {
 /* 1.13.0 THE default deposit (signal cards, detail, invest sheet, the robot-for-me):
    lose at most risk % of the wallet at the stop, and put at most 10 % (Opatrně) / 20 % (Odvážně) of the wallet into one trade. */
 export const STAKE_CAP = { conservative: 0.1, aggressive: 0.2 };
-/* lev (robot-for-me): the deposit shrinks with the leverage, so the loss at the stop stays at risk % */
-export function stakeFor(s = null, equity = null, lev = 1) {
+/* 1.13.1: ONE sizing for every screen. lev = the user's leverage profile for the instrument (setLevOf, app.js),
+   px = the price the trade really starts at (live ask / bid, or the limit) - so the loss at the stop is exactly risk %
+   of the wallet (Peněženka = equity) unless the 10 / 20 % cap is smaller. */
+let levOf = () => 1;
+export const setLevOf = (fn) => { levOf = fn; };
+export const profileLev = (sym) => { const v = +levOf(sym); return v >= 1 ? v : 1; };
+/* the wallet figure the sizing starts from: equity floored to 100 Kč / 10 € $ (stable while prices tick) */
+export function sizingBase(equity = null) {
   const ccy = walletCcy();
-  const eq = equity ?? (walletBalance() || calcState().account);
+  const eq = equity ?? (walletEquity() || calcState().account);
+  const step = ccy === 'CZK' ? 100 : 10;
+  return Math.max(0, Math.floor(eq / step) * step);
+}
+/* the cap per trade ("Výchozí vklad až …" in Nastavení) */
+export function stakeCap(equity = null) { return niceRound(sizingBase(equity) * (STAKE_CAP[riskProf().id] ?? 0.1)); }
+export function stakeFor(s = null, opt = {}) {
+  if (typeof opt === 'number' || opt == null) opt = { equity: opt }; // old call shape stakeFor(s, equity)
+  const ccy = walletCcy();
+  const eq = sizingBase(opt.equity ?? null);
   const p = riskProf();
-  const cap = eq * (STAKE_CAP[p.id] ?? 0.1);
+  const cap = stakeCap(eq);
   let a = cap;
-  if (s && s.entry > 0 && s.stop > 0 && s.entry !== s.stop) a = Math.min(cap, (eq * p.pct / 100) / (Math.abs(s.entry - s.stop) / s.entry) / Math.max(1, lev));
-  a = niceRound(a);
+  const lev = opt.lev ?? (s?.symbol ? profileLev(s.symbol) : 1);
+  const px = opt.px > 0 ? opt.px : s?.entry;
+  if (s && px > 0 && s.stop > 0 && px !== s.stop) {
+    const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px) / Math.max(1, lev);
+    if (want < cap) { const step = 10 ** Math.max(0, Math.floor(Math.log10(want)) - 3); a = Math.floor(want / step + 1e-9) * step; }
+  }
   return a >= (DEP_MIN[ccy] || 0) ? a : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
 }
 
@@ -457,9 +478,10 @@ export function convert(v, from, to, data) {
    Within ±0,1 % (pct) the result is "≈ 0 Kč · zatím na nule" in grey; otherwise signed money. Returns {text, tone}. */
 export function moneyTone(v, ccy, pct = null) {
   if (v == null || !Number.isFinite(v)) return { text: '–', tone: 'flat', zero: false };
-  const zero = pct != null ? Math.abs(pct) < FLAT_PCT : Math.abs(v) < 0.5;
-  if (zero) return { text: t('st.zero', { m: F.money(0, ccy, 0) }), tone: 'flat', zero: true };
-  return { text: (v > 0 ? '+' : '') + F.money(v, ccy, 0), tone: v > 0 ? 'up' : 'down', zero: false };
+  /* 1.13.1: "≈ 0 · na nule" only when the money rounds to 0 (the same rounding as Historie); a tiny % stays grey */
+  if (Math.abs(v) < 0.5) return { text: t('st.zero', { m: F.money(0, ccy, 0) }), tone: 'flat', zero: true };
+  const flat = pct != null && Math.abs(pct) < FLAT_PCT;
+  return { text: (v > 0 ? '+' : '') + F.money(v, ccy, 0), tone: flat ? 'flat' : v > 0 ? 'up' : 'down', zero: false };
 }
 
 /* ---------- 1.9.1: ONE user-facing state per signal (cards on Dnes / Signály / Výsledky / Moje, the detail) ----------
@@ -614,18 +636,21 @@ export function investBase(s, data, now = clock()) {
   const q = data ? priceOf(s.symbol, data) : null;
   const lim = cs.cta === 'limit' || !M.isOpen(s.symbol);
   if (lim || !q || !(q.p > 0)) return { px: s.entry, lim: true, mode: cs.cta === 'invest' ? 'now' : 'limit' };
-  return { px: q.p, lim: false, mode: 'now' };
+  /* 1.13.1: "buy now" starts at the ask (a sell at the bid) - the same price the sheet's button and the position use */
+  return { px: q.p + (s.action === 'SELL' ? -1 : 1) * M.spread(s.symbol, q.p) / 2, lim: false, mode: 'now' };
 }
 
 /* THE money numbers of a signal for a deposit (card, detail, invest sheet – one function):
-   maxLoss = the result at the stop (the trade is closed there; capped at the deposit), potential = at the robot's target. */
-export function offerNums(s, data, { amount = null, lev = 1, base = null, sl = null, tp = null, now = clock() } = {}) {
+   maxLoss = the result at the stop (the trade is closed there; capped at the deposit), potential = at the robot's target.
+   1.13.1: lev defaults to the user's profile and the deposit is sized from the same base price -> one number everywhere. */
+export function offerNums(s, data, { amount = null, lev = null, base = null, sl = null, tp = null, now = clock() } = {}) {
   const ccy = walletCcy();
-  const a = amount ?? stakeFor(s);
+  const L = lev ?? profileLev(s.symbol);
   const px = base ?? investBase(s, data, now).px;
+  const a = amount ?? stakeFor(s, { lev: L, px });
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
-  const o = outcome({ side, entry: px, amount: a, lev, sl: sl ?? s.stop, tp: tp ?? s.target });
-  return { amount: a, ccy, base: px, maxLoss: o.atStop, potential: o.atTarget, potentialPct: o.atTarget != null && a > 0 ? (o.atTarget / a) * 100 : null };
+  const o = outcome({ side, entry: px, amount: a, lev: L, sl: sl ?? s.stop, tp: tp ?? s.target });
+  return { amount: a, lev: L, ccy, base: px, maxLoss: o.atStop, potential: o.atTarget, potentialPct: o.atTarget != null && a > 0 ? (o.atTarget / a) * 100 : null };
 }
 /* result of a CLOSED signal for the example deposit (leverage 1:1): money + % (= zhodnocení of the deposit) */
 export function closedNums(s) {

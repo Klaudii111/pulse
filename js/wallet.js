@@ -97,7 +97,11 @@ export function amountForRisk(w, { entry, sl, lev, riskPct }) {
   return Math.round((w.balance * riskPct / 100) / (stopDist * lev));
 }
 
+/* 1.13.1: the last data a summary was made with, so screens without data (Více, Nastavení, sizing) show the SAME wallet */
+let lastData = null;
+const dayStart = (ms = Date.now()) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
 export function summary(data) {
+  if (data) lastData = data; else data = lastData;
   const w = get();
   let used = 0, open = 0;
   const reserved = w.orders.reduce((a, o) => a + o.amount, 0); // money waiting in pending limit orders
@@ -109,15 +113,33 @@ export function summary(data) {
     /* % = result on the money put in (includes leverage), same as the money figure */
     return { ...pos, px, pnl, pnlPct: (pnl / pos.margin) * 100, live: !!q };
   });
+  /* Peněženka (equity) = volné + ve hře + otevřený zisk/ztráta */
   const equity = w.balance + open;
-  const today = new Date().toDateString();
-  if (w.day !== today) { w.day = today; w.dayEquity = equity; save(w); }
+  /* 1.13.1 "Dnes": trades closed today + today's change of the open trades + today's overnight fees
+     (never the money loaded / withdrawn). Open trades from before today count from their value at the day's first look. */
+  const t0 = dayStart();
+  const today0 = new Date(t0).toDateString();
+  let dirty = false;
+  if (w.day !== today0) { w.day = today0; w.dayEquity = equity; w.dayOpen = {}; rows.forEach((r) => { w.dayOpen[r.id] = r.pnl; }); dirty = true; }
+  if (!w.dayOpen || typeof w.dayOpen !== 'object') { w.dayOpen = {}; dirty = true; }
+  let openChg = 0;
+  rows.forEach((r) => {
+    if (r.openedAt >= t0) { openChg += r.pnl; return; }
+    if (w.dayOpen[r.id] == null) { w.dayOpen[r.id] = r.pnl; dirty = true; }
+    openChg += r.pnl - w.dayOpen[r.id];
+  });
+  const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + c.pnl - (c.openedAt < t0 ? (w.dayOpen[c.id] ?? 0) : 0), 0);
+  const fees = w.cash.filter((c) => c.k === 'swap' && c.at >= t0).reduce((a, c) => a + c.amount, 0);
+  if (dirty) save(w);
+  const today = realized + openChg + fees;
   const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
   /* margin level (%): equity / money held in open trades; null without open trades */
   const level = used > 0 ? (equity / used) * 100 : null;
-  return { w, rows, balance: w.balance, equity, open, used, reserved, free: equity - used - reserved, today: equity - (w.dayEquity ?? equity), total: equity - putIn, putIn,
+  return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
     totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
+/* the wallet (Peněženka = equity) with the last known data – header, Dnes, Více, Nastavení and the sizing read this one number */
+export const equityNow = () => summary(lastData).equity;
 
 /* ---------- Fictional money: load / withdraw (1.9.0) ---------- */
 function cashRow(w, k, amount, extra = {}) {
@@ -129,7 +151,6 @@ export function deposit(amount) {
   if (!(a > 0) || a > 100000000) return { ok: false, reason: 'amount' };
   const w = get();
   w.balance += a;
-  if (w.dayEquity != null) w.dayEquity += a; // "Dnes" shows trading only, not the load
   cashRow(w, 'dep', a);
   save(w);
   return { ok: true };
@@ -140,7 +161,6 @@ export function withdraw(data, amount) {
   if (a > Math.floor(summary(data).free)) return { ok: false, reason: 'wdFree' };
   const w = get();
   w.balance -= a;
-  if (w.dayEquity != null) w.dayEquity -= a;
   cashRow(w, 'wd', -a);
   save(w);
   return { ok: true };
@@ -217,9 +237,10 @@ export function nyCloseAfter(ms) {
 }
 
 /* When an order with this validity runs out (ms): day = today's US close, gtc = 30 days, sig = the signal's last day */
-export function expiryFor(valid, sig, now = Date.now()) {
+export function expiryFor(valid, sig, now = Date.now(), sym = null) {
   const max = now + ORDER_MAX_DAYS * 86400000;
-  if (valid === 'day') return nyCloseAfter(now);
+  /* 1.13.1: "do konce dne / seance" = the end of the instrument's own session (DAX 17:30, US 22:00 Prague …) */
+  if (valid === 'day' || valid === 'sess') return sym ? M.sessionEnd(sym, now) : nyCloseAfter(now);
   if (valid === 'sig' && sig?.exit_date) {
     const [y, m, d] = sig.exit_date.split('-').map(Number);
     return Math.min(max, nyCloseAfter(Date.UTC(y, m - 1, d, 12)));
@@ -252,7 +273,7 @@ export function placeOrder(data, { sym, name = '', side, limit, amount, lev = 1,
   if (bad) return { ok: false, reason: bad };
   const now = Date.now();
   const v = valid === 'sig' && !sigId ? 'gtc' : valid;
-  const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now) };
+  const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now, sym) };
   if (now0) o.atOpen = true;
   w.orders.push(o);
   if (!quiet) logOrder(w, 'placed', o);
@@ -322,7 +343,11 @@ export function checkOrders(data) {
     const hit = o.atOpen && !M.isOpen(o.sym) ? null : pricesSince(data, o.sym, from).find((p) => p.t <= until && marketable(o.side, o.limit, p.p));
     if (hit) {
       const reopen = hit.t < SESSION_START;
-      const pos = addPos(w, { sym: o.sym, name: o.name, side: o.side, entry: o.limit, entryT: hit.t, lev: o.lev, amount: o.amount, sl: o.sl, tp: o.tp, sigId: o.sigId, order: o.id, half: M.spread(o.sym, o.limit) / 2 });
+      /* 1.13.1: an "at the open" order fills at the first real price (ask / bid) when that is better than its limit */
+      const half = M.spread(o.sym, hit.p) / 2;
+      const real = hit.p + dirOf(o.side) * half;
+      const entry = o.atOpen ? (o.side === 'SELL' ? Math.max(o.limit, real) : Math.min(o.limit, real)) : o.limit;
+      const pos = addPos(w, { sym: o.sym, name: o.name, side: o.side, entry, entryT: hit.t, lev: o.lev, amount: o.amount, sl: o.sl, tp: o.tp, sigId: o.sigId, order: o.id, half: M.spread(o.sym, o.limit) / 2 });
       endOrder(w, o, 'filled', { fillT: hit.t, fillPx: hit.p, src: hit.src, reopen, pos: pos.id });
       filled.push({ ...pos, reopen, fillT: hit.t });
       return;
@@ -488,7 +513,11 @@ export function autoOpen(data, sig, mode, onSince = 0) {
 /* the robot-for-me's deposit per signal: D.stakeFor (risk % at the stop, max 10 / 20 % of the wallet), never more than free */
 export function autoAmount(data, sig, s = null) {
   const sm = s || summary(data);
-  return Math.floor(Math.min(D.stakeFor(sig, get().balance, autoLev(sig.symbol)), Math.max(0, sm.free)));
+  /* 1.13.1: the same D.stakeFor as the card (profile leverage, equity, the price the copy starts at) */
+  const q = priceOf(sig.symbol, data);
+  const now = M.isOpen(sig.symbol) && q && marketable(sig.action, sig.entry, q.p);
+  const px = now ? q.p + dirOf(sig.action) * M.spread(sig.symbol, q.p) / 2 : sig.entry;
+  return Math.floor(Math.min(D.stakeFor(sig, { equity: sm.equity, lev: autoLev(sig.symbol), px }), Math.max(0, sm.free)));
 }
 /* the leverage the robot-for-me uses = the user's leverage profile for that instrument (Konzervativně 1:1 …) */
 let levFn = () => 1;

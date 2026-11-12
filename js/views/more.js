@@ -9,12 +9,13 @@ import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
 import * as Live from '../live.js';
 import * as Mkt from '../market.js';
 import * as B from '../brief.js';
+import * as W from '../wallet.js';
 
 /* 1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
 export const MORE_ITEMS = [
   { group: 'more.g.you', items: [
     { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
-    { id: 'penezenka', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(w.balance, w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
+    { id: 'penezenka', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(W.equityNow(), w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
     { id: 'historie', icon: 'history', sub: () => { const w = store.get('wallet', null); const n = w?.closed?.length || 0; return n ? t('more.historie.s', { n }) : t('more.historie.s0'); } },
     { id: 'auto', action: true, icon: 'robot', sub: () => t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off') },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
@@ -135,16 +136,17 @@ function myProfile() {
   const c = w?.ccy || D.calcState().ccy;
   const rp = D.riskProf();
   const lp = B.levProfile();
-  const stake = D.stakeFor(null);
+  /* 1.13.1: the cap per trade = the largest deposit any card / sheet / robot uses (D.stakeCap); the loss at the stop is at most risk % */
+  const stake = D.stakeCap();
   const radio = (items, act, key, cur) => `<div class="mp-seg" role="radiogroup">${items.map((x) => `<button type="button" class="mp-opt" role="radio" aria-checked="${x.id === cur}" data-action="${act}" ${key}="${x.id}"><b>${x.t}</b><small>${x.s}</small></button>`).join('')}</div>`;
   return `<section class="mp card" aria-labelledby="mp-h"><h2 class="mp-h" id="mp-h">${t('mp.title')}</h2>
-    <div class="mp-row"><div><p class="mp-l">${t('mp.cap')}</p><p class="mp-v num">${F.money(w ? w.balance : D.calcState().account, c, 0)}</p><p class="mp-s">${t('mp.capS')}</p></div>
+    <div class="mp-row"><div><p class="mp-l">${t('mp.cap')}</p><p class="mp-v num" data-mp-cap>${F.money(w ? W.equityNow() : D.calcState().account, c, 0)}</p><p class="mp-s">${t('mp.capS')}</p></div>
       <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topup')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
     <p class="mp-l">${t('mp.risk')}</p>
     ${radio(CONFIG.CALC.RISK_PROFILES.map((p) => ({ id: p.id, t: `${t(`profile.${p.id}`)} · ${F.num(p.pct, 0)} %`, s: t(`mp.risk.${p.id}`) })), 'risk-prof', 'data-id', rp.id)}
     <p class="mp-l">${t('mp.lev')}</p>
     ${radio(B.LEV_PROFILES.map((p) => ({ id: p.id, t: t(`mb.p.${p.id}`), s: t(`mp.lev.${p.id}`) })), 'lev-prof', 'data-prof', lp.id)}
-    <p class="mp-sum">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(rp.pct, 0) })}</span></p>
+    <p class="mp-sum" data-mp-stake="${stake}">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(rp.pct, 0) })}</span></p>
   </section>`;
 }
 

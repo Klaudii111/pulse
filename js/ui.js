@@ -1,6 +1,7 @@
 import * as F from './format.js';
 import { t } from './i18n/index.js';
 import * as D from './domain.js';
+import { cls as mktCls } from './market.js';
 
 export const icon = (name, cls = '') => `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
@@ -245,8 +246,17 @@ export function monogram(symbol, name = '') {
   let h = 0;
   for (const c of symbol) h = (h * 31 + c.charCodeAt(0)) % 360;
   /* index CFDs (US500, DE40 …): the first letter of the plain name (S&P, DAX) reads better than U / D */
-  const letters = (/^(US|DE|UK|JP)\d|^(XAU|XAG|WTI|BRENT|NATGAS)/.test(symbol) && name ? name.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase() : '') || symbol.replace(/[^A-Z]/g, '').slice(0, 1) || symbol.slice(0, 1);
-  return `<span class="mono" style="--h:${h}" title="${F.esc(name)}" aria-hidden="true">${F.esc(letters)}</span>`;
+  /* 1.13.1: the first letter of the plain name (XOM -> E, VLO -> V); ETFs the first + last letter of the ticker
+     so XLE / XLV / XLP never look the same (the same on every screen); the colour stays per symbol */
+  const words = String(name || '').replace(/\([^)]*\)/g, ' ').split(/[^\p{L}\p{N}&]+/u).filter((x) => /\p{L}/u.test(x));
+  let k = 'stock';
+  try { k = mktCls(symbol); } catch { /* registry not ready */ }
+  const tk = symbol.replace(/[^A-Z]/g, '');
+  let letters = '';
+  if (k === 'etf' && tk.length >= 2) letters = tk[0] + tk[tk.length - 1]; // XLE -> XE, XLV -> XV, XLP -> XP, SPY -> SY
+  else if (words.length && name !== symbol) letters = words[0][0].toUpperCase();
+  letters = letters || symbol.replace(/[^A-Z]/g, '').slice(0, 1) || symbol.slice(0, 1);
+  return `<span class="mono${letters.length > 1 ? ' is-2' : ''}" style="--h:${h}" title="${F.esc(name)}" aria-hidden="true">${F.esc(letters)}</span>`;
 }
 
 /* ---------- Horizon icon: a ring filled by holding length ---------- */

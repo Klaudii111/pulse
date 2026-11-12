@@ -124,7 +124,7 @@ export function signalCard(s, { data = null, events = [], now = new Date(), i = 
   const hzTag = (showHz ? `<span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>` : '')
     + (s.preview ? `<span class="hz-tag is-preview" title="${F.esc(t('sig.preview.t'))}">${t('sig.preview')}</span>` : '');
   const mine = D.journal()[s.id];
-  const myTag = mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 2) })}</span>`
+  const myTag = mine?.state === 'closed' ? `<span class="my-tag is-closed">${t('sig.mine.closed2', { v: F.spct(D.myResult(s, mine)?.pct ?? 0, 2) })}</span>`
     : mine?.state === 'in' ? `<span class="my-tag">${t('sig.mine.in')}</span>` : '';
   if (state === 'open' && est) sub = `<span class="dotw is-${est.code}"><i></i>${t(`entry.short.${est.code}`)}</span>`;
   else if (state !== 'open') sub = `<span class="dotw is-${state}"><i></i>${t(HIT[state])}${s.hit_at ? t('sig.hit.at', { time: F.time(s.hit_at) }) : ''}</span>`;
@@ -264,7 +264,7 @@ function sigBody(ctx) {
     if (ph === 'open') return off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i) => B.compact(x, { data, now, i })).join('')}</div>`;
+  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i, arr) => B.compact(x, { data, now, i, chips: i === B.firstMoneyIdx(arr, data, now) })).join('')}</div>`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {

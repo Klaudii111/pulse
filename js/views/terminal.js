@@ -32,7 +32,7 @@ const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 /* price in the instrument's own decimals (EUR/USD 1,10940; US500 7 633,70) */
 export const pxOf = (sym, v) => F.price(v, M.get(sym) ? M.decimals(sym, v) : null);
 /* 1.13.0: KOUPIT shows the ask, PRODAT the bid (mid ± half of the simulated spread) */
-export const pxC = (sym, v) => `${pxOf(sym, v)} ${F.ccySign(M.ccy(sym))}`;
+export const pxC = (sym, v) => F.ccyWrap(pxOf(sym, v), M.ccy(sym));
 const sidePx = (sym, mid, side) => mid + (side === 'SELL' ? -1 : 1) * M.spread(sym, mid) / 2;
 
 function openSigs(data) { return D.allOpen(data).filter((s) => s.status === 'open' && !s.intraday_hit); }
@@ -110,7 +110,7 @@ export function tradeRow(p, c, extra = '') {
       <span class="tr-id"><b class="tr-n">${F.esc(w.name)}</b>
         <span class="tr-meta num">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</span>
         <span class="tr-st tone-${st.tone}">${F.esc(st.text)}${toT != null && st.near !== 'target' ? ` · ${t('d.toTarget', { v: F.pct(toT, 1) })}` : ''}</span></span>
-      <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, 1)}</small></span>
+      <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, Math.abs(p.pnlPct) < 0.1 ? 2 : 1)}</small></span>
       ${extra}
     </button>
     <button type="button" class="btn btn-secondary btn-small tr-x" data-action="pos-close" data-id="${p.id}">${t('tr.close')}</button>
@@ -135,19 +135,29 @@ export function posStatus(p) {
     const left = (p.margin + Math.min(0, p.pnl)) / p.notional * 100;
     if (p.pnl < 0 && left < 100 / p.lev * 0.4) return { tone: 'down', text: t('term.nearOut', { v: F.pct(left, 1) }) };
   }
-  if (Math.abs(p.pnlPct) < 0.05) return { tone: 'flat', text: t('st.flat') };
-  return p.pnl > 0 ? { tone: 'up', text: t('st.win', { v: F.spct(p.pnlPct, 1) }) } : { tone: 'down', text: t('st.lose', { v: F.spct(p.pnlPct, 1) }) };
+  /* 1.13.1: "na nule" only when the money rounds to 0 (the same rounding as Historie) */
+  if (Math.abs(p.pnl) < 0.5) return { tone: 'flat', text: t('st.flat') };
+  const d = Math.abs(p.pnlPct) < 0.1 ? 2 : 1;
+  return p.pnl > 0 ? { tone: 'up', text: t('st.win', { v: F.spct(p.pnlPct, d) }) } : { tone: 'down', text: t('st.lose', { v: F.spct(p.pnlPct, d) }) };
 }
 
 /* How far the price still has to go to the limit, in plain words */
 export function limitDistance(o, px) {
   if (!(px > 0)) return { tone: 'flat', text: t('term.ord.noPx') };
+  /* 1.13.1: an order waiting for the open says when it fills (Prague time of the instrument's next session) */
+  if (o.atOpen && o.sym && !M.isOpen(o.sym)) { const op = M.nextOpen(o.sym); return { tone: 'up', text: t(o.side === 'SELL' ? 'term.ord.atOpenSell' : 'term.ord.atOpen', { d: op ? openWhen(op) : '' }) }; }
   const need = o.side === 'SELL' ? (o.limit - px) / px * 100 : (px - o.limit) / px * 100;
   if (need <= 0) return { tone: 'up', text: t('term.ord.at') };
   return { tone: need <= D.proximityPct() ? 'up' : 'gold', text: t(o.side === 'SELL' ? 'term.ord.up' : 'term.ord.down', { v: F.pct(need, need < 1 ? 2 : 1) }) };
 }
 export const validText = (o) => t('term.ord.valid', { k: t(`term.valid.${o.valid}`), d: F.dmTime(o.expiresAt) });
 
+/* "zítra 9:00" / "pondělí 15:30" (Prague time) */
+export function openWhen(ms, now = Date.now()) {
+  const days = F.daysUntil(new Date(ms), new Date(now));
+  return `${days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(new Date(ms))} ${F.time(new Date(ms))}`;
+}
+const nmTk = (sym, name) => { const w = B.whatIs(sym, name); return `<b class="tp-n">${F.esc(w.name)}</b>${w.name !== sym ? `<span class="ticker tp-tk">${F.esc(sym)}</span>` : ''}`; };
 /* One pending limit order (also used by Moje / Dnes) */
 export function orderRow(o, data, { buttons = true } = {}) {
   const q = W.priceOf(o.sym, data);
@@ -155,8 +165,8 @@ export function orderRow(o, data, { buttons = true } = {}) {
   const c = W.get().ccy;
   return `<div class="tp-row tp-ord ${buttons ? '' : 'is-static'}">
     <span class="tp-main">${monogram(o.sym, o.name)}
-      <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(o.sym)}</span><span class="side-tag ${o.side === 'SELL' ? 'sell' : ''}">${F.SIDE[o.side]}</span><span class="hz-tag is-preview">${t('term.ord.tag')}</span>${o.lev > 1 ? `<span class="hz-tag">${t('term.levTag', { v: o.lev })}</span>` : ''}</span>
-        <span class="tp-m num">${t('term.ord.meta', { v: pxOf(o.sym, o.limit), p: q ? pxOf(o.sym, q.p) : '–', a: money(o.amount, c) })}</span>
+      <span class="tp-id"><span class="tp-t">${nmTk(o.sym, o.name)}<span class="side-tag ${o.side === 'SELL' ? 'sell' : ''}">${F.SIDE[o.side]}</span>${o.lev > 1 ? `<span class="hz-tag">${t('term.levTag', { v: o.lev })}</span>` : ''}</span>
+        <span class="tp-m num">${t(o.atOpen ? 'term.ord.metaOpen' : 'term.ord.meta', { v: pxC(o.sym, o.limit), p: q ? pxC(o.sym, q.p) : '–', a: money(o.amount, c) })}</span>
         <span class="st-line tone-${dist.tone}"><i aria-hidden="true"></i><b>${F.esc(dist.text)}</b></span>
         <span class="tp-m">${F.esc(validText(o))}</span></span>
     </span>
@@ -173,7 +183,7 @@ function ordList(sm, data) {
   const help = `<p class="why-s ord-help">${t('term.ord.help')}</p>`;
   if (!rows.length) return lim + help + `<p class="sheet-label ord-sub">${t('term.ord.slTp')}</p><p class="quiet">${t('term.ord.noSlTp')}</p>`;
   return lim + help + `<p class="sheet-label ord-sub">${t('term.ord.slTp')}</p><div class="tp-list">${rows.map((p) => `<div class="tp-row is-static"><span class="tp-main">${monogram(p.sym, p.name)}
-    <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(p.sym)}</span><span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span></span>
+    <span class="tp-id"><span class="tp-t">${nmTk(p.sym, p.name)}<span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span></span>
     <span class="tp-m num">${p.sl ? `<span class="down">${t('term.slAt', { v: pxOf(p.sym, p.sl) })}</span>` : ''}${p.sl && p.tp ? ' · ' : ''}${p.tp ? `<span class="up">${t('term.tpAt', { v: pxOf(p.sym, p.tp) })}</span>` : ''}</span>
     <span class="tp-m">${t('term.ordWait')}</span></span></span></div>`).join('')}</div>`;
 }
@@ -181,7 +191,7 @@ function ordList(sm, data) {
 function histOrder(o) {
   return `<div class="tp-row is-static tone-flat"><span class="tp-main">
     <span class="hist-bar"></span>
-    <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(o.sym)}</span><span class="side-tag ${o.side === 'SELL' ? 'sell' : ''}">${F.SIDE[o.side]}</span><span class="hz-tag is-preview">${t('term.ord.tag')}</span></span>
+    <span class="tp-id"><span class="tp-t">${nmTk(o.sym, o.name)}<span class="side-tag ${o.side === 'SELL' ? 'sell' : ''}">${F.SIDE[o.side]}</span></span>
     <span class="tp-m num">${t('term.ord.histMeta', { v: pxOf(o.sym, o.limit), a: money(o.amount, W.get().ccy), d: F.dmTime(o.endAt) })}</span>
     <span class="tp-m">${t(`term.ord.end.${o.end}`)}</span></span>
     <span class="tp-v num">${t(`term.ord.endShort.${o.end}`)}</span></span></div>`;
@@ -481,10 +491,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const open = M.isOpen(sym);
   /* 1.10.0: four deposits from the minimum (100 Kč); the default = the example on the signal card (D.offerNums) */
   const minAmt = D.DEP_MIN[c] || 0;
-  /* 1.13.0: the default = Můj profil (D.stakeFor: risk % at the stop, max 10 / 20 % of the wallet) – the same number as on the card */
-  const stake = D.stakeFor(sig && sig.action === side ? sig : null);
   const BASE = { CZK: [1000, 5000, 10000], EUR: [40, 200, 400], USD: [50, 250, 500] }[c] || [minAmt * 10, minAmt * 50, minAmt * 100];
-  const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
   const useSig = sig && sig.action === side;
   const dir = side === 'SELL' ? -1 : 1;
   const maxLev = M.maxLev(sym);
@@ -494,17 +501,30 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   /* the robot's signals are LIMIT entries: price already past the entry (above it for a buy) -> wait for the entry price */
   const sigLim = useSig && sig.entry > 0 && dir * (q.p - sig.entry) > 0;
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
-  const st = { side, amount: stake, lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
-    type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false };
+  /* 1.13.1: closed market without a signal -> the default is "Koupit při otevření" (a market order at the next open);
+     a limit price only under Pokročilé */
+  const st = { side, amount: 0, auto: true, lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
+    type: useSig ? ((opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt') : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false };
   /* 1.13.0 BLOCKER fix: the live price is already at / better than the signal's entry -> the default is a plain
      "Koupit hned za X" (market open) or "koupí se při otevření, nejvýš za X" (closed). Never an error on the default path. */
   if (st.type === 'lim' && useSig && st.limit > 0 && W.marketable(side, st.limit, q.p) && open) st.type = 'mkt';
   const isLim = () => st.type === 'lim';
   const atOpen = () => isLim() && !open && st.limit > 0 && W.marketable(side, st.limit, q.p);
+  /* market order while the market is closed = buy / sell at the next open (protected: at most 3 % worse than now) */
+  const mktOpen = () => !isLim() && !open;
+  const capPx = () => round(q.p * (1 + 0.03 * dir));
   const half = M.spread(sym, q.p) / 2;
   const fillPx = () => q.p + dir * half; // a buy pays the ask, a sell gets the bid
-  const basePx = () => (isLim() && st.limit > 0 ? st.limit : q.p);
-  if (sm.free >= minAmt && st.amount > sm.free) st.amount = Math.floor(sm.free);
+  /* 1.13.1: the price the deposit is sized from = the price the trade starts at (the ask / bid, or the limit) */
+  const basePx = () => (isLim() && st.limit > 0 ? st.limit : fillPx());
+  /* 1.13.1 ONE sizing: D.stakeFor with the leverage of this ticket and its start price – the same number as the card */
+  const sizeSig = () => (useSig ? sig : { symbol: sym, action: side, entry: basePx(), stop: st.sl });
+  const stakeAt = (lev) => D.stakeFor(sizeSig(), { lev, px: basePx() });
+  const resize = () => { if (!st.auto) return; st.amount = stakeAt(st.lev); if (sm.free >= minAmt && st.amount > sm.free) st.amount = Math.floor(sm.free); };
+  resize();
+  const stake = st.amount;
+  const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
+  const sess = () => { const o = M.nextOpen(sym); return { o, e: M.sessionEnd(sym) }; };
   const fmtIn = (v) => (v == null ? '' : String(v));
   const validItems = () => [{ id: 'day', label: t('term.valid.day') }, { id: 'gtc', label: t('term.valid.gtc') }].concat(sigOpen ? [{ id: 'sig', label: t('term.valid.sig') }] : []);
   /* plain-language line about the limit: when it fills, how far, until when */
@@ -517,10 +537,17 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const exp = W.expiryFor(st.valid, useSig ? sig : null);
     return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'term.tkLimSell' : 'term.tkLimBuy', { v: pxOf(sym, st.limit), sym })} ${F.esc(d.text.charAt(0).toUpperCase() + d.text.slice(1))}. ${t('term.tkLimUntil', { d: F.dmTime(exp) })}</span></p>`;
   };
-  const goText = () => (atOpen() ? t(side === 'SELL' ? 'inv.goOpenSell' : 'inv.goOpen', { v: pxC(sym, st.limit || 0) })
+  const goText = () => (mktOpen() ? t(side === 'SELL' ? 'inv.goAtOpenSell' : 'inv.goAtOpen', { d: sess().o ? openWhen(sess().o) : '' })
+    : atOpen() ? t(side === 'SELL' ? 'inv.goOpenSell' : 'inv.goOpen', { v: pxC(sym, st.limit || 0) })
     : isLim() ? t(side === 'SELL' ? 'inv.goLimSell' : 'inv.goLim', { v: pxC(sym, st.limit || 0) })
-    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, fillPx()) }));
-  const blocked = () => !isLim() && !open;
+    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, q.p) }));
+  const blocked = () => false;
+  /* the at-open line: when it buys, the protection and until when the order waits (the instrument's own session) */
+  const openLine = () => {
+    if (!mktOpen()) return '';
+    const x = sess();
+    return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'tk.mktOpenSell' : 'tk.mktOpen', { d: x.o ? openWhen(x.o) : '–', v: pxC(sym, capPx()), e: F.dmTime(new Date(x.e)), h: F.esc(M.hours(sym)) })}</span></p>`;
+  };
   const costLine = () => {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     return `<p class="tk-cost">${qm('SPREAD')}<span>${t('tk.costs', { s: money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0) })}${k.swap > 0 ? ` · ${t('tk.swap', { v: money(k.swap, c, k.swap < 10 ? 2 : 0) })}` : ''}${k.conv ? ` · ${t('tk.conv', { ic: M.ccy(sym) })}` : ''}. ${t('tk.costsS')}</span></p>`;
@@ -529,15 +556,15 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen, dd: false })}
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, amountFor: st.auto ? (lev) => (lev === st.lev ? st.amount : stakeAt(lev)) : null, depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen, dd: false })}
       ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
-      ${isLim() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
-    </div>${limLine()}`;
+      ${isLim() || mktOpen() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
+    </div>${limLine()}${openLine()}`;
   };
   const body = () => `
-    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num">${pxC(sym, fillPx())}</b></div>
+    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num" data-tkpx>${pxC(sym, q.p)}</b></div>
     ${side === 'SELL' ? `<p class="tk-short">${t('tk.short')}</p>` : ''}
     ${useSig ? `<p class="tk-sig">${icon('signals', 'icon-xs')}${t('term.tkFromSig')}</p>` : ''}
     <p class="sheet-label">${t('inv.howMuch')}</p>
@@ -548,7 +575,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     <p class="sheet-label">${t('inv.riskL')}</p>
     <div class="chips tk-chips">${CONFIG.CALC.RISK_PROFILES.map((p) => `<button type="button" class="chip" data-risk="${p.pct}" aria-pressed="${st.risk === p.pct}">${t('term.riskChip', { v: p.pct })}</button>`).join('')}</div>
     <p class="sheet-label">${t('term.otype')}${qm('LIMIT')}</p>
-    <div class="tk-type" role="radiogroup" aria-label="${t('term.otype')}">${['mkt', 'lim'].map((id) => `<button type="button" class="tk-type-b" role="radio" data-otype="${id}" aria-checked="${st.type === id}"><b>${t(`term.otype.${id}`)}</b><small>${id === 'mkt' && !open ? t('term.otype.mktClosed') : t(`term.otype.${id}S`)}</small></button>`).join('')}</div>
+    <div class="tk-type" role="radiogroup" aria-label="${t('term.otype')}">${['mkt', 'lim'].map((id) => `<button type="button" class="tk-type-b" role="radio" data-otype="${id}" aria-checked="${st.type === id}"><b>${t(id === 'mkt' && !open ? 'term.otype.mktOpen' : `term.otype.${id}`)}</b><small>${id === 'mkt' && !open ? t('term.otype.mktOpenS') : t(`term.otype.${id}S`)}</small></button>`).join('')}</div>
     <div id="tk-limf" ${isLim() ? '' : 'hidden'}>
       <label class="tk-in"><span>${t('term.limitPx', { now: pxOf(sym, q.p) })}</span><input class="jin num" inputmode="decimal" data-in="limit" value="${fmtIn(st.limit)}"></label>
       <p class="sheet-label">${t('term.validity')}</p>
@@ -578,10 +605,11 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         go.disabled = blocked();
         root.querySelector('#tk-block').hidden = !blocked();
         root.querySelectorAll('[data-amt]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk == null && +b.dataset.amt === st.amount)));
+        const ai = root.querySelector('[data-in="amount"]'); if (ai && document.activeElement !== ai) ai.value = String(st.amount);
         root.querySelectorAll('[data-risk]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk === +b.dataset.risk)));
       };
       const applyRisk = () => {
-        if (st.risk == null) return;
+        if (st.risk == null) { resize(); return; }
         const a = W.amountForRisk(W.get(), { entry: basePx(), sl: st.sl, lev: st.lev, riskPct: st.risk });
         if (a) { st.amount = Math.min(a, Math.floor(sm.free)); root.querySelector('[data-in="amount"]').value = String(st.amount); }
       };
@@ -592,8 +620,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const va = ev.target.closest('[data-seg-name="tvalid"]');
         if (ty) { st.type = ty.dataset.otype; root.querySelectorAll('[data-otype]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.otype === st.type))); root.querySelector('#tk-limf').hidden = !isLim(); applyRisk(); haptic(); upd(); }
         if (va) { ev.preventDefault(); ev.stopPropagation(); st.valid = va.dataset.id; segMove(root, 'tvalid', st.valid); haptic(); upd(); }
-        if (a) { st.risk = null; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
-        if (r) { st.risk = +r.dataset.risk; applyRisk(); haptic(); upd(); }
+        if (a) { st.risk = null; st.auto = false; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
+        if (r) { st.risk = +r.dataset.risk; st.auto = false; applyRisk(); haptic(); upd(); }
         /* a one-off leverage for THIS ticket: never reaches the global profile handler */
         if (lv) { ev.stopPropagation(); st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd(); }
         /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */
@@ -602,6 +630,17 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const goB = ev.target.closest('[data-go]');
         if (!goB || goB.disabled) return;
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
+        if (mktOpen()) {
+          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: capPx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen && useSig ? sig.id : null, valid: 'sess', sig: useSig ? sig : null, atOpen: true });
+          if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
+          haptic(20);
+          closeTopSheet();
+          toast(t(side === 'SELL' ? 'inv.placedAtOpenSell' : 'inv.placedAtOpen', { d: sess().o ? openWhen(sess().o) : '' }), { timeout: 7000 });
+          document.dispatchEvent(new CustomEvent('pulse:wallet'));
+          tab = 'ord';
+          setTimeout(() => ctx.rerender({ soft: true }), 380);
+          return;
+        }
         if (isLim()) {
           const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: st.limit, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen ? sig.id : null, valid: st.valid, sig: useSig ? sig : null, atOpen: true });
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
@@ -613,6 +652,9 @@ function ticket(ctx, side, sym, sig, opt = {}) {
           setTimeout(() => ctx.rerender({ soft: true }), 380);
           return;
         }
+        /* 1.13.1: the promise holds at the moment of buying – an untouched deposit is re-sized from the newest price */
+        const q2 = W.priceOf(sym, ctx.data);
+        if (st.auto && q2 && q2.p > 0 && q2.p !== q.p) { q.p = q2.p; q.t = q2.t; resize(); }
         const res = W.open(ctx.data, { sym, name: nameOf(sym, ctx.data), side, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sig && sig.action === side && sig.status === 'open' && !sig.intraday_hit ? sig.id : null });
         if (!res.ok) { toast(t(`term.err.${res.reason}`, { h: M.hours(sym) })); return; }
         haptic(20);
@@ -625,7 +667,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       root.addEventListener('input', (ev) => {
         const k = ev.target.dataset.in; if (!k) return;
         const v = F.parseNum(ev.target.value);
-        if (k === 'amount') { st.risk = null; st.amount = v > 0 ? v : 0; }
+        if (k === 'amount') { st.risk = null; st.auto = false; st.amount = v > 0 ? v : 0; }
         if (k === 'sl') { st.sl = v > 0 ? v : null; applyRisk(); }
         if (k === 'tp') st.tp = v > 0 ? v : null;
         if (k === 'limit') { st.limit = v > 0 ? v : null; applyRisk(); }
@@ -774,6 +816,63 @@ export function resetSheet(ctx) {
   });
 }
 
+/* 1.13.1: the opposite button with an open trade: close it (one tap, result in money) or open a new trade the other way */
+function exitOrNew(ctx, side, sym, sig, mine) {
+  const c = W.get().ccy;
+  const nm = nameOf(sym, ctx.data);
+  const sell = side === 'SELL';
+  const rows = mine.map((p) => `<button type="button" class="btn btn-primary btn-block tk-exit" data-exit="${p.id}"><span>${t(sell ? 'ex.sellMine' : 'ex.buyMine', { n: F.esc(nm) })}</span><b class="num">${smoney(p.pnl, c)}</b></button>
+    <p class="ex-meta num">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</p>`).join('');
+  openSheet({
+    small: true, label: t(sell ? 'ex.titleSell' : 'ex.titleBuy', { n: nm }),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(sell ? 'ex.titleSell' : 'ex.titleBuy', { n: F.esc(nm) })}</p><p class="sheet-sub">${t('term.demo')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="ex-s">${t(sell ? 'ex.sSell' : 'ex.sBuy', { n: F.esc(nm) })}</p>${rows}
+      <button type="button" class="btn btn-ghost btn-block tk-new" data-new>${t(sell ? 'ex.short' : 'ex.long')}</button>
+      <p class="ex-s2">${t(sell ? 'ex.shortS' : 'ex.longS')}</p></div>`,
+    onMount(sh) {
+      sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-new]').addEventListener('click', () => { closeTopSheet(); setTimeout(() => ticket(ctx, side, sym, sig), 380); });
+      sh.querySelectorAll('[data-exit]').forEach((b) => b.addEventListener('click', () => {
+        const rec = W.close(ctx.data, b.dataset.exit);
+        closeTopSheet();
+        if (rec) toast(t('term.closed', { sym: B.whatIs(rec.sym, rec.name).name, v: smoney(rec.pnl, c) }));
+        document.dispatchEvent(new CustomEvent('pulse:wallet'));
+        setTimeout(() => ctx.rerender({ soft: true }), 380);
+      }));
+    },
+  });
+}
+
+/* 1.13.1 [Ukončit]: one confirm step with the result in money (Dnes, Zainvestováno, Obchodovat) */
+export function closeConfirm(ctx, id) {
+  const sm = W.summary(ctx.data);
+  const p = sm.rows.find((x) => x.id === id);
+  if (!p) return;
+  const c = sm.w.ccy;
+  const nm = B.whatIs(p.sym, p.name).name;
+  const tn = p.pnl > 0.5 ? 'up' : p.pnl < -0.5 ? 'down' : '';
+  openSheet({
+    small: true, label: t('cf.title', { n: nm }),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t('cf.title', { n: F.esc(nm) })}</p><p class="sheet-sub">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="cf-res">${t('cf.now')} <b class="num ${tn}">${smoney(p.pnl, c)}</b> <small class="num ${tn}">(${F.spct(p.pnlPct, Math.abs(p.pnlPct) < 0.1 ? 2 : 1)})</small></p>
+      <p class="ex-s">${t('cf.s', { a: money(Math.max(0, p.margin + p.pnl), c) })}</p>
+      <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-yes>${t('cf.yes', { v: smoney(p.pnl, c) })}</button><button type="button" class="btn btn-ghost" data-no>${t('cf.no')}</button></div></div>`,
+    onMount(sh) {
+      sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-no]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-yes]').addEventListener('click', () => {
+        const rec = W.close(ctx.data, id);
+        closeTopSheet();
+        if (rec) toast(t('term.closed', { sym: B.whatIs(rec.sym, rec.name).name, v: smoney(rec.pnl, c) }));
+        document.dispatchEvent(new CustomEvent('pulse:wallet'));
+        setTimeout(() => ctx.rerender({ soft: true }), 380);
+      });
+    },
+  });
+}
+
 /* Zrušit: in-app confirmation (no window.confirm) */
 function cancelSheet(ctx, id) {
   const o = W.get().orders.find((x) => x.id === id);
@@ -832,7 +931,14 @@ function editSheet(ctx, id) {
 export const actions = {
   't-ocancel'(el, ev, ctx) { cancelSheet(ctx, el.dataset.id); },
   't-oedit'(el, ev, ctx) { editSheet(ctx, el.dataset.id); },
-  't-ticket'(el, ev, ctx) { const { sym, sig } = currentSym(ctx); ticket(ctx, el.dataset.side, sym, sig); },
+  't-ticket'(el, ev, ctx) {
+    const { sym, sig } = currentSym(ctx);
+    const side = el.dataset.side;
+    /* 1.13.1: I hold Bitcoin and press PRODAT -> first "Prodat můj Bitcoin (ukončit obchod)"; a short is the second choice */
+    const mine = W.summary(ctx.data).rows.filter((p) => p.sym === sym && p.side !== side);
+    if (mine.length) { exitOrNew(ctx, side, sym, sig, mine); return; }
+    ticket(ctx, side, sym, sig);
+  },
   't-pick'(el, ev, ctx) { picker(ctx); },
   'w-watch'(el, ev, ctx) { const on = toggleWatch(el.dataset.sym); toast(t(on ? 'watch.added' : 'watch.removed')); ctx.rerender({ soft: true }); },
   'w-add'(el, ev, ctx) { picker(ctx, (sym) => { if (!watchList().includes(sym)) toggleWatch(sym); store.set('watch', [sym].concat(watchList().filter((x) => x !== sym))); setTimeout(() => ctx.rerender({ soft: true }), 380); }); },
@@ -840,11 +946,7 @@ export const actions = {
   'w-front'(el, ev, ctx) { store.set('watch', [el.dataset.sym].concat(watchList().filter((x) => x !== el.dataset.sym))); ctx.rerender({ soft: true }); },
   'w-open'(el, ev, ctx) { store.set('termView', 'one'); choose(ctx, el.dataset.sym); },
   't-sym'(el, ev, ctx) { choose(ctx, el.dataset.sym); },
-  't-close'(el, ev, ctx) {
-    const rec = W.close(ctx.data, el.dataset.id);
-    if (rec) toast(t('term.closed', { sym: rec.sym, v: smoney(rec.pnl, W.get().ccy) }));
-    ctx.rerender({ soft: true });
-  },
+  't-close'(el, ev, ctx) { closeConfirm(ctx, el.dataset.id); },
   't-reset'(el, ev, ctx) { resetSheet(ctx); },
   't-cmode'(el, ev, ctx) {
     cmode = el.dataset.id;

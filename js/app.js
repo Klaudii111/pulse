@@ -239,7 +239,7 @@ function newSignalOffer() {
   if (!s) return;
   openSheet({ small: true, label: t('nsig.t'), html: `<div class="sheet-head"><div><p class="sheet-title">${t('nsig.t')}</p><p class="sheet-sub">${t('nsig.s')}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-    <div class="sheet-body">${B.compact(s, { data, now: now(), notNow: true })}</div>`,
+    <div class="sheet-body">${B.compact(s, { data, now: now(), notNow: true, chips: true })}</div>`,
     onMount(el) { el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); } });
 }
 
@@ -441,12 +441,8 @@ const GLOBAL = {
   },
   auto() { GLOBAL['auto-toggle'](); },
   /* 1.13.0 [Ukončit] on the shared trade row (Dnes, Zainvestováno, Obchodovat) */
-  'pos-close'(el) {
-    const rec = W.close(data, el.dataset.id);
-    if (rec) toast(t('term.closed', { sym: B.whatIs(rec.sym, rec.name).name, v: (rec.pnl > 0.5 ? '+' : '') + F.money(rec.pnl, W.get().ccy, 0) }));
-    document.dispatchEvent(new CustomEvent('pulse:wallet'));
-    rerender({ soft: true });
-  },
+  /* 1.13.1: one confirm step that shows the result in money */
+  'pos-close'(el) { Term.closeConfirm(ctx(), el.dataset.id); },
   /* Můj profil (Nastavení) + the 3 profile chips on a compact signal card */
   'risk-prof'(el) { D.saveCalc({ profile: el.dataset.id }); toast(t('mp.riskDone', { p: t(`profile.${el.dataset.id}`) })); rerender({ soft: true }); },
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
@@ -635,6 +631,9 @@ async function boot() {
   document.querySelectorAll('[data-slot="appname"]').forEach((el) => { el.textContent = CONFIG.APP_NAME; });
   P.initInstall();
   P.onInstallChange(() => { if (['dnes', 'signaly', 'nastaveni'].includes(route.name)) rerender({ soft: true }); });
+  /* 1.13.1: one leverage profile for every money number (cards, detail, sheet, robot-for-me) – set before the first render */
+  D.setLevOf((sym) => B.selLev(sym));
+  W.setAutoLev((sym) => B.selLev(sym));
   route = parseRoute();
   VIEWS[route.name].enter?.();
   renderNav();

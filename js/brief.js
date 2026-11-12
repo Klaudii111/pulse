@@ -271,8 +271,9 @@ export function whyBullets(s, max = 3) {
     .replace(/\bVIX (nad|above) (\d+)\b(?!\))/g, (m, w, n) => (cs ? `„index strachu“ VIX nad ${n}` : `the “fear index” VIX above ${n}`))
     .replace(/\bbot\b/g, cs ? 'robot' : 'the robot')
     .trim();
-  let out = txt.split(/\s*;\s*/).map(plain).filter((x) => x.length > 3);
-  if (!out.length) out = (s.reasons || []).map((r) => L(r)).filter(Boolean);
+  /* 1.13.1: no raw data formats in the text ("2026-12-11" -> "11. 12. 2026", "315.34" -> "315,34") */
+  let out = txt.split(/\s*;\s*/).map(plain).map(F.human).filter((x) => x.length > 3);
+  if (!out.length) out = (s.reasons || []).map((r) => F.human(L(r))).filter(Boolean);
   return out.slice(0, max).map((x) => x.charAt(0).toUpperCase() + x.slice(1));
 }
 export function whyBlock(s) {
@@ -319,11 +320,16 @@ export const levProfile = () => {
   return LEV_PROFILES.find((p) => p.id === id) || LEV_PROFILES[0];
 };
 const profLev = (p, mx) => (p.lev === 'max' ? mx : Math.min(p.lev, mx));
+/* 1.13.1: always the three profiles (crypto 1:1 · 1:2 · Agresivněji 1:2 = its cap) – the column of MY profile is the chosen one */
 export function profCols(sym) {
   const mx = M.maxLev(sym) || 1;
-  const out = [];
-  for (const p of LEV_PROFILES) { const lev = profLev(p, mx); if (!out.some((o) => o.lev === lev)) out.push({ ...p, lev }); }
-  return out;
+  return LEV_PROFILES.map((p) => ({ ...p, lev: profLev(p, mx) }));
+}
+/* which column is "on" for the leverage sel: my profile's column when it has that leverage, else the first with it */
+export function onColId(cols, sel) {
+  const lp = levProfile();
+  const mine = cols.find((c) => c.id === lp.id && c.lev === sel);
+  return (mine || cols.find((c) => c.lev === sel) || {}).id || null;
 }
 /* the leverage of the user's profile for this instrument (capped at the cap that applies now) */
 export const selLev = (sym) => profLev(levProfile(), M.maxLev(sym) || 1);
@@ -388,9 +394,12 @@ export function ddNote(cols = null) {
 export function moneyBlock(m) {
   const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
-  const arg = { side: m.side, entry: m.base, amount: m.amount, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
+  /* 1.13.1: amountFor(lev) = the deposit sized for that leverage (detail, untouched sheet); else one fixed deposit */
+  const amt = (lev) => (m.amountFor ? m.amountFor(lev) : m.amount);
+  const arg = { side: m.side, entry: m.base, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
   const mx = M.maxLev(m.sym) || 1;
-  const cols = profCols(m.sym).map((c) => ({ ...c, n: levNums({ ...arg, lev: c.lev }) }));
+  const cols = profCols(m.sym).map((c) => ({ ...c, n: levNums({ ...arg, amount: amt(c.lev), lev: c.lev }) }));
+  const onId = onColId(cols, m.sel);
   /* every enabled chip has its block ready, so a tap anywhere on the page only switches what is shown */
   const levs = M.levSteps(mx);
   if (!levs.includes(m.sel)) levs.push(m.sel);
@@ -398,27 +407,29 @@ export function moneyBlock(m) {
   const wf = ok ? winFrac(bt.win_rate) : null;
   const worstTxt = (n) => (n.worst == null ? '–' : n.capped ? `${sm(n.worst)} <small class="mb-allw">${t('mb.all')}</small>` : sm(n.worst));
   const main = (lev) => {
-    const n = levNums({ ...arg, lev });
+    const a = amt(lev);
+    const n = levNums({ ...arg, amount: a, lev });
     const on = lev === m.sel;
-    const nums = F.esc(JSON.stringify({ a: m.amount, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
+    const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
+    const dep = m.depLine ? `<p class="sc-dep">${t('c.dep', { a: F.money(a, m.ccy, 0) })}</p>` : '';
     /* 1.13.0: no per-tile leverage warning – one risk line under the button, the details in Příklady pák */
     if (!ok) {
-      const pp = n.best != null && m.amount > 0 ? (n.best / m.amount) * 100 : null;
-      return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
+      const pp = n.best != null && a > 0 ? (n.best / a) * 100 : null;
+      return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">${dep}
         <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
         <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
     }
-    return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
+    return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">${dep}
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
       <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
       <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p></div>`;
   };
-  const cell = (c) => `<button type="button" class="mb-col${c.lev === m.sel ? ' is-on' : ''}" role="radio" aria-checked="${c.lev === m.sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
+  const cell = (c) => `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
       <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
       <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
-  const ownOn = !cols.some((c) => c.lev === m.sel);
+  const ownOn = !onId;
   const own = `<div class="mb-ownw${m.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${ownOn ? ' is-on' : ''}" data-action="lev-own-open" aria-expanded="${!!m.open}">
       <span>${t('mb.own')}</span><b class="num mb-own-v">${ownOn ? `1:${m.sel}` : ''}</b>${icon('chev-down', 'icon-xs')}</button>
     <div class="mb-own"${m.open ? '' : ' hidden'}>${levChips(m.sym, m.sel)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>`;
@@ -471,7 +482,9 @@ export function levExamples(m) {
 /* card / detail: the block for the example deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {
   const n = D.offerNums(s, data, { now });
-  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: selLev(s.symbol) }) };
+  /* 1.13.1: every profile column has its own deposit (D.stakeFor at that leverage) – the "Když vložíš" line rides in each */
+  const amountFor = (lev) => D.stakeFor(s, { lev, px: n.base });
+  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, amountFor, depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: selLev(s.symbol) }) };
 }
 /* the motivating but true line, once per strategy: the whole robot account in the test */
 export function testLine(s, data) {
@@ -497,14 +510,17 @@ export function syncLev() {
     const lev = selLev(box.dataset.sym);
     const has = [...box.querySelectorAll('[data-l]')].some((x) => +x.dataset.l === lev);
     box.querySelectorAll('[data-l]').forEach((x) => { x.hidden = has ? +x.dataset.l !== lev : x !== box.querySelector('[data-l]'); });
-    box.closest('.cc')?.querySelectorAll('.cc-chip').forEach((x) => { const on = +x.dataset.lev === lev; x.setAttribute('aria-checked', String(on)); });
+    const ids = [...(box.closest('.cc')?.querySelectorAll('.cc-chip') || [])].map((x) => ({ id: x.dataset.prof, lev: +x.dataset.lev }));
+    const onId = onColId(ids, lev);
+    box.closest('.cc')?.querySelectorAll('.cc-chip').forEach((x) => { x.setAttribute('aria-checked', String(x.dataset.prof === onId)); });
   });
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
     const lev = selLev(mb.dataset.sym);
     mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', +x.dataset.l === lev));
-    let any = false;
-    mb.querySelectorAll('.mb-col').forEach((x) => { const on = +x.dataset.lev === lev; any = any || on; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
+    const onId = onColId([...mb.querySelectorAll('.mb-col')].map((x) => ({ id: x.dataset.prof, lev: +x.dataset.lev })), lev);
+    const any = !!onId;
+    mb.querySelectorAll('.mb-col').forEach((x) => { const on = x.dataset.prof === onId; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
     mb.querySelectorAll('.mb-own .lev-chip[data-lev]').forEach((x) => x.setAttribute('aria-checked', String(+x.dataset.lev === lev)));
     const ob = mb.querySelector('.mb-own-b');
     if (ob) { ob.classList.toggle('is-on', !any); const v = ob.querySelector('.mb-own-v'); if (v) v.textContent = any ? '' : `1:${lev}`; }
@@ -582,7 +598,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
     /* the robot's whole-account test result: once per strategy in a list (seen), always on a single card */
     const tl = !seen || !seen.has(s.horizon) ? testLine(s, data) : '';
     if (seen) seen.add(s.horizon);
-    money = `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${tl}`;
+    money = `<div class="sc-money">${html}</div>${tl}`;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);
     if (mv != null) money = `<p class="sc-mv"><span>${t('c.move')}</span><b class="num">${F.spct(mv, 1)}</b></p>`;
@@ -609,33 +625,41 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
    ~150 px: logo + "ExxonMobil ↑ Koupit" + horizon pill + "do 17. 11." pill · one "Proč" line · the exact entry (short)
    · ONE money line for the chosen leverage profile · 3 profile chips · [Zainvestovat] + small "Teď ne".
    Everything else (profile table, Příklady pák, warnings, test line, full reasoning) lives in the detail. */
-export function ccMoneyLines(s, data, now = D.clock()) {
+export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true } = {}) {
   const n = D.offerNums(s, data, { now });
   const bt = H.strat(data, s.horizon)?.backtest || null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
   const sel = selLev(s.symbol);
   const cols = profCols(s.symbol);
-  const levs = cols.map((c) => c.lev);
+  const levs = [...new Set(cols.map((c) => c.lev))];
   if (!levs.includes(sel)) levs.push(sel);
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
   const sm = (v) => sMoney(v, n.ccy);
+  /* 1.13.1: each line = D.stakeFor at that leverage from the same base price – the same deposit as the detail, the sheet and the robot */
   const line = (lev) => {
-    const x = levNums({ side, entry: n.base, amount: n.amount, sl: s.stop, tp: s.target, lev, bt: ok ? bt : null });
+    const a = D.stakeFor(s, { lev, px: n.base });
+    const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev, bt: ok ? bt : null });
     const gain = ok ? (x.avg != null ? t('cc.avg', { v: `≈ ${sm(x.avg)}` }) : t('cc.avgNa')) : t('cc.tp', { v: x.best != null ? sm(x.best) : '–' });
     const loss = x.worst != null ? t(x.capped ? 'cc.maxAll' : 'cc.max', { v: sm(x.worst) }) : '';
-    return `<p class="cc-ml num" data-l="${lev}"${lev === sel ? '' : ' hidden'}><b>${F.money(n.amount, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+    return `<p class="cc-ml num" data-l="${lev}" data-a="${a}" data-loss="${Math.round(x.worst ?? 0)}"${lev === sel ? '' : ' hidden'}><b>${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
   };
-  const chips = `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.lev === sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">1:${c.lev}</small></button>`).join('')}</div>`;
+  const onId = onColId(cols, sel);
+  /* 1.13.1: the three profile chips only on the first card of a list (and in the detail / sheet) */
+  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">1:${c.lev}</small></button>`).join('')}</div>` : '';
   return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${levs.map(line).join('')}</div>`, chips, n };
 }
 function enShort(s, en, now) {
   if (en.code === 'now') return t('cp.now', { c: F.time(new Date(nyCloseAfterMs(+now))) });
   if (en.code === 'soon') { const o = nextUsOpen(now); const days = o ? F.daysUntil(o, now) : 1; return t('cp.soon', { day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o), time: o ? F.time(o) : '15:30' }); }
-  if (en.code === 'wait') return t('cp.wait', { v: D.spx(s, s.entry) });
+  if (en.code === 'wait') return t(s.action === 'SELL' ? 'cp.waitSell' : 'cp.wait', { v: D.spx(s, s.entry) });
   if (en.code === 'order') return t('cp.order');
   return '';
 }
-export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew = false } = {}) {
+/* the first card of a list that shows money lines (it carries the three profile chips) */
+export function firstMoneyIdx(list, data, now = D.clock()) {
+  return list.findIndex((x) => D.sigPhase(x, now) === 'open' && !['mine', 'order', 'done'].includes(D.cardState(x, data, now).code));
+}
+export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew = false, chips = null } = {}) {
   const cs = D.cardState(s, data, now);
   const ph = D.sigPhase(s, now);
   const w = whatIs(s.symbol, s.name);
@@ -643,7 +667,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   const why = ph === 'closed' ? '' : whyBullets(s, 1)[0] || '';
   const en = cs.code === 'mine' || ph === 'closed' ? null : D.entryLine(s, data, now, cs, true);
   /* the exact entry rides in one small pill ("Vstup teď do 22:00" / "Vstup zítra od 15:30") – the long line is in the detail */
-  const enPill = en && en.code !== 'late' ? `<span class="cc-pill is-${en.code} num">${F.esc(enShort(s, en, now))}</span>` : '';
+  const enPill = en && en.code !== 'late' && !(en.code === 'order' && cs.code === 'order') ? `<span class="cc-pill is-${en.code} num">${F.esc(enShort(s, en, now))}</span>` : '';
   const pills = `<span class="cc-pill">${t(`c.typeS.${s.horizon}`)}</span>${s.exit_date && ph !== 'closed' ? `<span class="cc-pill num">${t('cc.until', { d: F.dm(s.exit_date) })}</span>` : ''}${enPill}${['order', 'late', 'done'].includes(cs.code) && !cs.my ? `<span class="cc-pill tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="cc-pill is-preview">${t('sig.preview')}</span>` : ''}`;
   let mid = '', foot = '';
   if (ph === 'closed') {
@@ -654,7 +678,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
     const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
     foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
   } else if (ph === 'open' && cs.code !== 'order') {
-    const m = ccMoneyLines(s, data, now);
+    const m = ccMoneyLines(s, data, now, { chips: chips ?? i === 0 });
     mid = m.html + m.chips;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);

@@ -45,7 +45,19 @@ const SIGN = { USD: '$', EUR: '€', GBP: '£', CZK: 'Kč', JPY: '¥', CHF: 'CHF
 export const ccySign = (c) => SIGN[c] || c || '$';
 export function pxc(v, ccy = 'USD') {
   if (v == null || !Number.isFinite(+v)) return '–';
-  return `${num(+v, Math.abs(v) < 2 ? 4 : 2)} ${ccySign(ccy)}`;
+  return ccyWrap(num(+v, Math.abs(v) < 2 ? 4 : 2), ccy);
+}
+/* 1.13.1: English puts $ € £ in front ("$164.47"), Czech after ("164,47 $") */
+export function ccyWrap(n, ccy) {
+  if (!isCs() && ['USD', 'EUR', 'GBP'].includes(ccy)) return n.startsWith(MINUS) ? `${MINUS}${ccySign(ccy)}${n.slice(1)}` : `${ccySign(ccy)}${n}`;
+  return `${n} ${ccySign(ccy)}`;
+}
+/* 1.13.1: robot text with raw data values -> plain local formats ("2026-12-11" -> "11. 12. 2026", "315.34" -> "315,34") */
+export function human(txt) {
+  if (typeof txt !== 'string' || !txt) return txt || '';
+  return txt
+    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => dmy(`${y}-${mo}-${d}`))
+    .replace(/(^|[^\d.,])(\d+)\.(\d+)(?!\d|\.\d)/g, (m, pre, a, b) => `${pre}${num(+`${a}.${b}`, b.length, b.length)}`);
 }
 
 export function money(v, ccy = 'CZK', dec) {

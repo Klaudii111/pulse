@@ -6,7 +6,7 @@ import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline, toast } 
 import * as B from '../brief.js';
 import * as W from '../wallet.js';
 import * as store from '../store.js';
-import { orderRow, histList, tradeRow } from './terminal.js';
+import { orderRow, histList, tradeRow, closeConfirm } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
 import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck } from './signals.js';
@@ -110,8 +110,8 @@ export function accountCard(ctx) {
   return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
     <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
       <p class="d-hero-v num">${F.money(sm.equity, c, 0)}</p>
-      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.spct(sm.today / Math.max(1, sm.equity - sm.today) * 100, 1) })}</p>
-      <p class="d-hero-s num">${t('dh.split', { f: F.money(Math.max(0, sm.free), c, 0), u: F.money(sm.used + sm.reserved, c, 0) })}</p></a>
+      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.spct(v, Math.abs(v) < 0.1 ? 2 : 1); })() })}</p>
+      <p class="d-hero-s num">${t(Math.abs(sm.open) >= 0.5 ? 'dh.split3' : 'dh.split', { f: F.money(Math.max(0, sm.cash), c, 0), u: F.money(sm.used + sm.reserved, c, 0), o: (sm.open > 0 ? '+' : '') + F.money(sm.open, c, 0) })}</p></a>
     <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
 }
@@ -207,19 +207,19 @@ export function robotLine1(ctx) {
   const p = ctx.data?.paper;
   if (!p || !Array.isArray(p.positions)) return '';
   const n = p.positions.length;
-  const sum = p.positions.reduce((a, x) => a + (+x.pnl_usd || 0), 0);
+  /* 1.13.1: the robot's account since its start (the same figure as the Účet tab and the chart's last point) – not "dnes" */
+  const a = p.account || {};
+  const start = +a.start_equity || 100000;
+  const sum = Number.isFinite(+a.pnl_usd) ? +a.pnl_usd : p.positions.reduce((x, y) => x + (+y.pnl_usd || 0), 0);
+  const pct = Number.isFinite(+a.pnl_pct) ? +a.pnl_pct : (sum / start) * 100;
   const c = D.walletCcy();
   const v = (sum > 0.5 ? '+' : sum < -0.5 ? '−' : '') + F.money(Math.abs(D.convert(sum, 'USD', c, ctx.data)), c, 0);
-  return `<p class="d-robot">${icon('shield', 'icon-sm')}<span>${t('d.robot', { n, u: F.unit('trade', n), v })}</span></p>`;
+  const since = ctx.data?.performance?.equity?.[0]?.date;
+  return `<p class="d-robot">${icon('shield', 'icon-sm')}<span>${t('d.robot2', { n, u: F.unit('trade', n), p: F.spct(pct, 2), v, d: since ? F.dm(since) : '–' })}</span></p>`;
 }
 
 export const actions = {
-  'h-close'(el, ev, ctx) {
-    const rec = W.close(ctx.data, el.dataset.id);
-    if (rec) toast(t('term.closed', { sym: rec.sym, v: smoney(rec.pnl, W.get().ccy) }));
-    document.dispatchEvent(new CustomEvent('pulse:wallet'));
-    ctx.rerender({ soft: true });
-  },
+  'h-close'(el, ev, ctx) { closeConfirm(ctx, el.dataset.id); },
   'h-term'(el) { store.set('termSym', el.dataset.sym); window.__pulseGo('#/terminal'); },
 };
 
@@ -243,7 +243,7 @@ export function render(ctx) {
   ${B.statsRow(ctx.data, now)}</div>
   <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
-    ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
+    ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true, chips: i === B.firstMoneyIdx(sigs, ctx.data, now) })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
   </section>
   <section class="d-block d-c3" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   </div>

@@ -3104,3 +3104,40 @@ body::after {
 .cc-act { margin-top: 0; }
 .cc-act .cc-go { min-height: 40px; height: 40px; }
 @media (max-width: 400px) { .cc-chip { font-size: 11.5px; gap: 3px; } .cc-chip small { font-size: 10.5px; } }
+
+/* ---------- 1.13.1 ---------- */
+/* detail: compact sticky head (one line name + ticker, one line description) – under 120 px */
+.sheet-head:has(.d-name) { padding-top: 10px; padding-bottom: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+.sheet-head:has(.d-name) .sheet-id { gap: 10px; }
+.sheet-head:has(.d-name) .sheet-id .mono { width: 36px; height: 36px; border-radius: 11px; font-size: 14px; flex: none; }
+.sheet-head:has(.d-name) .sig-tl { flex-wrap: nowrap; min-width: 0; align-items: baseline; gap: 6px; }
+.sheet-head .d-name { font-size: 18px; line-height: 1.25; margin-right: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sheet-head:has(.d-name) .ticker { font-size: 12px; flex: none; }
+.sheet-head:has(.d-name) .sheet-sub { margin: 2px 0 0; font-size: 13px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-head:has(.d-name) .sheet-head-r { gap: 6px; }
+.sheet-head:has(.d-name) .sheet-head-r .icon-btn { width: 32px; height: 32px; }
+/* the sticky "Zainvestovat" bar is opaque (no text shows through it); the fade sits above it */
+.sheet-cta { background: var(--raise); }
+.sheet-cta::before { content: ''; position: absolute; left: 0; right: 0; top: -28px; height: 28px; pointer-events: none; background: linear-gradient(180deg, transparent, var(--raise)); }
+.sheet-body:has(.sheet-cta) { scroll-padding-bottom: 140px; }
+.d-brief .d-why { -webkit-line-clamp: unset; line-clamp: unset; display: block; overflow: visible; }
+/* "Co udělal robot ▾" */
+.d-robotd { margin-top: 8px; font-size: 13px; color: var(--ink-3); }
+.d-robotd summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; min-height: 32px; color: var(--ink-2); }
+.d-robotd summary::-webkit-details-marker { display: none; }
+.d-robotd[open] summary .icon:last-child { transform: rotate(180deg); }
+.d-robotd p { margin: 4px 0 0 22px; line-height: 1.45; }
+.mono.is-2 { font-size: 0.8em; letter-spacing: -0.02em; }
+/* 1.13.1 order rows: the full name, the ticker small */
+.tp-t .tp-n { font-size: 16px; font-weight: 650; color: var(--ink); }
+.tp-t .ticker.tp-tk { font-size: 12px; color: var(--ink-3); letter-spacing: .02em; }
+/* PRODAT with my open trade / Ukončit confirm */
+.ex-s { margin: 4px 0 14px; color: var(--ink-2); line-height: 1.5; }
+.ex-s2 { margin: 6px 0 0; font-size: 13px; color: var(--ink-3); line-height: 1.45; text-align: center; }
+.tk-exit { display: flex; justify-content: space-between; gap: 12px; }
+.tk-exit b { font-weight: 700; }
+.ex-meta { margin: 6px 0 14px; font-size: 13px; color: var(--ink-3); text-align: center; }
+.tk-new { margin-top: 4px; }
+.cf-res { font-size: 18px; margin: 4px 0 6px; }
+.cf-res b { font-size: 22px; }
+.cf-res .up { color: var(--up); } .cf-res .down { color: var(--down); }

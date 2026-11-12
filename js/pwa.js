@@ -74,7 +74,10 @@ export async function initSW() {
     setInterval(check, 30 * 60000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
     let reloaded = false;
+    /* 1.13.1: the very first install takes control of the page (clients.claim) – that is not an update: no reload, no toast */
+    let hadCtl = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadCtl) { hadCtl = true; return; }
       if (reloaded) return; reloaded = true;
       try { sessionStorage.setItem('pulse.updated', '1'); } catch { /* ignore */ }
       location.reload();

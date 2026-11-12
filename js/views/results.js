@@ -21,7 +21,13 @@ const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Amer
 export function withLive(eq, data) {
   const last = eq[eq.length - 1];
   const today = nyDay(Date.now());
-  if (!last || today <= last.date) return eq;
+  if (!last) return eq;
+  if (today <= last.date) {
+    /* 1.13.1: today's point already published -> its robot value is the paper account's (one figure everywhere) */
+    const pa0 = data?.paper?.account;
+    if (today === last.date && pa0 && +pa0.start_equity > 0 && Number.isFinite(+pa0.equity) && eq[0]?.bot > 0) return eq.slice(0, -1).concat({ ...last, bot: eq[0].bot * (+pa0.equity / +pa0.start_equity) });
+    return eq;
+  }
   let delta = 0, any = false;
   /* the account curve is an equal-start blend of the horizon sleeves -> a position moves it by its sleeve share */
   const sleeves = Math.max(1, Object.keys(data?.performance?.by_horizon || {}).filter((k) => k !== 'ALL' && k !== 'DEN').length);
@@ -34,8 +40,12 @@ export function withLive(eq, data) {
   });
   const q = Live.quote('SPY');
   const spyOk = q && q.pc > 0 && nyDay(q.t) === today && last.spy != null;
-  if (!any && !spyOk) return eq;
-  return eq.concat({ date: today, bot: last.bot * (1 + delta / 100), spy: spyOk ? last.spy * (q.p / q.pc) : last.spy, live: true });
+  /* 1.13.1: the robot's real paper account wins for today's point – the chart ends on the SAME % as "Robot od startu" */
+  const pa = data?.paper?.account;
+  const paOk = pa && +pa.start_equity > 0 && Number.isFinite(+pa.equity) && eq[0]?.bot > 0;
+  if (!any && !spyOk && !paOk) return eq;
+  const bot = paOk ? eq[0].bot * (+pa.equity / +pa.start_equity) : last.bot * (1 + delta / 100);
+  return eq.concat({ date: today, bot, spy: spyOk ? last.spy * (q.p / q.pc) : last.spy, live: true });
 }
 
 function rangeSeries(perf, id, data) {

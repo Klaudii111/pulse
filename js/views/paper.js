@@ -76,7 +76,7 @@ function posRow(x, data) {
   const q = Math.abs(+x.qty), e = +x.avg_entry;
   const usdTxt = mt.zero ? mt.text.replace(/[\d\s ,.]+\s*(Kč|CZK|€|EUR)?/, ' 0 $') : `${+x.pnl_usd >= 0 ? '+' : ''}${usd(+x.pnl_usd, 0)}`;
   return `<button class="pa-row" ${attrs}>
-    ${monogram(x.symbol, '')}
+    ${monogram(x.symbol, B.whatIs(x.symbol).name)}
     <span class="pa-id"><span class="pa-sym">${F.esc(w.name)}${w.name !== x.symbol ? ` <span class="ticker">${F.esc(x.symbol)}</span>` : ''}</span>
       <span class="pa-meta num">${t('pa.qty2', { q: F.num(q, 0), e: F.price(e), v: usd(q * e, 0) })}</span>
       ${lg.tp != null ? `<span class="pa-leg num up">${t(x.side === 'short' ? 'pa.legTpS' : 'pa.legTp', { v: F.price(lg.tp) })}</span>` : ''}
@@ -89,7 +89,7 @@ function orderRow(o) {
   const w = B.whatIs(o.symbol, '');
   const buy = o.side === 'buy';
   return `<div class="pa-row is-static">
-    ${monogram(o.symbol, '')}
+    ${monogram(o.symbol, B.whatIs(o.symbol).name)}
     <span class="pa-id"><span class="pa-sym">${F.esc(w.name)}${w.name !== o.symbol ? ` <span class="ticker">${F.esc(o.symbol)}</span>` : ''}</span>
       <span class="pa-meta num">${t(buy ? 'pa.ordBuy' : 'pa.ordSell', { v: F.price(+o.limit) })}</span>
       ${o.take != null || o.stop != null ? `<span class="pa-meta num">${t('pa.ordThen', { t: o.take != null ? F.price(+o.take) : '–', s: o.stop != null ? F.price(+o.stop) : '–' })}</span>` : ''}</span>

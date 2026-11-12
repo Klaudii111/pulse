@@ -173,10 +173,13 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   /* 1.9.1: one state from D.cardState (badge, sentence, colour, button) – the robot line is a separate neutral fact */
   const cs = D.cardState(s, ctx.data, now);
   const bot = B.robotLine(s, ctx.data);
+  /* 1.13.1: "Proč" only once – the robot's full reason at the top in plain local formats; the lower section has the details */
+  const whyFull = (() => { const x = ex ? L(ex.summary || ex) : ''; return typeof x === 'string' ? F.human(x.replace(/^\s*(Proč|Why)\s*:\s*/i, '')).trim() : ''; })();
+  const whyTop = D.sigPhase(s, now) === 'closed' ? '' : (whyFull ? whyFull.charAt(0).toUpperCase() + whyFull.slice(1) : B.whyBullets(s, 1)[0] || '');
   const brief = `<div class="d-brief">
       ${['mine', 'order', 'late', 'done'].includes(cs.code) || s.preview ? `<p class="bc-tags">${['mine', 'order', 'late', 'done'].includes(cs.code) ? `<span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>` : ''}
       <p class="d-ctitle"><span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span><span>${t(`c.type.${s.horizon}`)}</span>${s.exit_date ? `<span class="num">${F.esc(B.lenText(s, now))}</span>` : ''}<span class="sc-no num">#${D.sigNo(s)}</span></p>
-      ${(() => { const w = B.whyBullets(s, 1)[0]; return w && D.sigPhase(s, now) !== 'closed' ? `<p class="cc-why"><b>${t('c.why')}</b> ${F.esc(w)}</p>` : ''; })()}
+      ${whyTop ? `<p class="cc-why d-why"><b>${t('c.why')}</b> ${F.esc(whyTop)}</p>` : ''}
       ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : ''}
       ${(() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`; })()}
       ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
@@ -184,8 +187,9 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${cs.my ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
       <div class="bc-quiet">
-      ${bot ? `<p class="bc-bot b-bot">${icon('shield', 'icon-xs')}<span>${F.esc(bot)}</span></p>` : ''}
-      ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}
+      ${bot || B.robotPosOf(s, ctx.data) ? `<details class="d-robotd"><summary>${icon('shield', 'icon-xs')}<span>${t('det.robotD')}</span>${icon('chev-down', 'icon-xs')}</summary>
+      ${bot ? `<p class="bc-bot b-bot">${F.esc(bot)}</p>` : ''}
+      ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}</details>` : ''}
       <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
       </div>
     </div>`;
@@ -195,7 +199,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     const { n, html } = B.moneyFor(s, ctx.data, now);
     const ex = B.levExamples({ s, data: ctx.data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: B.selLev(s.symbol) });
     return `<section class="d-sec" aria-labelledby="d-money"><h3 class="sheet-label" id="d-money">${t('det.moneyH')}</h3>
-      <div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${ex}
+      <div class="sc-money">${html}</div>${ex}
       <p class="mb-cap">${icon('shield', 'icon-xs')}<span>${F.esc(B.levWhy(s.symbol, M.maxLev(s.symbol)))}</span></p>${B.testLine(s, ctx.data)}</section>`;
   })() : '';
   const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
@@ -244,14 +248,14 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
 
       ${instrumentText(s.symbol) ? `<h3 class="sheet-label">${t('det.what')}</h3><p class="why">${F.esc(instrumentText(s.symbol))}</p>` : ''}
-      <h3 class="sheet-label" id="det-why">${t('det.why')}</h3>
+      <h3 class="sheet-label" id="det-why">${t(whyTop ? 'det.why2' : 'det.why')}</h3>
       ${B.miniChart(s).replace(/ data-action="open-signal"[^>]*?role="button" tabindex="0"/, "")}
-      ${ex?.summary ? `<p class="why">${F.esc(L(ex.summary))}</p>` : (ex && (ex.cs || ex.en) ? `<p class="why">${F.esc(L(ex))}</p>` : '')}
+      ${whyTop ? '' : ex?.summary ? `<p class="why">${F.esc(F.human(L(ex.summary)))}</p>` : (ex && (ex.cs || ex.en) ? `<p class="why">${F.esc(F.human(L(ex)))}</p>` : '')}
       ${ex?.strategies?.length ? `<p class="why-l">${t('det.strategies')}</p><div class="chips" style="margin-top:8px">${ex.strategies.map((x) => `<span class="chip chip-gold">${F.esc(L(x))}</span>`).join('')}</div>` : ''}
-      <ul class="reasons">${(s.reasons || []).map((r) => `<li>${icon('check')}${F.esc(L(r))}</li>`).join('')}</ul>
+      <ul class="reasons">${(s.reasons || []).map((r) => `<li>${icon('check')}${F.esc(F.human(L(r)))}</li>`).join('')}</ul>
       ${ex?.expect || ex?.invalidation ? `<div class="why-grid">
-        ${ex.expect ? `<div><p class="why-l">${t('det.expect')}</p><p>${F.esc(L(ex.expect))}</p></div>` : ''}
-        ${ex.invalidation ? `<div><p class="why-l">${t('det.invalid')}</p><p>${F.esc(L(ex.invalidation))}</p></div>` : ''}
+        ${ex.expect ? `<div><p class="why-l">${t('det.expect')}</p><p>${F.esc(F.human(L(ex.expect)))}</p></div>` : ''}
+        ${ex.invalidation ? `<div><p class="why-l">${t('det.invalid')}</p><p>${F.esc(F.human(L(ex.invalidation)))}</p></div>` : ''}
       </div>` : ''}
 
       <details class="gloss"><summary>${t('det.gloss')}</summary><ul>${glossaryFor(s, [L(ex?.summary || ''), ...(s.reasons || []).map((r) => L(r)), L(ex?.expect || ''), L(ex?.invalidation || ''), typeof ex === 'object' && !ex?.summary ? L(ex) : ''])

@@ -109,6 +109,22 @@ export function hours(k) {
   if (it?.hours_cs) return `${it.hours_cs.replace(/Po/g, 'Mon').replace(/Pá/g, 'Fri').replace(/Ne/g, 'Sun').replace(/nonstop/g, '24/7').replace(/pauza/g, 'break')} CET`;
   return t(`hours.${cls(k) === 'stock' || cls(k) === 'etf' ? 'us' : cls(k)}`);
 }
+/* 1.13.1: the next session of an instrument from its own schedule (DAX 9:00–17:30 Prague, US 15:30–22:00 …), 15-min steps.
+   nextOpen = when it opens next (now when open), sessionEnd = when that session closes. US holidays are not modelled. */
+const STEP = 15 * 60000;
+export function nextOpen(k, now = Date.now()) {
+  if (bySchedule(k, new Date(now))) return now;
+  let x = Math.ceil(now / STEP) * STEP;
+  for (let i = 0; i < 4 * 24 * 9; i++, x += STEP) if (bySchedule(k, new Date(x))) return x;
+  return null;
+}
+export function sessionEnd(k, now = Date.now()) {
+  const o = nextOpen(k, now);
+  if (o == null || cls(k) === 'crypto') return now + 86400000;
+  let x = Math.floor(o / STEP) * STEP + STEP;
+  for (let i = 0; i < 4 * 24 * 9; i++, x += STEP) if (!bySchedule(k, new Date(x))) return x;
+  return o + 86400000;
+}
 /* schedule only (no server flag) - used by the tests */
 export const schedOpen = (k, now = new Date()) => bySchedule(k, now);
 export const delayed = (k) => !!Live.meta(k)?.delayed;
