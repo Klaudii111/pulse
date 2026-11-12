@@ -3370,3 +3370,13 @@ body::after {
 .pa-dual { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 20px; max-width: 100%; overflow-x: clip; overflow-y: visible; }
 .pa-dual > .pa-usd { position: relative; margin-left: 0; }
 .pa-dual .pa-sep { position: absolute; right: 100%; width: 20px; text-align: center; font-style: normal; }
+/* 1.13.8: the profile column header ("Aggressive · deposit CZK 10,000 · leverage 1:20") gets its own height – the header row
+   grows with the longest column (English, CZK) and all columns + the row labels stay aligned (subgrid) */
+@supports (grid-template-rows: subgrid) {
+  .mb-lev { grid-template-rows: auto 20px 28px; row-gap: 0; }
+  .mb-rl, .mb-col { grid-row: 1 / span 3; grid-template-rows: subgrid; }
+  .mb-ph { align-self: center; padding: 1px 0 3px; }
+}
+@supports not (grid-template-rows: subgrid) {
+  .mb-rl, .mb-col { grid-template-rows: 58px 20px 28px; }
+}
