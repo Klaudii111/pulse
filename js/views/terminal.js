@@ -523,7 +523,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const stake = st.amount;
   const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
   const sess = () => { const o = M.nextOpen(sym); return { o, e: M.sessionEnd(sym) }; };
-  const fmtIn = (v) => (v == null ? '' : String(v));
+  /* 1.13.8: Stop / Cíl / limit in the instrument's price format like everywhere else ("7 390,80"), parsed back by F.parsePx */
+  const fmtIn = (v) => (v == null || !(v > 0) ? '' : pxOf(sym, v));
   /* 1.13.3: the deposit is shown with spaces like the first-run amount ("7 507", "10 000") – also while typing */
   const amtIn = (v) => (v > 0 ? F.num(Math.round(v), 0) : '');
   const validItems = () => [{ id: 'day', label: t('term.valid.day') }, { id: 'gtc', label: t('term.valid.gtc') }].concat(sigOpen ? [{ id: 'sig', label: t('term.valid.sig') }] : []);
@@ -562,7 +563,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       ${B.tkMoneyLine({ ...mm, lev: st.lev })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <details class="tk-det"${st.detOpen ? ' open' : ''}><summary data-tkdet>${t('tk.details')}${icon('chev-down', 'icon-xs')}</summary>
-      ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen, ro: true } })}
+      ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen, ro: !!useSig } })}
       ${B.levExamples({ ...mm, sel: st.lev, exOpen: st.exOpen, readonly: true })}
       <p class="tk-fee"><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
       ${isLim() || mktOpen() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
@@ -680,12 +681,17 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       });
       root.addEventListener('input', (ev) => {
         const k = ev.target.dataset.in; if (!k) return;
-        const v = k === 'amount' ? groupInput(ev.target) : F.parseNum(ev.target.value);
+        const v = k === 'amount' ? groupInput(ev.target) : F.parsePx(ev.target.value);
         if (k === 'amount') { st.risk = null; st.auto = false; st.amount = v > 0 ? v : 0; }
         if (k === 'sl') { st.sl = v > 0 ? v : null; applyRisk(); }
         if (k === 'tp') st.tp = v > 0 ? v : null;
         if (k === 'limit') { st.limit = v > 0 ? v : null; applyRisk(); }
         upd();
+      });
+      /* 1.13.8: leaving a price field shows it formatted ("7390.8" -> "7 390,80"); an unreadable text returns to the last valid price */
+      root.addEventListener('change', (ev) => {
+        const k = ev.target.dataset.in; if (!['sl', 'tp', 'limit'].includes(k)) return;
+        ev.target.value = fmtIn(st[k]);
       });
     },
   });

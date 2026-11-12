@@ -97,6 +97,8 @@ const stack = [];
 let closingViaHistory = false;
 
 export function openSheet({ html, label = 'Detail', small = false, onMount, onClose, className = '', instant = false }) {
+  /* 1.13.8: a toast from the screen below never stays over the sheet's content */
+  clearToasts(0);
   const scrim = document.createElement('div');
   scrim.className = 'sheet-scrim';
   const el = document.createElement('div');

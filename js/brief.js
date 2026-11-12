@@ -309,15 +309,20 @@ export function lossView(worst, amount, lev, ccy, { capped = false, deposit = nu
   const exact = capped || lim;
   /* within 3 % of the profile's risk (the deposit is floored to 100 Kč / 10 €) = the risk itself: "≈ −1 000 Kč", never "≈ −990 Kč" */
   const r = exact ? Math.round(v) : roundLoss(nominal > 0 && Math.abs(v - nominal) <= nominal * 0.03 ? nominal : v);
-  return { v: -r, lim, capped, p, txt: `${exact ? '' : '≈ '}${sMoney(-r, ccy)}`, pTxt: F.num(p, p % 1 ? 1 : 0) };
+  /* 1.13.8: the capped case says the REAL share of the wallet ("≈ 6 % peněženky"), never the profile's nominal "méně než 20 %" */
+  const w = eq > 0 ? r / eq * 100 : null;
+  const wr = w == null ? null : w < 1 ? Math.round(w * 10) / 10 : Math.round(w);
+  return { v: -r, lim, capped, p, w, txt: `${exact ? '' : '≈ '}${sMoney(-r, ccy)}`, pTxt: F.num(p, p % 1 ? 1 : 0), wTxt: wr == null ? null : F.num(wr, wr < 1 ? 1 : 0) };
 }
-/* "max ≈ −1 000 Kč" · "max −913 Kč (méně než 1 %, vklad je omezený)" · "max −7 500 Kč (celý vklad)" */
+/* the reason after a capped loss: "≈ 6 % peněženky, vklad je omezený" (fallback without a wallet: "méně než 1 %, …") */
+export const limWhy = (lv) => (lv.wTxt != null ? t('mb.limW', { w: lv.wTxt }) : t('mb.limS', { p: lv.pTxt }));
+/* "max ≈ −1 000 Kč" · "max −913 Kč (≈ 0,9 % peněženky, vklad je omezený)" · "max −7 500 Kč (celý vklad)" */
 export function lossLine(lv) {
   if (!lv) return '';
   /* "max ≈ −1 000 Kč" never breaks inside; the reason may wrap to the next line */
   const head = `<span class="nw">${t('cc.max', { v: lv.txt })}</span>`;
   if (lv.capped) return `${head} (${t('mb.all')})`;
-  if (lv.lim) return `${head} (${t('mb.limS', { p: lv.pTxt })})`;
+  if (lv.lim) return `${head} (${limWhy(lv)})`;
   return head;
 }
 export function sigTitle(s) {
@@ -437,7 +442,9 @@ export function moneyBlock(m) {
   const sm = (v) => sMoney(v, m.ccy);
   const wf = ok ? winFrac(bt.win_rate) : null;
   const lvOf = (n, a) => lossView(n.worst, a, n.lev, m.ccy, { capped: n.capped, deposit: m.ticket ? (m.deposit ?? null) : a });
-  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `${lv.txt} <small class="mb-allw">${t('mb.all')}</small>` : lv.lim ? `${lv.txt} <small class="mb-allw">${t('mb.limS', { p: lv.pTxt })}</small>` : lv.txt; };
+  /* 1.13.8: the reason goes UNDER the amount (own line), so the label "Maximální možná ztráta" keeps its width on a phone */
+  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${t('mb.all')}</small>` : lv.lim ? `<span class="nw">${lv.txt}</span> <small class="mb-allw">${limWhy(lv)}</small>` : lv.txt; };
+  const wCls = (n, a) => { const lv = lvOf(n, a); return lv && (lv.capped || lv.lim) ? ' has-why' : ''; };
   const main = (key, a, lev, on, pid) => {
     const n = levNums({ ...arg, amount: a, lev });
     const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), lv: lvOf(n, a)?.v ?? 0, p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
@@ -445,13 +452,13 @@ export function moneyBlock(m) {
     if (!ok) {
       const pp = n.best != null && a > 0 ? (n.best / a) * 100 : null;
       return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
-        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p>
+        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down${wCls(n, a)}" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p>
         <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
     }
     return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
-      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p></div>`;
+      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down${wCls(n, a)}" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p></div>`;
   };
   const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
   /* 1.13.3: a trade without a signal is sized by the deposit cap, not by the risk % -> its columns show the REAL share of

@@ -2,6 +2,7 @@
 // when the deposit is capped; Wallet "Open trades profit/loss"; Signals 2 control rows; Closed follow the profile.
 // Keys must also be in cs121.js.
 export default {
+  'mb.limW': '≈ {w} % of the wallet, the deposit is capped',
   'cc.maxLim': 'max {v} (under {p} %, the deposit is capped)',
   'mb.limS': 'under {p} %, the deposit is capped',
   'acc.open': 'Open trades profit/loss',

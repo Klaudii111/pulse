@@ -3,7 +3,7 @@
 import * as F from '../format.js';
 import * as B from '../brief.js';
 import * as D from '../domain.js';
-import { t, tag } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 import * as W from '../wallet.js';
 import { icon, monogram, sparkline } from '../ui.js';
 
@@ -20,20 +20,11 @@ function kc(v, data, sign = false) {
   const txt = F.money(Math.abs(x), c || 'USD', 0);
   return sign ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${txt}` : txt;
 }
-const dual = (v, data, sign = false) => (mineCcy() ? `${kc(v, data, sign)} <small class="pa-usd">${sign && v > 0 ? '+' : ''}${usd(v, 0)}</small>` : `${sign && v > 0 ? '+' : ''}${usd(v, 0)}`);
+/* 1.13.8: "2 224 160 Kč · 101 057 US$" – Kč first everywhere (Robot, Dnes, Výsledky), dollars small and separated */
+const dual = (v, data, sign = false) => (mineCcy() ? `<span class="pa-dual"><span class="nw">${kc(v, data, sign)}</span> <small class="pa-usd"><i class="pa-sep" aria-hidden="true">·</i>${sign && v > 0 ? '+' : ''}${usd(v, 0)}</small></span>` : `${sign && v > 0 ? '+' : ''}${usd(v, 0)}`);
 
 /* The paper account's equity: live P&L of positions is already in equity from the server */
 function eq(p) { return +p.account.equity; }
-
-/* 1.9.1: "100 338 $ ≈ 2,2 mil. Kč" – the robot's dollars also in the user's currency (live FX, else config) */
-function inMine(v, data) {
-  const ccy = D.walletCcy();
-  if (ccy === 'USD' || !(v > 0)) return '';
-  const x = D.convert(v, 'USD', ccy, data);
-  let txt;
-  try { txt = new Intl.NumberFormat(tag(), { style: 'currency', currency: ccy, notation: 'compact', maximumFractionDigits: 1 }).format(x); } catch { txt = F.money(x, ccy, 0); }
-  return `<span class="pa-mine num">≈ ${F.esc(txt)}</span>`;
-}
 
 /* the robot's exit legs (bracket order: take-profit limit + stop) belong to their position, not to "orders" */
 const isLeg = (o, pos) => !o.signal_id && pos.some((x) => x.symbol === o.symbol && ((x.side === 'long' && o.side === 'sell') || (x.side === 'short' && o.side === 'buy')));
@@ -61,8 +52,8 @@ export function paperHero(ctx) {
   return `<a class="pa-hero tone-${tone(pnl)}" href="#/robot">
     <span class="pa-glow" aria-hidden="true"></span>
     <span class="pa-top"><span class="pa-k">${icon('shield', 'icon-sm')}${t('pa.acc')}</span>${modeBadge(p)}</span>
-    <span class="pa-vrow"><span class="pa-v num">${usd(eq(p), 0)}</span>${inMine(eq(p), ctx.data)}</span>
-    <span class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${pnl >= 0 ? '+' : ''}${usd(pnl, 0)}</b> ${t('pa.heroS', { start: usd(+a.start_equity || 100000, 0) })}</span>
+    <span class="pa-vrow"><span class="pa-v num">${dual(eq(p), ctx.data)}</span></span>
+    <span class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${kc(pnl, ctx.data, true)}</b> ${t('pa.heroS', { start: kc(+a.start_equity || 100000, ctx.data) })}</span>
     <span class="pa-bigger">${icon('info', 'icon-xs')}${t('pa.bigger')}</span>
     <span class="pa-foot"><span>${t('pa.posN', { n: pos.length })}</span><span>${t('pa.ordN', { n: (p.orders || []).filter((o) => !isLeg(o, pos)).length })}</span><span class="pa-more">${t('pa.more')}${icon('chev-right', 'icon-xs')}</span></span>
   </a>`;

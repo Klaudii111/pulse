@@ -3358,3 +3358,15 @@ body::after {
 .chip.is-off, .chip:disabled { opacity: .38; cursor: not-allowed; border-style: dashed; }
 /* the loss note in a money line ("vklad je omezený") stays muted */
 .cc-ml .down small, .mb-allw { font-weight: 500; }
+/* 1.13.8: a capped loss keeps the label on one line – the reason ("≈ 6 % peněženky, vklad je omezený") sits under the amount */
+.sc-m b.has-why { white-space: normal; text-align: right; max-width: 58%; flex: 0 1 auto; }
+.sc-m b.has-why .mb-allw { display: block; margin: 2px 0 0; line-height: 1.3; }
+.sc-m:has(b.has-why) { align-items: flex-start; }
+.sc-m:has(b.has-why) > span { padding-top: 2px; }
+/* 1.13.8: the robot's money in dollars next to the Kč amount, readable and separated ("2 224 160 Kč · 101 057 US$") */
+.pa-usd { letter-spacing: 0; word-spacing: normal; white-space: nowrap; display: inline-block; }
+/* the "·" separator sits in the left gap of the dollar part; when the dollars wrap under the Kč (long English amounts)
+   the separator falls outside the clipped box, so a new line never starts with "·" */
+.pa-dual { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 20px; max-width: 100%; overflow-x: clip; overflow-y: visible; }
+.pa-dual > .pa-usd { position: relative; margin-left: 0; }
+.pa-dual .pa-sep { position: absolute; right: 100%; width: 20px; text-align: center; font-style: normal; }

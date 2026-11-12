@@ -2,6 +2,7 @@
 // přesně s důvodem; Peněženka „Zisk/ztráta otevřených obchodů“; Signály 2 řádky ovládání; Ukončené podle profilu.
 // Klíče musí být i v en121.js.
 export default {
+  'mb.limW': '≈ {w} % peněženky, vklad je omezený',
   'cc.maxLim': 'max {v} (méně než {p} %, vklad je omezený)',
   'mb.limS': 'méně než {p} %, vklad je omezený',
   'acc.open': 'Zisk/ztráta otevřených obchodů',

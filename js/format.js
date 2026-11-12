@@ -133,6 +133,19 @@ export function esc(s) {
 }
 
 /* Parse user number input in Czech or English notation */
+/* 1.13.8 a typed PRICE (Stop / Cíl / limit): "7 390,80", "7390.80", "7,390.80", "7.390,80" -> 7390.8 – comma or dot as the
+   decimal mark in both languages; with both marks the last one is the decimal; a lone comma in English with exactly
+   3-digit groups ("7,390") is a thousands separator */
+export function parsePx(s) {
+  if (typeof s === 'number') return s;
+  let x = String(s ?? '').replace(/[\s  ']/g, '').replace(/[−–]/g, '-');
+  const c = x.lastIndexOf(','), d = x.lastIndexOf('.');
+  if (c >= 0 && d >= 0) x = c > d ? x.replace(/\./g, '').replace(',', '.') : x.replace(/,/g, '');
+  else if (c >= 0) x = lang() === 'en' && /^-?\d{1,3}(,\d{3})+$/.test(x) ? x.replace(/,/g, '') : (x.split(',').length === 2 ? x.replace(',', '.') : x.replace(/,/g, ''));
+  else if (d >= 0 && x.split('.').length > 2) x = x.replace(/\./g, '');
+  const v = parseFloat(x);
+  return Number.isFinite(v) && /^-?\d*\.?\d+$/.test(x) ? v : NaN;
+}
 export function parseNum(s) {
   if (typeof s === 'number') return s;
   let x = String(s ?? '').replace(/[\s\u00a0\u202f]/g, '');

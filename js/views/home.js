@@ -6,7 +6,7 @@ import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline, toast } 
 import * as B from '../brief.js';
 import * as W from '../wallet.js';
 import * as store from '../store.js';
-import { orderRow, histList, tradeRow, closeConfirm } from './terminal.js';
+import { orderRow, histList, tradeRow, closeConfirm, pxC } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
 import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ } from './signals.js';
@@ -166,7 +166,7 @@ function myInvest(ctx) {
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
   const ords = sm.w.orders.map((o) => `<a class="mi-row is-ord" href="#/zainvestovano"><span class="mi-id"><b class="mi-n">${F.esc(B.whatIs(o.sym, o.name).name)}</b>
-      <span class="mi-s num">${t('d.order', { v: F.price(o.limit), a: F.money(o.amount, c, 0) })}</span></span></a>`).join('');
+      <span class="mi-s num">${t('d.order', { v: `<span class="nw">${pxC(o.sym, o.limit)}</span>`, a: `<span class="nw">${F.money(o.amount, c, 0)}</span>` })}</span></span></a>`).join('');
   const rows = myInvestRows(ctx, sm, true);
   return rows + ords ? `<div class="mi-list">${rows}${ords}</div>` : `<p class="d-empty">${t('d.mine0')}</p>`;
 }
