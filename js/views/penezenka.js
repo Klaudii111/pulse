@@ -121,7 +121,7 @@ function curveSvg(pts, c, minSpan = 0) {
 function closedRow(p, c) {
   const h = hzOf(p);
   return `<div class="hi-row">${p.sigId ? `<button type="button" class="hi-main" data-action="open-signal" data-id="${F.esc(p.sigId)}">` : '<div class="hi-main">'}
-    <span class="hi-bar ${tone(p.pnl)}"></span><span class="hi-m"><b>${F.esc(nameOf(p))}</b><small>${F.esc(h === 'own' ? t('hi.own') : t(`c.typeS.${h}`))} · ${F.dm(p.closedAt)}${p.lev > 1 ? ` · 1:${p.lev}` : ''} · ${F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`))}</small></span>
+    <span class="hi-bar ${tone(p.pnl)}"></span><span class="hi-m"><b>${F.esc(nameOf(p))}</b><small>${F.esc(h === 'own' ? t('hi.own') : t(`c.typeS.${h}`))} · ${F.dm(p.closedAt)} · ${F.esc(B.levTxt(p.lev))} · ${F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`))}</small></span>
     <span class="hi-v num ${tone(p.pnl)}">${sm(p.pnl, c)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>${p.sigId ? '</button>' : '</div>'}</div>`;
 }
 function mine(ctx) {
@@ -194,8 +194,13 @@ export function renderHistory(ctx) {
   return head + `
   <h2 class="d-h hi-h">${t('hi.mine')}</h2>
   ${mine(ctx)}
-  ${(() => { const jb = journalBody(ctx); return jb ? `<section class="d-block hi-journal"><h2 class="d-h">${t('hi.journal')}</h2>${jb}</section>` : ''; })()}
   <section class="d-block"><h2 class="d-h">${t('cm.title')}</h2>${people()}${shareBox()}</section>
+  ${(() => {
+    /* 1.13.4: the old manual journal only as a small collapsed block at the bottom (never next to the wallet's numbers) */
+    const jb = journalBody(ctx);
+    const n = jb ? D.journalRows(ctx.data).filter((r) => !r.e.wallet).length : 0;
+    return jb ? `<details class="hi-legacy" id="hi-legacy"><summary>${t('hi.legacy')}<span class="num"> · ${n}</span>${icon('chev-down', 'icon-xs')}</summary><div class="hi-journal">${jb}</div></details>` : '';
+  })()}
   <p class="disclaimer">${icon('info')}${F.esc(t('disclaimer'))}</p>`;
 }
 export function mountHistory(el, ctx) {

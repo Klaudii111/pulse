@@ -253,6 +253,7 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   }
   const el = document.createElement('div');
   el.className = 'toast';
+  el.dataset.at = String(Date.now());
   el.setAttribute('role', 'status');
   el.innerHTML = `<span>${msg}</span>${action ? `<button class="btn btn-primary" type="button">${F.esc(action.label)}</button>` : ''}`;
   if (action) el.querySelector('button').addEventListener('click', () => { action.fn(); hide(); });
@@ -261,6 +262,16 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   let timer = setTimeout(hide, timeout);
   function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); } }, 260); }
   return hide;
+}
+
+/* 1.13.4: a toast belongs to the screen it was raised on – a route change removes it (no carry-over onto KOUPIT /
+   PRODAT or the Dnes cards). A toast raised in the same tick as the navigation (younger than minAge ms) stays. */
+export function clearToasts(minAge = 350) {
+  const root = document.getElementById('toast-root');
+  if (!root) return;
+  const now = Date.now();
+  root.querySelectorAll('.toast').forEach((n) => { if (now - (+n.dataset.at || 0) >= minAge) n.remove(); });
+  if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); }
 }
 
 /* ---------- Skeletons ---------- */

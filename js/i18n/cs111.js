@@ -61,7 +61,7 @@ export default {
   'th.SILA.t': 'Síla signálu',
   'th.SILA.s': 'Kolikrát větší je možný zisk (k cíli) než možná ztráta (ke stopu), když vstoupíš teď. ●●● = zisk aspoň 2,5× větší, ●● = aspoň 1,8×, ● = méně. Nejsilnější signály jsou nahoře. Není to záruka – i silný signál může skončit ztrátou.',
   /* Jak PULSE funguje + průvodce */
-  'jak.q7': 'Jak víte, že signály fungují?',
+  'jak.q7': 'Jak víš, že signály fungují?',
   'jak.a7': 'Robot každou hodinu porovná výsledky signálů v praxi s testem na datech 2023–2026. Strategii, která vychází jasně hůř, sám dočasně vypne. Vše je vidět na stránce',
   'tour.learn.t': 'Jak se robot učí', 'tour.learn.s': 'Robot každou hodinu kontroluje, jestli strategie fungují i v praxi. Co nefunguje, sám vypne. Klepni a uvidíš semafor každé strategie.',
   /* 1.11.1 – peníze u signálu: průměr z testu, nejlepší/nejhorší případ, profily páky */

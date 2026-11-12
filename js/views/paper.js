@@ -151,6 +151,27 @@ export function render(ctx) {
   <p class="disclaimer">${icon('info')}${F.esc(t('pa.disc'))}</p>`;
 }
 
+/* 1.13.4 Robot page: what the robot holds (from paper.json positions), what waits to be bought (its own buy orders, not
+   the exit legs) and – apart – how many signals the USER can still buy. Every number counts from the same arrays. */
+export function robotHold(ctx, canBuy) {
+  const p = ctx.data?.paper;
+  if (!ok(p)) return '';
+  const pos = p.positions || [];
+  const ord = (p.orders || []).filter((o) => !isLeg(o, pos));
+  const chip = (x) => {
+    const sig = x.signal_id ? D.findSignal(ctx.data, x.signal_id) : null;
+    const nm = B.whatIs(x.symbol, sig?.name || '').name;
+    const v = +x.pnl_pct;
+    const inner = `<span class="rb-n">${F.esc(nm)}</span><b class="num ${tone(v)}">${Number.isFinite(v) ? F.spct(v, 1) : '–'}</b>`;
+    return sig ? `<button type="button" class="rb-c" data-action="open-signal" data-id="${F.esc(sig.id)}" data-sym="${F.esc(x.symbol)}">${inner}</button>` : `<span class="rb-c" data-sym="${F.esc(x.symbol)}">${inner}</span>`;
+  };
+  return `<section class="rb-hold" id="rb-hold" data-pos="${pos.length}" data-ord="${ord.length}" data-buy="${canBuy}">
+    <p class="rb-h">${icon('shield', 'icon-xs')}<b>${pos.length ? t('rb.holds', { n: pos.length }) : t('rb.holds0')}</b>${ord.length ? `<span> · ${t('rb.wait', { n: ord.length })}</span>` : ''}</p>
+    ${pos.length ? `<div class="rb-list">${pos.map(chip).join('')}</div>` : ''}
+    <a class="rb-buy" href="#/signaly">${t('rb.canBuy', { n: canBuy })}${icon('chev-right', 'icon-xs')}</a>
+  </section>`;
+}
+
 /* Small link card for Results */
 export function paperLink(ctx) {
   const p = ctx.data?.paper;

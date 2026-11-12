@@ -3,7 +3,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg } from './ui.js';
+import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts } from './ui.js';
 import { linkLine } from './views/learn.js';
 import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
@@ -197,7 +197,7 @@ function onLangChange() {
 function onRoute() {
   const prev = route.name;
   route = parseRoute();
-  if (route.name !== prev) VIEWS[route.name].enter?.();
+  if (route.name !== prev) { VIEWS[route.name].enter?.(); clearToasts(); }
   closeAllSheets();
   M.withTransition(() => { renderNav(); rerender(); });
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
@@ -454,7 +454,7 @@ const GLOBAL = {
   'lev-prof'(el) {
     if (!el.isConnected || el.closest('#tk')) return;
     B.setLevProfile(el.dataset.prof);
-    if (el.closest('.mp')) toast(t('mp.profDone', { p: t(`mb.p.${el.dataset.prof}`), s: t(`pf.short.${el.dataset.prof}`) }));
+    if (el.closest('.mp')) toast(t('mp.profDone', { p: t(`mb.p.${el.dataset.prof}`), s: B.profShort(el.dataset.prof) }));
     if (!sheetOpen()) rerender({ soft: true });
   },
   /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */

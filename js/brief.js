@@ -332,6 +332,10 @@ export function onColId(cols, sel) {
 export const selLev = (sym) => D.profLevFor(D.prof(), sym);
 /* "riziko 2 % · páka 1:2" – the one-line meaning of a profile for one instrument */
 export const profMeta = (c) => `${t('mb.risk', { v: F.num(c.pct, 0) })} · ${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}`;
+/* 1.13.4 "bez páky" wherever the leverage is 1:1 (chips, positions, tables, history) */
+export const levTxt = (lev) => (+lev > 1 ? t('mb.lev', { v: +lev }) : t('mb.noLev'));
+/* 1.13.4 the profile's fixed meaning; Agresivněji names the real caps ("páka 1:5 u akcií, 1:20 u indexů") */
+export const profShort = (id) => t(`pf.short.${id}`, { s: M.maxLev('AAPL') || 5, i: M.maxLev('US500') || 20 });
 /* "1 ze 2" / "3 z 5" / "6 z 10": the simplest fraction within 3 points of the test's win rate */
 export function winFrac(w) {
   if (!(w > 0 && w < 1)) return null;
@@ -425,24 +429,40 @@ export function moneyBlock(m) {
   const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
   /* 1.13.3: a trade without a signal is sized by the deposit cap, not by the risk % -> its columns show the REAL share of
      the wallet lost at worst (computed), never the profile's nominal "riziko 1 %" */
+  /* 1.13.4: the column = the profile's FIXED definition (riziko 1 % · bez páky); the real effect of THIS trade on the
+     wallet is one separate line under the main block ("Tento obchod: nejhůř −300 Kč = 0,3 % peněženky") */
   const eq = D.sizingBase(null);
-  const riskOf = (c) => {
-    if (m.s || !(eq > 0) || c.n.worst == null) return F.num(c.pct, 0);
-    const v = Math.abs(c.n.worst) / eq * 100;
-    return F.num(v, v < 1 ? 1 : 0);
-  };
+  const riskOf = (c) => F.num(c.pct, 0);
+  const pctTxt = (v) => F.num(v, v < 1 ? 1 : 0);
   const cell = (c) => `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
-      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl" data-risk>${t('mb.risk', { v: riskOf(c) })}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
+      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl" data-risk>${t('mb.risk', { v: riskOf(c) })}</span><span class="mb-pl">${levTxt(c.lev)}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
       <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
   const own = tk ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
       <span>${t('mb.own')}</span><b class="num mb-own-v">${onId ? '' : `1:${tk.lev}`}</b>${icon('chev-down', 'icon-xs')}</button>
     <div class="mb-own"${tk.open ? '' : ' hidden'}>${levChips(m.sym, tk.lev)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>` : '';
-  /* 1.13.3: the worst share of the deposit across the profiles of THIS signal / trade (max loss / deposit) */
-  const maxPct = Math.round(Math.max(0, ...cols.filter((c) => c.a > 0 && c.n.worst != null).map((c) => Math.abs(c.n.worst) / c.a * 100)));
-  const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
+  /* 1.13.4: the worst share of the deposit for the SELECTED profile (one note per column, the chosen one shown;
+     the invest sheet: exactly what it will buy) – never the maximum over all profiles under "Konzervativně" */
+  const dPct = (a, worst) => (a > 0 && worst != null ? Math.round(Math.abs(worst) / a * 100) : null);
+  const pfName = (id, lev) => (id ? t(`mb.p.${id}`) : `${t('mb.ownShort')} 1:${lev}`);
+  const note = (key, name, pct, on) => (pct == null ? '' : `<p class="mb-note" data-p="${key}" data-maxpct="${pct}"${on ? '' : ' hidden'}>${t('mb.levNote4', { pf: name, p: pct })}</p>`);
+  let notes;
+  let real = '';
+  if (tk) {
+    const n = levNums({ ...arg, amount: tk.amount, lev: tk.lev });
+    notes = note('cur', pfName(onId, tk.lev), dPct(tk.amount, n.worst), true);
+    /* a trade without a signal: the profile's definition + what THIS trade does to the wallet, apart */
+    if (!m.s && eq > 0 && n.worst != null) {
+      const pc = onId ? cols.find((c) => c.id === onId) : null;
+      const def = pc ? `${t(`mb.p.${pc.id}`)} · ${profMeta(pc)}` : `${t('mb.ownShort')} · ${levTxt(tk.lev)}`;
+      real = `<p class="mb-real" data-realpct="${(Math.abs(n.worst) / eq * 100).toFixed(2)}"><b>${F.esc(def)}</b><span>${t('mb.real', { v: sm(n.worst), p: pctTxt(Math.abs(n.worst) / eq * 100) })}</span></p>`;
+    }
+  } else {
+    notes = cols.map((c) => note(c.id, t(`mb.p.${c.id}`), dPct(c.a, c.n.worst), c.id === onId)).join('');
+  }
+  const table = `${real}<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}<p class="mb-note" data-maxpct="${maxPct}">${t('mb.levNote3', { p: maxPct })}</p>`;
+      ${cols.map(cell).join('')}</div>${own}${notes}`;
   return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
 }
@@ -521,6 +541,7 @@ export function syncLev() {
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
     mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', x.dataset.p === pid));
+    mb.querySelectorAll('.mb-note[data-p]').forEach((x) => { x.hidden = x.dataset.p !== pid; });
     mb.querySelectorAll('.mb-col').forEach((x) => { const on = x.dataset.prof === pid; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
   });
 }
@@ -640,7 +661,7 @@ export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true
     return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}"${c.id === pid ? '' : ' hidden'}><b>${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
   };
   /* the three profile chips only on the first card of a list (and in the detail / sheet) */
-  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · 1:${c.lev}</small></button>`).join('')}</div>` : '';
+  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · ${c.lev > 1 ? `1:${c.lev}` : t('mb.noLev')}</small></button>`).join('')}</div>` : '';
   return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${cols.map(line).join('')}</div>`, chips, n };
 }
 function enShort(s, en, now) {

@@ -3,10 +3,10 @@ import * as store from '../store.js';
 import { icon, seg, segMove, skBlock, ring, hzIcon } from '../ui.js';
 import { equityChart } from '../charts.js';
 import * as D from '../domain.js';
-import { rTip, VISIBLE_HZ, signalRow } from './signals.js';
+import { rTip, VISIBLE_HZ, signalRow, buyable } from './signals.js';
 import * as B from '../brief.js';
 import { verifyUrl } from './detail.js';
-import { paperLink } from './paper.js';
+import { paperLink, robotHold } from './paper.js';
 import { linkLine } from './learn.js';
 import { t } from '../i18n/index.js';
 import * as Live from '../live.js';
@@ -174,7 +174,7 @@ export function render(ctx) {
   const hsN = D.headStats(ctx.data, now).n;
   return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>
   ${hsN ? B.statsBig(ctx.data, now) : ''}
-  <p class="res-counts num">${counts}</p>
+  ${robotHold(ctx, buyable(ctx.data, now).length) || `<p class="res-counts num">${counts}</p>`}
   ${paperLink(ctx)}
   ${ctx.inRobot ? '' : linkLine(ctx.data, now, 'hs-row le-res')}
   <div class="results-layout">
@@ -198,7 +198,7 @@ export function render(ctx) {
     </div>
   </div>
   ${hsN ? '' : B.statsBig(ctx.data, now)}
-  ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${counts}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
+  ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${t('rb.openSig', { n: openNow.length })}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
   <div class="srow-list">${openNow.map((x, i) => signalRow(x, now, i)).join('')}</div>` : ''}
   <h2 class="section-title">${t('fr.title')}</h2>
   ${B.freshTable(ctx.data, { n: 10, now })}

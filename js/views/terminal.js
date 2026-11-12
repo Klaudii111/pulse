@@ -281,7 +281,7 @@ function watchView(ctx) {
   const n = phone ? 4 : watchN();
   const shown = l.slice(0, n), rest = l.slice(n);
   return `<section class="watch">
-    <div class="watch-top">${phone ? '' : `<div class="range-chips w-lays" role="group" aria-label="${F.esc(t('watch.layout'))}">${[1, 2, 4].map((k) => `<button type="button" class="range-chip w-lay${k > 1 ? ' w-lay-multi' : ''}" data-action="w-n" data-id="${k}" aria-pressed="${k === n}">${icon(`lay${k}`, 'icon-xs')}${t('watch.n', { n: k })}</button>`).join('')}</div>`}
+    <div class="watch-top">${phone ? '' : `<div class="range-chips w-lays" role="group" aria-label="${F.esc(t('watch.layout'))}">${[1, 2, 4].map((k) => `<button type="button" class="range-chip w-lay${k > 1 ? ' w-lay-multi' : ''}" data-action="w-n" data-id="${k}" data-lay="${k}" aria-label="${F.esc(t('watch.layAria', { n: k }))}" aria-pressed="${k === n}">${icon(`lay${k}`, 'icon-xs')}<span aria-hidden="true">${t('watch.n', { n: k })}</span></button>`).join('')}</div>`}
       <button type="button" class="btn btn-secondary btn-small" data-action="w-add">${icon('plus-square', 'icon-sm')}${t('watch.addBtn')}</button></div>
     ${shown.length ? `<div class="watch-grid n${n}">${shown.map((s, i) => watchCard(s, ctx.data, i)).join('')}</div>` : `<p class="d-empty">${t('watch.empty')}</p>`}
     ${rest.length ? `<p class="watch-rest-l">${t('watch.rest')}</p><div class="chips">${rest.map((s) => `<button type="button" class="chip" data-action="w-front" data-sym="${F.esc(s)}">${F.esc(whatOf(s, ctx.data).name)}</button>`).join('')}</div>` : ''}
@@ -346,8 +346,8 @@ export function render(ctx) {
       <div id="t-tab">${tabBody(sm, ctx.data)}</div>
       ${sigs.length ? `<h2 class="section-title">${t('term.sigs')}</h2><div class="chips term-chips">${sigs.slice(0, 12).map((x) => `<button type="button" class="chip ${x.symbol === sym ? 'chip-gold' : ''}" data-action="t-sym" data-sym="${F.esc(x.symbol)}">${F.esc(x.symbol)}</button>`).join('')}</div>` : ''}
       <details class="gloss term-gloss"><summary>${t('term.words')}</summary><ul>${['PAKA', 'PAKAMT', 'MARZE', 'OBJEM', 'STOPOUT', 'SHORT', 'SPREAD', 'SWAP', 'MCALL', 'DELAY'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
-      <div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5">${t('mt5.help')}</a></div>
-      <button type="button" class="btn btn-ghost btn-small term-reset" data-action="t-reset">${t('term.reset')}</button>
+      <!-- 1.13.4: ONE compact MetaTrader 5 row (the help page has the download); "Začít znovu" lives in Peněženka -->
+      <a class="mt5-row" href="#/mt5" id="mt5-row">${icon('external', 'icon-xs')}<span class="mt5-t">${t('mt5.row')}</span><small>${t('mt5.rowS')}</small>${icon('chev-right', 'icon-xs')}</a>
     </section>
   </div>
   <p class="disclaimer">${icon('info')}${F.esc(t('term.disc'))}</p>`;

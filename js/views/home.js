@@ -110,7 +110,7 @@ export function accountCard(ctx) {
   return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
     <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
       <p class="d-hero-v num">${F.money(sm.equity, c, 0)}</p>
-      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.mpct(v, sm.today); })() })}</p>
+      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.mpct(v, sm.today); })() })}${sm.rows.length ? `<small class="d-hero-incl">${t('dh.inclOpen')}</small>` : ''}</p>
       <p class="d-hero-s num">${t(Math.abs(sm.open) >= 0.5 ? 'dh.split3' : 'dh.split', { f: F.money(Math.max(0, sm.cash), c, 0), u: F.money(sm.used + sm.reserved, c, 0), o: (sm.open > 0 ? '+' : '') + F.money(sm.open, c, 0) })}</p></a>
     <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
@@ -119,15 +119,15 @@ export function accountCard(ctx) {
 /* 1.13.0 "Jak chceš obchodovat": one card, three chips – Sám · Signály · Robot za mě (switch + one status line) */
 export function profText() {
   const p = D.prof();
-  return `${t(`mb.p.${p.id}`)} · ${t(`pf.short.${p.id}`)}`;
+  return `${t(`mb.p.${p.id}`)} · ${B.profShort(p.id)}`;
 }
 function paths() {
   const on = !!store.get('autoCopy', null)?.on;
   return `<section class="how-card" aria-label="${t('pt.aria')}">
     <p class="d-k">${t('pt.aria')}</p>
     <div class="how-chips">
-      <a class="hw-chip" href="#/terminal">${icon('chart', 'icon-sm')}<span>${t('pt.self')}</span></a>
-      <a class="hw-chip" href="#/signaly">${icon('signals', 'icon-sm')}<span>${t('pt.sig')}</span></a>
+      <a class="hw-chip hw-link" href="#/terminal" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.terminal') }))}">${icon('chart', 'icon-sm')}<span>${t('pt.self')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
+      <a class="hw-chip hw-link" href="#/signaly" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.signaly') }))}">${icon('signals', 'icon-sm')}<span>${t('pt.sig')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
       <button type="button" class="hw-chip hw-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">${icon('robot', 'icon-sm')}<span>${t('pt.auto')}</span><span class="auto-sw" aria-hidden="true"><i></i></span></button>
     </div>
     <p class="how-st"><b class="${on ? 'up' : ''}">${t(on ? 'pt.on' : 'pt.off')}</b> · <a class="link" href="#/nastaveni">${F.esc(profText())}</a></p>

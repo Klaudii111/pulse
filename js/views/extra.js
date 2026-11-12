@@ -23,7 +23,9 @@ export function renderJournal(ctx) {
 /* 1.13.3: the journal entries (stats + list) – also a section of Historie when there are entries; '' when none */
 export function journalBody(ctx) {
   if (!ctx.data?.signals) return '';
-  const rows = D.journalRows(ctx.data);
+  /* 1.13.4: only the user's own manual entries – a trade from the wallet already lives in Historie (closed list),
+     so its mirrored journal entry is never counted twice ("Obchodů 0" / "Nevstoupil" next to a real closed trade) */
+  const rows = D.journalRows(ctx.data).filter((r) => !r.e.wallet);
   if (!rows.length) return '';
   const ins = rows.filter((r) => r.e.state === 'in');
   const outs = rows.filter((r) => r.e.state === 'out');
@@ -48,7 +50,7 @@ export function journalBody(ctx) {
       const v = r.e.state === 'in' ? r.my?.r : null;
       return `<button class="hist-row" type="button" data-action="open-signal" data-id="${F.esc(r.id)}">
         <span class="hist-bar ${r.e.state === 'in' ? tone(v) : ''}"></span>
-        <span><span class="hist-sym">${F.esc(r.s.symbol)}<span class="tag">${t(r.e.state === 'in' ? 'jr.tagIn' : 'jr.tagOut')}</span>${r.closed ? '' : `<span class="tag new">${t('jr.tagOpen')}</span>`}</span>
+        <span><span class="hist-sym">${F.esc(r.s.symbol)}<span class="tag">${t(r.e.state === 'out' ? 'jr.tagOut' : 'jr.tagIn')}</span>${r.closed ? '' : `<span class="tag new">${t('jr.tagOpen')}</span>`}</span>
           <span class="hist-meta" style="display:block">${F.HZ_LABEL[r.s.horizon]}${r.e.state === 'in' ? t('jr.myEntry', { v: F.price(r.e.entry) }) : ''}</span></span>
         <span class="hist-res"><span class="hist-r num ${r.e.state === 'in' ? tone(v) : 'flat'}" style="display:block">${r.e.state === 'in' && r.my ? F.spct(r.my.pct, 2) : '–'}</span>
           <span class="hist-p num" style="display:block">${showR ? t('jr.meBot', { me: v != null && r.e.state === 'in' ? F.sr(v) : '–', bot: r.botR != null ? F.sr(r.botR) : '–' }) : t('jr.posChange')}</span></span>

@@ -12,6 +12,7 @@ import { t, lang } from './i18n/index.js';
 import { icon, ladder, toast } from './ui.js';
 import { howStrip } from './views/help.js';
 import * as H from './health.js';
+import * as B from './brief.js';
 
 let root = null;
 
@@ -83,7 +84,7 @@ function profCards() {
     const loss = cap * p.pct / 100;
     const ex = r != null ? t('onb.p.ex', { c: F.money(cap, cs.ccy, 0), a: sm(loss * r), l: sm(-loss) }) : t('onb.p.ex0', { c: F.money(cap, cs.ccy, 0), l: sm(-loss) });
     return `<button type="button" role="radio" class="onb-pc is-${p.id}" data-prof="${p.id}" aria-checked="${p.id === id}">
-      <span class="onb-pc-h"><b>${t(`mb.p.${p.id}`)}</b><small>${t(`pf.short.${p.id}`)}</small></span>
+      <span class="onb-pc-h"><b>${t(`mb.p.${p.id}`)}</b><small>${B.profShort(p.id)}</small></span>
       <span class="onb-pc-ex num">${F.esc(ex)}</span></button>`;
   }).join('');
 }
