@@ -167,8 +167,11 @@ export function canTrade(j, s, now = D.clock()) {
   if (j?.robot?.stav !== 'bezi' || !ENTRY_OPEN.includes(s?.stav)) return false;
   if (s.strategie && pausedGroups(j).includes(String(s.strategie))) return false;
   if (s.vstup_stav === 'pozde' || s.pozde_pri_zapisu === true) return false;
+  /* an offer needs an end of validity and the price limit its sentence shows - without them the signal is information only */
   const until = ms(s.vstup?.plati_do);
-  if (until && +now > until) return false;
+  if (!(until > 0) || +now > until) return false;
+  const lim = s.smer === 'PRODEJ' ? +s.vstup?.nejniz : +s.vstup?.nejvys;
+  if (!(lim > 0)) return false;
   const at = ms(s.cas_signalu);
   return !!at && pragueDay(at) === pragueDay(+now);
 }
@@ -190,7 +193,12 @@ export function sigState(j, s, now = D.clock()) {
   const k = s?.stav;
   if (k === 'uzavreno') { const o = outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
   if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
-  if (ENTRY_OPEN.includes(k)) return { ...base, code: untilMs ? 'over' : 'other' };
+  if (ENTRY_OPEN.includes(k)) {
+    /* not offered although its state says "valid": say the real reason (a paused group, entry over, entry data missing) */
+    if (s.strategie && pausedGroups(j).includes(String(s.strategie))) return { ...base, code: 'pausedg' };
+    if (untilMs && +now > untilMs) return { ...base, code: 'over' };
+    return { ...base, code: 'info' };
+  }
   if (k === 'neuzavreno_chybi_data') return { ...base, code: 'nodata' };
   return { ...base, code: 'other' };
 }
@@ -201,7 +209,7 @@ const TODAY_CAP = 4;
 const nameHtml = (o) => `${F.esc(o.x.m)}${isPB(o.s) ? ` ${pbTag().replace('class="den-pb"', 'class="den-pb den-pb-s"')}` : ''}`;
 /* today's non-actionable signals as short grey lines: one signal -> the usual sentence; more -> one line per state,
    identical states grouped ("3 signály přišly pozdě: Nasdaq 100, Ropa WTI, DAX – nepočítají se.") */
-function todayLines(list, afterGo = false) {
+function todayLines(list, afterGo = false, lead = true) {
   if (!list.length) return '';
   if (list.length === 1) {
     const o = list[0];
@@ -216,7 +224,7 @@ function todayLines(list, afterGo = false) {
       : tp(`den.lg.${g.code}`, g.l.length, { list: g.l.map(one).join(', ') });
     return `<p class="den-note den-line" data-den-state="${g.code}">${txt}</p>`;
   }).join('');
-  return `<p class="den-note den-lead">${t(afterGo ? 'den.todayLead2' : 'den.todayLead')}</p>${lines}`;
+  return `${lead || afterGo ? `<p class="den-note den-lead">${t(afterGo ? 'den.todayLead2' : 'den.todayLead')}</p>` : ''}${lines}`;
 }
 /* "Poslední: čt 12. 11. · DAX · přišel pozdě" */
 const lastText = (x) => t('den.last', { d: dayLabel(x.at), m: x.m, o: t(`den.o.${x.code}`) });
@@ -255,7 +263,7 @@ function sigBlock(j, s) {
   const btn = demoOk(s.trh)
     ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
     : `<p class="den-note den-nodemo" data-den-nodemo="1">${t('den.noDemo')}</p>`;
-  const title = `<p class="den-sig-t"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span>${isPB(s) ? pbTag() : ''}</p>${isPB(s) ? `<p class="den-st den-pb-l">${t('den.pb.line')}</p>` : ''}`;
+  const title = `<p class="den-sig-t${demoOk(s.trh) ? '' : ' is-info'}"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span>${isPB(s) ? pbTag() : ''}</p>${isPB(s) ? `<p class="den-st den-pb-l">${t('den.pb.line')}</p>` : ''}`;
   if (s.stav === 'over_u_brokera') {
     const at = ms(s.cas_signalu);
     const n = Number.isFinite(+s.data_zpozdena_min) ? Math.round(+s.data_zpozdena_min) : 0;
@@ -275,7 +283,7 @@ function sigBlock(j, s) {
     <p class="den-st tone-up">${t('den.st.plati')}</p>${btn}</div>`;
 }
 /* "Dnes" body shared by the card and the page: actionable blocks, else at most two grey lines */
-function todayBody(j, now) {
+function todayBody(j, now, { cap = TODAY_CAP, lead = true } = {}) {
   if (!j || !fresh(j, now)) {
     const last = j ? lastOld(j, now) : null;
     return `<p class="den-note" data-den-state="nodata">${t('den.noData')}</p>${last ? `<p class="den-note den-note-2">${F.esc(lastText(last))}</p>` : ''}`;
@@ -285,16 +293,16 @@ function todayBody(j, now) {
     return `<p class="den-note" data-den-state="paused">${F.esc(why)}</p>`;
   }
   const pg = pausedGroups(j);
-  const pgHtml = pg.length ? `<p class="den-note den-pg" data-den-paused="${F.esc(pg.join(','))}">${F.esc(t('den.pausedG', { list: pg.map((k) => { const y = arr(j.styly).find((z) => z?.kod === k); return y && arr(y.trhy).length ? `${gName(k)} (${mktList(y.trhy)})` : gName(k); }).join('; ') }))}</p>` : '';
+  const pgHtml = pg.length ? `<p class="den-note den-pg" data-den-paused="${F.esc(pg.join(','))}">${F.esc(t('den.pausedG', { list: pg.map((k) => { const y = arr(j.styly).find((z) => z?.kod === k); return y && arr(y.trhy).length ? `${gName(k)} – ${arr(y.trhy).map((m) => mktName(m)).join(', ')}` : gName(k); }).join('; ') }))}</p>` : '';
   const xs = arr(j.signaly).map((s) => ({ s, x: sigState(j, s, now) }));
   const go = xs.filter((o) => o.x.code === 'go');
   const rest = xs.filter((o) => o.x.code !== 'go' && o.x.today).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
   /* 1.15.3: up to four of today's signals (the playbook can give four a day), the rest behind "a další N" -> #/den */
-  const goShown = go.slice(0, TODAY_CAP);
-  const restShown = rest.slice(0, Math.max(0, TODAY_CAP - goShown.length));
+  const goShown = go.slice(0, cap);
+  const restShown = rest.slice(0, Math.max(0, cap - goShown.length));
   const more = go.length + rest.length - goShown.length - restShown.length;
   let html = goShown.map((o) => sigBlock(j, o.s)).join('');
-  html += todayLines(restShown, goShown.length > 0);
+  html += todayLines(restShown, goShown.length > 0, lead);
   if (more > 0) html += `<p class="den-note den-more-n"><a href="#/den">${F.esc(tp('den.moreN', more))}${icon('chev-right', 'icon-xs')}</a></p>`;
   if (!go.length && !rest.length) {
     const last = lastOld(j, now);
@@ -430,7 +438,7 @@ export function render(ctx) {
     const histHtml = hist.length ? `<table class="den-tbl"><tbody>${hist.map((h) => { const r = +h.R; const mm = /(\d{4})(\d{2})(\d{2})/.exec(h?.id || ''); return `<tr><td>${mm ? F.esc(F.dm(`${mm[1]}-${mm[2]}-${mm[3]}`)) : '–'}</td><td>${F.esc(mktName(h.trh))}</td><td>${t(h.smer === 'PRODEJ' ? 'den.sell' : 'den.buy')}</td><td class="num ${r > 0 ? 'up' : r < 0 ? 'down' : ''}">${Number.isFinite(r) && h.R != null ? `${r > 0 ? '+' : r < 0 ? '−' : ''}${n2(Math.abs(r), 2)} R` : '–'}</td></tr>`; }).join('')}</tbody></table><p class="den-st">${t('den.Rexpl')}</p>` : `<p>${t('den.hist0')}</p>`;
     const safe = t('den.safe1', { n: pj.po_obchodech ?? 30, z: pj.zbyva_do_kontroly ?? '–' });
     const comm = commentary(j, s0);
-    const body = todayBody(j, now);
+    const body = todayBody(j, now, { cap: 99, lead: false });
     return head + `<div class="den-page">
       <section class="den-card${body.includes('data-den-state="go"') ? '' : ' is-quiet'}">${headHtml(false)}
         <h2 class="den-h2">${t('den.s.what')}</h2><p class="den-p">${F.esc(t('den.what', { m: mktList(j.robot?.trhy) }))}</p>

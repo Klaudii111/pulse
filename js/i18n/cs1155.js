@@ -93,4 +93,12 @@ export default {
   'den.s.groups': 'Části robota',
   'den.pausedG': 'Pozastaveno: {list}. Odtud teď signály nechodí, zbytek robota běží dál.',
   'den.onM': 'na {m}',
+  /* 1.15.3 po nezávislé kontrole: signál, který se nenabízí z jiného důvodu než „vstup skončil“ */
+  'den.t.pausedg': 'Dnešní signál na {m} je z části robota, která je teď pozastavená – nenabízí se.',
+  'den.t.info': 'Dnešní signál na {m} je jen pro informaci – chybí u něj údaje pro vstup.',
+  'den.l1.pausedg': '{m} – z pozastavené části robota, nenabízí se.',
+  'den.l1.info': '{m} – jen pro informaci (chybí údaje pro vstup).',
+  'den.lg.pausedg.other': 'Z pozastavené části robota: {list} – nenabízí se.',
+  'den.lg.info.other': 'Jen pro informaci: {list}.',
+  'den.o.pausedg': 'z pozastavené části', 'den.o.info': 'jen pro informaci',
 };

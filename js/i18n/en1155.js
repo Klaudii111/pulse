@@ -137,4 +137,12 @@ export default {
   'den.s.groups': 'Parts of the robot',
   'den.pausedG': 'Paused: {list}. No signals come from there now; the rest of the robot keeps running.',
   'den.onM': '{m}',
+  /* 1.15.3 after the independent check: a signal that is not offered for another reason than 'entry over' */
+  'den.t.pausedg': 'Today’s signal on {m} comes from a part of the robot that is paused now – it is not offered.',
+  'den.t.info': 'Today’s signal on {m} is for information only – its entry details are missing.',
+  'den.l1.pausedg': '{m} – from a paused part of the robot, not offered.',
+  'den.l1.info': '{m} – for information only (entry details missing).',
+  'den.lg.pausedg.other': 'From a paused part of the robot: {list} – not offered.',
+  'den.lg.info.other': 'For information only: {list}.',
+  'den.o.pausedg': 'from a paused part', 'den.o.info': 'for information only',
 };

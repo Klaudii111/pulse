@@ -53,3 +53,6 @@
 .den-pg { font-size: 15px; color: var(--ink-2); }
 .den-groups b.up { color: var(--up); font-weight: 650; } .den-groups b.down { color: var(--ink-3); font-weight: 650; }
 .den-pb.den-pb-s { min-height: 20px; padding: 0 7px; font-size: 12px; }
+
+/* 1.15.3: a market the demo cannot trade - the direction is information, not an offer (no green / red) */
+.den-sig-t.is-info .up, .den-sig-t.is-info .down { color: var(--ink-2); }
