@@ -168,7 +168,7 @@ function sigRow(s, sm, now) {
   const sp = sparks.get(s.symbol);
   const inner = `${monogram(s.symbol, w.name)}
     <span class="pf-id"><span class="pf-n"><b>${F.esc(w.name)}</b><span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span></span>
-      <span class="pf-meta num">${F.esc(t('p2.sent', { t: sent, hz: t(`c.typeS.${s.horizon}`) }))}</span><span class="pf-when">${tag}</span></span>
+      <span class="pf-meta num">${F.esc(sent ? t('p2.sent', { t: sent, hz: t(`c.typeS.${s.horizon}`) }) : t(`c.typeS.${s.horizon}`))}</span><span class="pf-when">${tag}</span></span>
     <span class="pf-v num">${st.done ? '' : `<span class="pf-spark mi-spark ${tn}" data-f="spark" data-sym="${F.esc(s.symbol)}" aria-hidden="true">${sp ? sparkline(sp, { w: 56, h: 18 }) : ''}</span>`}<b class="${tn}" data-s="mv">${F.esc(how)}</b>${held ? `<small class="${tone(held.pnl)}">${F.esc(t('p2.mine', { v: sg(held.pnl, sm.w.ccy) }))}</small>` : ''}</span>`;
   return held
     ? `<a class="pf-row p2-sig tone-${tn}" href="#/obchod/${F.esc(held.id)}" data-sid="${F.esc(s.id)}">${inner}</a>`
@@ -176,8 +176,9 @@ function sigRow(s, sm, now) {
 }
 /* grouped by the day it was sent ("Dnes · čtvrtek 12. 11."), newest first */
 function byDay(list, render, now) {
-  const key = (s) => { const d = new Date(Date.parse(s.created_at || 0)); d.setHours(0, 0, 0, 0); return +d; };
-  const sorted = list.slice().sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0));
+  const at = (s) => Date.parse(s.created_at || s.closed_at || s.hit_at || s.exit_date || 0) || 0;
+  const key = (s) => { const d = new Date(at(s)); d.setHours(0, 0, 0, 0); return +d; };
+  const sorted = list.slice().sort((a, b) => at(b) - at(a));
   const out = []; let last = null;
   sorted.forEach((s) => {
     const k = key(s);
