@@ -657,7 +657,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
     foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
   } else if (cs.cta) {
     const lim = cs.cta === 'limit';
-    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${lim ? t('inv.btnLim', { v: D.spx(s, D.maxEntry(s)) }) : t('sc.invest')}</span></button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${lim ? t('inv.btnLim', { v: D.spx(s, D.maxEntry(s)) }) : t(s.action === 'SELL' ? 'sc.investSell' : 'sc.invest')}</span></button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
   let money = '';
   if (ph === 'closed') money = closedLines(s, now);
@@ -759,7 +759,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   }
   if (!foot && cs.cta) {
     const lim = cs.cta === 'limit';
-    foot = `<div class="cc-act"><button type="button" class="btn btn-primary cc-go sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${t('sc.invest')}</span></button>${notNow ? `<button type="button" class="link cc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+    foot = `<div class="cc-act"><button type="button" class="btn btn-primary cc-go sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${t(s.action === 'SELL' ? 'sc.investSell' : 'sc.invest')}</span></button>${notNow ? `<button type="button" class="link cc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
   return `<article class="cc sc is-${cs.code} ph-${ph}${isNew ? ' is-new' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="cc-head sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">

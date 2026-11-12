@@ -27,4 +27,13 @@ export default {
   'tk.topup': 'Dobít peněženku',
   'tk.freeShort': 'Volné peníze: {v} – nestačí',
   'tk.pxHead': 'cena za kus',
+  /* A3 one word for the main action of a BUY signal: „Koupit“ (SELL: „Prodat“) */
+  'inv.btn': 'Koupit nanečisto',
+  'sc.invest': 'Koupit', 'sc.investSell': 'Prodat', 'sc.investAgain': 'Koupit znovu', 'sc.investAgainSell': 'Prodat znovu',
+  'u.box.mine0': 'Zatím nic. Klepni na „Koupit“ u signálu nebo na Obchodovat.',
+  'u.empty.mine': 'Tady zatím nic nemáš. Začni u signálu tlačítkem Koupit.',
+  'tour.s4.s': '„Koupit“ otevře obchod s fiktivními penězi, předvyplněný podle signálu.',
+  'd.mine0': 'Zatím nic. Začni tlačítkem Koupit u signálu.',
+  'jak.q3': 'Co když nestihnu koupit?',
+  'jak.a3': 'U každého signálu je napsané, co platí teď: 1) cena je skoro stejná jako u signálu – ještě můžeš koupit; 2) cena už trochu utekla – zadáš nákup za původní cenu a koupí se sám, až cena klesne (platí do konce signálu); 3) cena utekla moc – na signál je pozdě, vynech ho, další přijde. Tip: zapni „Robot obchoduje za mě“ (v Obchodovat) a nic nezmeškáš.',
 };

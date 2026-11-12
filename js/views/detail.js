@@ -414,7 +414,7 @@ function ctaHtml(ctx, s) {
   const cs = D.cardState(s, ctx.data, ctx.now());
   if (!cs.cta) return `<p class="inv-note">${F.esc(cs.text)}</p>`;
   const lim = cs.cta === 'limit';
-  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${t(cs.my?.closed ? 'sc.investAgain' : 'sc.invest')}</button>
+  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${t((cs.my?.closed ? 'sc.investAgain' : 'sc.invest') + (s.action === 'SELL' ? 'Sell' : ''))}</button>
     <p class="risk-line">${t('risk.line')}</p>`;
 }
 
