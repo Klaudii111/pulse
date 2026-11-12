@@ -80,4 +80,7 @@ export default {
   "sty.w.full": "All in: every trade puts a fifth of the wallet on leverage 1:5, five trades at once = the whole wallet in play. The worst month in history −86%, the largest drop −96%, 2022 −66%. The wallet fell below half within a year in about 1 simulation in 3. In the long run it made less than Bold. This is play money.",
   "sty.w.aggr": "Leverage 1:20: a 5% move against you takes the whole deposit – in the history of the signals that happened in 3 trades out of 10. Taking every signal, the wallet was wiped out in all three tested periods (from 2015 to October 2018, from January 2022 within three weeks, from 2023 to March 2026). This is play money.",
   "sty.ofW": "{v}% of the wallet",
+  /* acceptance check 3: two English bell texts that kept the old wording */
+  'ev.myOpen.s': 'Stake {a} (play money)',
+  'ev.ordPlaced': '{sym}: order placed at {v}',
 };
