@@ -120,4 +120,6 @@ export default {
   'den.hist0': 'Zatím žádný obchod.',
   'den.histNote': 'Výsledek je násobek rizika jednoho obchodu (+1× = vydělal tolik, kolik riskoval).',
   'lang.k': 'Jazyk · Language',
+  'scan.den': 'Jednodenní signály testem neprošly, mezi otestovanými nejsou. Zkušební denní robot je zvlášť na Dnes.',
+  'rs.all': 'Zobrazit všech {n}',
 };

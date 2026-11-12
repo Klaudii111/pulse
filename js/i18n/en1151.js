@@ -120,4 +120,6 @@ export default {
   'den.hist0': 'No trade yet.',
   'den.histNote': 'The result is a multiple of one trade\u2019s risk (+1× = won as much as it risked).',
   'lang.k': 'Language · Jazyk',
+  'scan.den': 'One-day signals did not pass the test, so they are not among the tested ones. The experimental daily robot is shown separately on Today.',
+  'rs.all': 'Show all {n}',
 };

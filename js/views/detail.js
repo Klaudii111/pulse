@@ -139,7 +139,8 @@ function rsHtml(s) {
   const item = (x, ok) => `<li class="rs-i ${ok ? 'is-ok' : 'is-no'}">${x.why ? `<details><summary>${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><p>${F.esc(x.why)}</p></details>`
     : `<p class="rs-n">${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span></p>`}</li>`;
   return `<section class="d-rs" aria-label="${F.esc(t('pd.rs'))}"><p class="d-rs-h">${t('pd.rs')}</p>
-    <ul class="rs-list">${r.ok.map((x) => item(x, true)).join('')}</ul>
+    <ul class="rs-list">${r.ok.slice(0, 3).map((x) => item(x, true)).join('')}</ul>
+    ${r.ok.length > 3 ? `<details class="rs-more"><summary><span>${t('rs.all', { n: r.ok.length })}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><ul class="rs-list">${r.ok.slice(3).map((x) => item(x, true)).join('')}</ul></details>` : ''}
     ${r.no.length ? `<details class="rs-no"><summary><span>${t('rs.no')}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><ul class="rs-list">${r.no.map((x) => item(x, false)).join('')}</ul></details>` : ''}
     <p class="pd-rs-note">${t('pd.rsNote')}</p></section>`;
 }

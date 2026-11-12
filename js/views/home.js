@@ -356,7 +356,7 @@ export function render(ctx) {
   ${heroKolik(ctx)}
   <div class="d2-sigcol">${todayBlock(ctx)}${Den.cardHtml(now)}</div>
   ${mine}
-  <div class="d2-more">${paths()}${B.statsRow(ctx.data, now)}${scanLine(ctx.data, now)}</div>
+  <div class="d2-more">${paths()}${B.statsRow(ctx.data, now)}</div>
   </div>
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

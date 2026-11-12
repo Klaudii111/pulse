@@ -136,10 +136,13 @@
 @media (min-width: 560px) { .al-wrap { grid-template-columns: 200px minmax(0, 1fr); align-items: center; } }
 @media (min-width: 1100px) {
   .p2-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: 'left right'; gap: 28px; align-items: start; }
-  .p2-left { grid-area: left; } .p2-right { grid-area: right; position: sticky; top: 24px; display: grid; gap: 16px; }
-  .p2-right .al-wrap { grid-template-columns: minmax(0, 1fr); }
+  .p2-left { grid-area: left; } .p2-right { grid-area: right; position: static; display: grid; gap: 16px; }
+  .p2-right .pf-chart { height: 150px; }
+  .p2-right .al-wrap { grid-template-columns: 170px minmax(0, 1fr); }
+  .p2-right .al-donut, .p2-right .al-svg { width: 170px; height: 170px; }
+  .p2-right .al-mid b { font-size: 20px; }
 }
-@media (min-width: 1380px) { .p2-right .al-wrap { grid-template-columns: 200px minmax(0, 1fr); } }
+@media (min-width: 1380px) { .p2-right .al-wrap { grid-template-columns: 200px minmax(0, 1fr); } .p2-right .al-donut, .p2-right .al-svg { width: 200px; height: 200px; } }
 
 /* ---------- CS | EN switch ---------- */
 .lang-sw { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--raise-2); border: 1px solid var(--line-2); gap: 2px; }
@@ -177,3 +180,8 @@
 .cc-pill.is-sent { color: var(--ink); }
 .d-sent { display: flex; gap: 8px; align-items: center; font-size: 16px; color: var(--ink); margin: 6px 0 0; }
 .d-sent .icon-xs { color: var(--ink-3); flex: none; }
+
+/* "Proč zainvestovat": the first 3 fulfilled reasons, the rest behind "Zobrazit všech N" (the main button stays on screen) */
+.rs-more > summary { display: flex; align-items: center; justify-content: space-between; min-height: 40px; font-size: 15px; color: var(--ink-2); cursor: pointer; list-style: none; }
+.rs-more > summary::-webkit-details-marker { display: none; }
+.rs-more[open] > summary .rs-chev { transform: rotate(180deg); }
