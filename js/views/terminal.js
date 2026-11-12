@@ -34,7 +34,8 @@ const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 /* price in the instrument's own decimals (EUR/USD 1,10940; US500 7 633,70) */
 export const pxOf = (sym, v) => F.price(v, M.get(sym) ? M.decimals(sym, v) : null);
 /* 1.13.0: KOUPIT shows the ask, PRODAT the bid (mid ± half of the simulated spread) */
-export const pxC = (sym, v) => F.ccyWrap(pxOf(sym, v), M.ccy(sym));
+/* 1.15.0: an index is quoted in points, never with a currency sign ("6 812,4", not "6 812,4 $") */
+export const pxC = (sym, v) => (M.cls(sym) === 'index' ? pxOf(sym, v) : F.ccyWrap(pxOf(sym, v), M.ccy(sym)));
 const sidePx = (sym, mid, side) => mid + (side === 'SELL' ? -1 : 1) * M.spread(sym, mid) / 2;
 
 /* 1.13.9: only signals whose entry window is still open (D.entryOpen) are offered here (chips, quick buy, the ticket) */
@@ -195,7 +196,7 @@ function histOrder(o) {
     <span class="hist-bar"></span>
     <span class="tp-id"><span class="tp-t">${nmTk(o.sym, o.name)}<span class="side-tag ${o.side === 'SELL' ? 'sell' : ''}">${F.SIDE[o.side]}</span></span>
     <span class="tp-m num">${t('term.ord.histMeta', { v: pxOf(o.sym, o.limit), a: money(o.amount, W.get().ccy), d: F.dmTime(o.endAt) })}</span>
-    <span class="tp-m">${t(`term.ord.end.${o.end}`)}</span></span>
+    <span class="tp-m">${t(o.side === 'SELL' && o.end === 'cancelled' ? 'term.ord.end.cancelledSell' : `term.ord.end.${o.end}`)}</span></span>
     <span class="tp-v num">${t(`term.ord.endShort.${o.end}`)}</span></span></div>`;
 }
 
@@ -218,7 +219,7 @@ export function histList(sm) {
   return `<div class="tp-list">${all.map(({ p, o, r }) => (r ? histCash(r, c) : o ? histOrder(o) : `<div class="tp-row is-static tone-${tone(p.pnl)}"><span class="tp-main">
     <span class="hist-bar ${tone(p.pnl) === 'flat' ? '' : tone(p.pnl)}"></span>
     <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(p.sym)}</span><span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span><span class="hz-tag lev-tag">${t('term.levTag', { v: p.lev || 1 })}</span></span>
-    <span class="tp-m num">${t('term.histMeta', { e: pxOf(p.sym, p.entry), x: pxOf(p.sym, p.exit), d: F.dmTime(p.closedAt) })}</span><span class="tp-m tp-open">${F.esc(B.myOpenText(p, c))}</span>${p.order ? `<span class="tp-m">${t('term.ord.fromLimit')}</span>` : ''}
+    <span class="tp-m num">${t('term.histMeta', { e: pxOf(p.sym, p.entry), x: pxOf(p.sym, p.exit), d: F.dmTime(p.closedAt) })}</span><span class="tp-m tp-open">${F.esc(B.myOpenText(p, c))}</span>${p.order ? `<span class="tp-m">${t(p.side === 'SELL' ? 'term.ord.fromLimitSell' : 'term.ord.fromLimit')}</span>` : ''}
     <span class="tp-m">${t(`term.why.${p.why}`, { sl: pxOf(p.sym, p.sl), x: pxOf(p.sym, p.exit) })}${p.fee > 0.5 ? ` · ${t('term.convFee', { v: money(p.fee, c) })}` : ''}</span></span>
     <span class="tp-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span></span></div>`)).join('')}</div>`;
 }
@@ -722,7 +723,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
-          toast(t(atOpen() ? 'inv.placedOpen' : 'inv.placedOk', { v: pxC(sym, st.limit) }), { timeout: 7000, action: { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${res.order.id}`) } });
+          toast(t((atOpen() ? 'inv.placedOpen' : 'inv.placedOk') + (side === 'SELL' ? 'Sell' : ''), { v: pxC(sym, st.limit) }), { timeout: 7000, action: { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${res.order.id}`) } });
           document.dispatchEvent(new CustomEvent('pulse:wallet'));
           tab = 'ord';
           setTimeout(() => ctx.rerender({ soft: true }), 380);
@@ -965,8 +966,8 @@ function cancelSheet(ctx, id) {
   const o = W.get().orders.find((x) => x.id === id);
   if (!o) return;
   openSheet({
-    small: true, label: t('term.ord.cancelT'),
-    html: `<div class="sheet-head"><div><p class="sheet-title">${t('term.ord.cancelT')}</p><p class="sheet-sub">${t('term.ord.cancelS', { side: F.SIDE[o.side], sym: F.esc(o.sym), v: pxOf(o.sym, o.limit), a: money(o.amount, W.get().ccy) })}</p></div>
+    small: true, label: t(o.side === 'SELL' ? 'term.ord.cancelTSell' : 'term.ord.cancelT'),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(o.side === 'SELL' ? 'term.ord.cancelTSell' : 'term.ord.cancelT')}</p><p class="sheet-sub">${t('term.ord.cancelS', { side: F.SIDE[o.side], sym: F.esc(o.sym), v: pxOf(o.sym, o.limit), a: money(o.amount, W.get().ccy) })}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
       <div class="sheet-body"><div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-yes>${t('term.ord.cancelYes')}</button><button type="button" class="btn btn-ghost" data-no>${t('term.ord.cancelNo')}</button></div></div>`,
     onMount(sh) {
@@ -994,8 +995,8 @@ function editSheet(ctx, id) {
     return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${F.esc(limitDistance({ side: o.side, limit: v }, q?.p).text)}</span></p>`;
   };
   openSheet({
-    small: true, label: t('term.ord.editT'),
-    html: `<div class="sheet-head"><div><p class="sheet-title">${t('term.ord.editT')}</p><p class="sheet-sub">${F.SIDE[o.side]} ${F.esc(o.sym)} · ${t('term.ord.now', { p: q ? pxOf(o.sym, q.p) : '–' })}</p></div>
+    small: true, label: t(o.side === 'SELL' ? 'term.ord.editTSell' : 'term.ord.editT'),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(o.side === 'SELL' ? 'term.ord.editTSell' : 'term.ord.editT')}</p><p class="sheet-sub">${F.SIDE[o.side]} ${F.esc(o.sym)} · ${t('term.ord.now', { p: q ? pxOf(o.sym, q.p) : '–' })}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
       <div class="sheet-body"><label class="tk-in"><span>${t('term.limitPx', { now: q ? pxOf(o.sym, q.p) : '–' })}</span><input class="jin num" inputmode="decimal" data-lim value="${o.limit}"></label>
       <div id="ed-line">${line()}</div>

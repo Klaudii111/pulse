@@ -44,11 +44,11 @@ export function renderMt5() {
   </section>
   <h2 class="section-title">${t('mt5.steps')}</h2>
   <section class="card"><ol class="stp">
-    ${step(1, t('mt5.s1'))}${step(2, t('mt5.s2'))}${step(3, t('mt5.s3'))}${step(4, t('mt5.s4'))}
+    ${step(1, t('mt5.s1'))}${step(2, t('mt5.s2'))}${CONFIG.MT5.EA_URL ? `${step(3, t('mt5.s3'))}${step(4, t('mt5.s4'))}` : step(3, t('mt5.s4'))}
   </ol>
   <div class="btn-stack" style="margin-top:16px">
     <a class="btn btn-primary btn-block" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-sm')}${t('mt5.open')}</a>
-    ${CONFIG.MT5.EA_URL ? `<a class="btn btn-secondary btn-block" href="${CONFIG.MT5.EA_URL}">${t('mt5.ea')}</a>` : `<button class="btn btn-secondary btn-block btn-two-line" type="button" disabled><span class="btn-line">${t('mt5.ea')}</span><span class="btn-note">${t('mt5.soon')}</span></button>`}
+    ${CONFIG.MT5.EA_URL ? `<a class="btn btn-secondary btn-block" href="${CONFIG.MT5.EA_URL}">${t('mt5.ea')}</a>` : '' /* 1.15.0: no "brzy ke stažení" teaser */}
   </div></section>
   <p class="honest">${icon('info', 'icon-xs')} ${t('mt5.demoOnly')}</p>
   <p class="disclaimer">${icon('info')}${F.esc(t('disclaimer'))}</p>`;

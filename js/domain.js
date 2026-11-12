@@ -11,7 +11,7 @@ import * as M from './market.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
 /* 1.13.0: a signal's price with its currency, 2 decimals ("164,47 $") */
-export const spx = (s, v) => F.pxc(v, M.ccy(s?.symbol) || 'USD');
+export const spx = (s, v) => (s?.symbol && M.cls(s.symbol) === 'index' ? F.num(+v, 2) : F.pxc(v, M.ccy(s?.symbol) || 'USD')); /* 1.15.0: index = points */
 
 /* App clock (overridable for demos via ?now=ISO) */
 let clockFn = () => new Date();

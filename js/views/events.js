@@ -49,10 +49,10 @@ export function describe(e) {
     /* 1.8.0: my limit orders */
     case 'ord-auto': return { ic: 'spark', tn: 'up', title: t('ev.auto', { sym, side: side(e.side), v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t(e.reopen ? 'ev.auto.reopen' : 'ev.auto.s'), go: mine };
     case 'ord-autoLim': return { ic: 'clock', tn: 'gold', title: t('ev.autoLim', { sym, v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t('ev.auto.s'), go: mine };
-    case 'ord-placed': return { ic: 'clock', tn: 'gold', title: t('ev.ordPlaced', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t('ev.ordPlaced.s', { side: side(e.side), a: F.money(e.v, e.ccy, 0) }), go: mine };
-    case 'ord-filled': return { ic: 'check', tn: 'up', title: t('ev.ordFilled', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t(e.reopen ? 'ev.ordFilled.reopen' : 'ev.ordFilled.s', { side: side(e.side).charAt(0).toUpperCase() + side(e.side).slice(1) }), go: mine };
-    case 'ord-cancelled': return { ic: 'close', tn: 'gold', title: t('ev.ordCancelled', { sym, v: F.price(e.lim) }), sub: t('ev.ordCancelled.s'), go: { href: '#/portfolio' } };
-    case 'ord-expired': return { ic: 'clock', tn: 'gold', title: t('ev.ordExpired', { sym, v: F.price(e.lim) }), sub: t(`ev.ordExpired.${['day', 'sig'].includes(e.why) ? e.why : 'gtc'}`), go: { href: '#/portfolio' } };
+    case 'ord-placed': return { ic: 'clock', tn: 'gold', title: t(e.side === 'SELL' ? 'ev.ordPlacedSell' : 'ev.ordPlaced', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t('ev.ordPlaced.s', { side: side(e.side), a: F.money(e.v, e.ccy, 0) }), go: mine };
+    case 'ord-filled': return { ic: 'check', tn: 'up', title: t(e.side === 'SELL' ? 'ev.ordFilledSell' : 'ev.ordFilled', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t(e.reopen ? 'ev.ordFilled.reopen' : 'ev.ordFilled.s', { side: side(e.side).charAt(0).toUpperCase() + side(e.side).slice(1) }), go: mine };
+    case 'ord-cancelled': return { ic: 'close', tn: 'gold', title: t(e.side === 'SELL' ? 'ev.ordCancelledSell' : 'ev.ordCancelled', { sym, v: F.price(e.lim) }), sub: t('ev.ordCancelled.s'), go: { href: '#/portfolio' } };
+    case 'ord-expired': return { ic: 'clock', tn: 'gold', title: t(e.side === 'SELL' ? 'ev.ordExpiredSell' : 'ev.ordExpired', { sym, v: F.price(e.lim) }), sub: t(`ev.ordExpired.${['day', 'sig'].includes(e.why) ? e.why : 'gtc'}`), go: { href: '#/portfolio' } };
     default: return null;
   }
 }

@@ -393,8 +393,8 @@ function tlHtml(ctx, p, sm) {
   if (!ev.length) return '';
   const txt = (e) => {
     switch (e.k) {
-      case 'placed': return t('pd.tl.placed', { v: pxC(p.sym, e.v) });
-      case 'filled': return t('pd.tl.filled', { v: pxC(p.sym, e.v) });
+      case 'placed': return t(p.side === 'SELL' ? 'pd.tl.placedSell' : 'pd.tl.placed', { v: pxC(p.sym, e.v) });
+      case 'filled': return t(p.side === 'SELL' ? 'pd.tl.filledSell' : 'pd.tl.filled', { v: pxC(p.sym, e.v) });
       case 'bought': return t(p.side === 'SELL' ? 'pd.tl.sold' : 'pd.tl.bought', { v: pxC(p.sym, e.v), a: F.money(p.margin, c, 0) });
       case 'edit': return t('pd.tl.edit', { s: e.sl > 0 ? pxOf(p.sym, e.sl) : '–', t: e.tp > 0 ? pxOf(p.sym, e.tp) : '–' });
       case 'swap': return t('pd.tl.swap', { v: F.money(Math.abs(e.v), c, 2) });
@@ -480,7 +480,7 @@ function orderPage(ctx, o, sm) {
   <div class="pd-grid"><div class="pd-main">
     <section class="pd-top card"><p class="d-k">${t(o.side === 'SELL' ? 'po.ordSellT' : 'po.ordBuyT')}</p><p class="pd-val num">${F.money(o.amount, c, 0)}</p>
       <p class="pd-state tone-${dist.tone}">${icon('clock', 'icon-xs')}<span>${F.esc(dist.text)}</span></p></section>
-    ${chartHtml({ ...o, entry: o.limit }, true, ctx.data).replace(t('pd.lg.entry'), t('pd.lg.limit')).replace(`<span class="lg-mk">${t('pd.lg.marks2')}</span>`, '')}
+    ${chartHtml({ ...o, entry: o.limit }, true, ctx.data).replace(t('pd.lg.entry'), t(o.side === 'SELL' ? 'pd.lg.limitSell' : 'pd.lg.limit')).replace(`<span class="lg-mk">${t('pd.lg.marks2')}</span>`, '')}
     <section class="pd-sec card"><h2 class="d-h">${t('pd.o.kolik')}</h2><div class="pd-kvs">${kv}</div></section>
     <section class="pd-acts">
       <button type="button" class="btn btn-secondary" data-action="t-oedit" data-id="${F.esc(o.id)}">${icon('settings', 'icon-sm')}<span>${t('term.ord.edit')}</span></button>

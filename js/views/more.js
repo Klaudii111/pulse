@@ -12,7 +12,8 @@ import * as B from '../brief.js';
 import * as W from '../wallet.js';
 import * as Sync from '../sync.js';
 
-/* 1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
+/* 1.15.0: Kalendář (sample data) and Předplatné ("Platby spustíme…") are out of the navigation; the routes stay for old links.
+   1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
 /* 1.13.3: Více in three groups – the main five on top (Peněženka, Historie, Robot, Jak to funguje, Nastavení),
    then Pro pokročilé (Kalkulačka, Simulátor, MetaTrader 5, Předplatné), then the rest. Můj deník lives in Historie
    (its own section there when it has entries); the #/denik page stays for old links. */
@@ -29,12 +30,10 @@ export const MORE_ITEMS = [
     { id: 'kalkulacka', icon: 'calc', sub: () => t('more.kalkulacka.s') },
     { id: 'simulator', icon: 'sim', sub: () => t('more.simulator.s') },
     { id: 'mt5', icon: 'external', sub: () => t('more.mt5.s') },
-    { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
   ] },
   { group: 'more.g.other', items: [
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
     { id: 'duvera', icon: 'check', sub: () => t('more.duvera.s') },
-    { id: 'kalendar', icon: 'calendar', sub: () => t('more.kalendar.s') },
     { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
   ] },
 ];
