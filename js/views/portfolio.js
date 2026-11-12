@@ -489,7 +489,7 @@ function kolikHtml(p, sm) {
   const rows = [
     kvRow(t('pd.k.dep'), F.money(p.margin, c, 0), { hint: t('pd.k.depS'), key: 'dep' }),
     kvRow(t('pd.k.lev'), F.esc(levTxt(p.lev)), { hint: p.lev > 1 ? t('pd.k.levS', { v: p.lev }) : t('pd.k.lev1S'), key: 'lev' }),
-    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.ccyWrap(F.num(f.fx, f.fx >= 10 ? 1 : f.fx >= 0.1 ? 3 : 4), c) })}</small>` : ''}` : ''}`, { key: 'size' }),
+    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.money(f.fx, c, f.fx >= 10 ? 1 : f.fx >= 0.1 ? 2 : 4) })}</small>` : ''}` : ''}`, { key: 'size' }),
     kvRow(t(p.side === 'SELL' ? 'pd.k.sellPx' : 'pd.k.buyPx'), pxC(p.sym, p.entry), { key: 'entry' }),
     f.closed ? kvRow(t(p.side === 'SELL' ? 'pd.k.buyBack' : 'pd.k.exitPx'), pxC(p.sym, p.exit), { key: 'exit' }) : kvRow(t('pd.k.px'), pxC(p.sym, f.px), { key: 'px' }),
     kvRow(t(f.closed ? 'pd.k.valEnd' : 'pd.k.val'), F.money(f.value, c, 0), { key: 'value', cls: 'is-strong' }),
