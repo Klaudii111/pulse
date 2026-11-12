@@ -15,7 +15,8 @@ import { journalBody } from './extra.js';
 import * as Sync from '../sync.js';
 
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
-const sm = (v, c, dec = 0) => (v > 0.5 ? '+' : v < -0.5 ? '−' : '') + F.money(Math.abs(v) < 0.5 ? 0 : Math.abs(v), c, dec);
+/* P2-04: the zero threshold follows the decimals shown (0.5 for whole amounts, 0.005 with two decimals: −€0.13, not €0.00) */
+const sm = (v, c, dec = 0) => { const z = dec > 0 ? 0.5 / 10 ** dec : 0.5; return (v > z ? '+' : v < -z ? '−' : '') + F.money(Math.abs(v) < z ? 0 : Math.abs(v), c, dec); };
 const nameOf = (p) => B.whatIs(p.sym, p.name).name;
 const HZ = ['MESIC', 'TYDEN', 'DNY', 'DEN'];
 export const hzOf = (p) => { const h = String(p.sigId || '').split('-')[0]; return HZ.includes(h) ? h : 'own'; };
