@@ -38,4 +38,15 @@ export default {
   'jak.a3': 'Each signal says what applies now: 1) the price is almost the same as at the signal – you can still buy; 2) the price has moved a bit – place a buy at the original price and it buys by itself when the price comes back (valid until the signal ends); 3) the price moved too far – too late, skip it, another one will come. Tip: switch on “The robot trades for me” (in Trade) and you will not miss anything.',
   /* A12 onboarding */
   'onb.back': 'Back',
+  /* A5 plain words on Signals */
+  'sig.preview': 'SENT DURING THE DAY',
+  'regime.on': 'The market is mostly rising', 'regime.off': 'The market is mostly falling',
+  'regime.vs': 'S&P 500 {v} vs its long-term average',
+  'rg.onS': 'The main US index, the S&P 500, is {v} above its average price over the last 200 days – the market is rising over the long run.',
+  'rg.offS': 'The main US index, the S&P 500, is {v} against its average price over the last 200 days – the market is weakening over the long run.',
+  'rg.s2': 'The robot buys mostly while the market rises; when it falls, it sends fewer signals.',
+  /* A6 K2-14 */
+  'tk.validUntil': 'valid until {d}',
+  /* A6 K1-21 */
+  'sty.h.full': 'In the 2023–26 test a usual month {m} on {w}, but the largest drop {dd}. More risk did not bring more money in the test – Bold made more.',
 };

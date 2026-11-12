@@ -153,7 +153,8 @@ export function limitDistance(o, px) {
   if (need <= 0) return { tone: 'up', text: t('term.ord.at') };
   return { tone: need <= D.proximityPct() ? 'up' : 'gold', text: t(o.side === 'SELL' ? 'term.ord.up' : 'term.ord.down', { v: F.pct(need, need < 1 ? 2 : 1) }) };
 }
-export const validText = (o) => t('term.ord.valid', { k: t(`term.valid.${o.valid}`), d: F.dmTime(o.expiresAt) });
+/* 1.15.0 (A6 / K2-14): ONE statement - "platí do 12. 12. 10:15" (was "platí do zrušení · do 12. 12. 10:15") */
+export const validText = (o) => (o.expiresAt ? t('tk.validUntil', { d: F.dmTime(o.expiresAt) }) : t('term.ord.valid', { k: t(`term.valid.${o.valid}`), d: '–' }));
 
 /* "zítra 9:00" / "pondělí 15:30" (Prague time) */
 export function openWhen(ms, now = Date.now()) {

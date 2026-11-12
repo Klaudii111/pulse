@@ -38,4 +38,15 @@ export default {
   'jak.a3': 'U každého signálu je napsané, co platí teď: 1) cena je skoro stejná jako u signálu – ještě můžeš koupit; 2) cena už trochu utekla – zadáš nákup za původní cenu a koupí se sám, až cena klesne (platí do konce signálu); 3) cena utekla moc – na signál je pozdě, vynech ho, další přijde. Tip: zapni „Robot obchoduje za mě“ (v Obchodovat) a nic nezmeškáš.',
   /* A12 onboarding */
   'onb.back': 'Zpět',
+  /* A5 plain words on Signály */
+  'sig.preview': 'POSLÁNO BĚHEM DNE',
+  'regime.on': 'Trh teď spíš roste', 'regime.off': 'Trh teď spíš klesá',
+  'regime.vs': 'S&P 500 {v} proti dlouhodobému průměru',
+  'rg.onS': 'Hlavní americký index S&P 500 je {v} nad svou průměrnou cenou za posledních 200 dní – trh dlouhodobě roste.',
+  'rg.offS': 'Hlavní americký index S&P 500 je {v} proti své průměrné ceně za posledních 200 dní – trh dlouhodobě slábne.',
+  'rg.s2': 'Robot nakupuje hlavně, když trh roste; když klesá, posílá méně signálů.',
+  /* A6 K2-14 */
+  'tk.validUntil': 'platí do {d}',
+  /* A6 K1-21 */
+  'sty.h.full': 'V testu 2023–26 obvyklý měsíc {m} na {w}, ale největší propad {dd}. Víc rizika v testu nepřineslo víc peněz – Odvážně vydělalo víc.',
 };

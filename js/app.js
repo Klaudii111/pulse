@@ -706,6 +706,9 @@ async function boot() {
   rerender();
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
   P.initSW();
+  /* 1.15.0 (A6 / K1-16): the splash in index.html stays until the app has drawn its first screen (or the gate) - no empty
+     background while the modules load; index.html keeps only a long fallback timer */
+  { const sp = document.getElementById('splash'); if (sp) { requestAnimationFrame(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 450); }); } }
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
   /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */

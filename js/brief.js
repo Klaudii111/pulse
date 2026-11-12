@@ -477,7 +477,7 @@ export function moneyBlock(m) {
         <p class="sty-k is-win"><span class="sty-kl">${t('sty.win')}${qh('POTOLD')}</span><b class="num up" data-win="${Math.round(n.win)}">${x.win}</b>${n.est ? `<small>${t('sty.winEst')}</small>` : ''}</p>
         <p class="sty-k is-loss"><span class="sty-kl">${t('sty.loss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${x.lv?.v ?? ''}">${x.loss}</b>${x.note ? `<small>${x.note}</small>` : ''}</p>
       </div>
-      ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}</div>`;
+      ${wf && !n.wiped && id !== 'aggr' ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : '' /* A6 / K2-15: the signal's win rate is not true where leverage ends the trade before the stop */}</div>`;
   };
   const mains = tk ? main('cur', tk.amount, tk.lev, true, pid) : cols.map((c) => main(c.id, c.a, c.lev, c.id === pid, c.id)).join('');
   const own = tk && !tk.ro ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b" data-action="lev-own-open" aria-expanded="${!!tk.open}">

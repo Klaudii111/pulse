@@ -34,3 +34,8 @@
 .tk-short-m { color: var(--down); font-weight: 600; font-size: 13.5px; }
 .tk-chips .chip.is-off { opacity: .45; }
 .onb-back { color: var(--ink-3); padding-inline: 10px; }
+
+/* A5 the market line is a button (tap = two sentences) */
+.rg-btn { background: none; border: 0; padding: 6px 4px; min-height: 40px; text-align: left; cursor: pointer; font: inherit; font-size: 13px; font-weight: 560; color: var(--ink); flex-wrap: wrap; }
+.rg-btn .num { color: var(--ink-3); font-weight: 500; }
+.rg-btn .icon-xs { color: var(--ink-3); }

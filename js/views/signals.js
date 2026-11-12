@@ -6,7 +6,7 @@ import * as Live from '../live.js';
 import { t, L } from '../i18n/index.js';
 import { pricePoints } from '../charts.js';
 import { sparkline } from '../ui.js';
-import { icon, il, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
+import { icon, il, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track, openSheet, closeTopSheet } from '../ui.js';
 import * as B from '../brief.js';
 import * as H from '../health.js';
 import { offLine } from './learn.js';
@@ -17,7 +17,8 @@ const seen = new Set(); // ladders animate only the first time a card appears
 export function regimeLine(r) {
   if (!r) return '';
   const off = r.state === 'risk_off';
-  return `<p class="regime-line ${off ? 'is-off' : ''}" title="${F.esc(L(r.note))}"><i aria-hidden="true"></i>${t(off ? 'regime.off' : 'regime.on')}<span class="num">${t('regime.vs', { v: F.spct(r.spy_vs_sma200_pct ?? 0) })}</span></p>`;
+  /* 1.15.0 (A5): plain words + a tap opens two sentences about what it means */
+  return `<button type="button" class="regime-line rg-btn ${off ? 'is-off' : ''}" data-action="regime-info" data-off="${off ? 1 : 0}" data-v="${F.esc(F.spct(r.spy_vs_sma200_pct ?? 0))}"><i aria-hidden="true"></i>${t(off ? 'regime.off' : 'regime.on')}<span class="num">${t('regime.vs', { v: F.spct(r.spy_vs_sma200_pct ?? 0) })}</span>${icon('help', 'icon-xs')}</button>`;
 }
 
 /* 1.15.0: the next US sessions (day + open time in the user's clock) – the evening batch is no longer listed */
@@ -437,7 +438,18 @@ function rebody(ctx) {
   const hs = root.querySelector('select[data-chg="sig-hz"]'); if (hs) hs.value = curHz();
 }
 
+export function regimeInfo(el) {
+  const off = el.dataset.off === '1';
+  openSheet({
+    small: true, label: t(off ? 'regime.off' : 'regime.on'),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t(off ? 'regime.off' : 'regime.on')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="ex-s">${t(off ? 'rg.offS' : 'rg.onS', { v: F.esc(el.dataset.v || '') })}</p><p class="ex-s">${t('rg.s2')}</p></div>`,
+    onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
+  });
+}
 export const actions = {
+  'regime-info'(el) { regimeInfo(el); },
   'sig-hz'(el, ev, ctx) { haptic(); store.set('sigHz', el.dataset.id); rebody(ctx); },
   seg(el, ev, ctx) {
     if (el.dataset.segName !== 'sph') return false;
