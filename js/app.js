@@ -35,8 +35,8 @@ import * as Wal from './views/penezenka.js';
 import * as Comm from './community.js';
 import * as H from './health.js';
 import * as Sync from './sync.js';
-import * as Sty from './styles.js';
 import * as Den from './den.js';
+import * as Sty from './styles.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
