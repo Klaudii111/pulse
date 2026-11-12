@@ -16,6 +16,7 @@ import * as M from '../market.js';
 import * as H from '../health.js';
 import * as store from '../store.js';
 import * as Bars from '../bars.js';
+import * as P from '../portfolio.js';
 
 /* 1.9.0 chart markers: ▲ robot bought (paper.json fill time), ▲ I bought (play money), ▼ exits */
 function chartMarks(ctx, s) {
@@ -130,6 +131,19 @@ function onLiveDetail(el, ctx, s) {
   return () => document.removeEventListener('pulse:live', fn);
 }
 
+/* 1.15.0 "Proč zainvestovat" (/data/duvody.json, shadow): fulfilled reasons as a ✓ list, the explanation behind a tap;
+   not-yet-fulfilled ones collapsed. Never a count, never a strength score, never used for sorting. */
+function rsHtml(s) {
+  const r = P.reasonsSplit(s.id, lang());
+  if (!r) return '';
+  const item = (x, ok) => `<li class="rs-i ${ok ? 'is-ok' : 'is-no'}">${x.why ? `<details><summary>${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><p>${F.esc(x.why)}</p></details>`
+    : `<p class="rs-n">${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span></p>`}</li>`;
+  return `<section class="d-rs" aria-label="${F.esc(t('pd.rs'))}"><p class="d-rs-h">${t('pd.rs')}</p>
+    <ul class="rs-list">${r.ok.map((x) => item(x, true)).join('')}</ul>
+    ${r.no.length ? `<details class="rs-no"><summary><span>${t('rs.no')}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><ul class="rs-list">${r.no.map((x) => item(x, false)).join('')}</ul></details>` : ''}
+    <p class="pd-rs-note">${t('pd.rsNote')}</p></section>`;
+}
+
 export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const s = D.findSignal(ctx.data, id);
   if (!s) { toast(t('det.notFound')); return; }
@@ -181,6 +195,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${['mine', 'order', 'late', 'done'].includes(cs.code) || s.preview ? `<p class="bc-tags">${['mine', 'order', 'late', 'done'].includes(cs.code) ? `<span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>` : ''}
       <p class="d-ctitle">${D.sigPhase(s, now) === 'open' || ['mine', 'order'].includes(cs.code) ? `<span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span>` : `<span class="cc-dir is-held">${t(D.sigPhase(s, now) === 'closed' ? 'u.chip.done' : 'c.held')}</span>`}<span>${t(`c.type.${s.horizon}`)}</span>${s.exit_date ? `<span class="num">${F.esc(B.lenText(s, now))}</span>` : ''}<span class="sc-no num">#${D.sigNo(s)}</span></p>
       ${whyTop ? `<p class="cc-why d-why"><b>${t('c.why')}</b> ${F.esc(whyTop)}</p>` : ''}
+      <div id="d-rs">${rsHtml(s)}</div>
       ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : ''}
       ${D.sigPhase(s, now) === 'closed' ? `<p class="bc-todo is-big b-todo tone-flat d-ended">${icon('close', 'icon-xs')}<span>${t('det.sigEnded')}</span></p>` : (() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return (cs.my?.closed && cs.cta ? `${B.myLine(cs)}<p class="d-reentry">${t('det.reentry')}</p>` : '') + (en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`); })()}
       ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
@@ -278,6 +293,8 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
 
   const mount = (el) => {
     el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+    /* 1.15.0 "Proč zainvestovat": the optional reasons file arrives later -> fill the block once (missing file / id = nothing) */
+    P.loadReasons().then(() => { const b = el.querySelector('#d-rs'); if (b && el.isConnected && !b.firstElementChild) b.innerHTML = rsHtml(s); });
     const box = el.querySelector('#pchart');
     const isLive = () => s.status === 'open' && !s.intraday_hit && Live.stamp(Date.parse(s.last_price_at || 0)).code === 'live';
     /* the signal's own line chart is drawn only when it is chosen (the candles are the default) */

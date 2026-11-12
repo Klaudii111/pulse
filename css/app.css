@@ -3829,3 +3829,20 @@ a.tr-main, a.hi-main, a.wl-row.is-link { color: inherit; text-decoration: none; 
 .page-head .head-il { width: 72px; height: 72px; align-self: center; }
 .onb-il { width: 72px; height: 72px; margin: 0 0 8px; }
 @media (max-width: 360px) { .how-chips.has-il { grid-template-columns: 1fr 1fr; } }
+/* 1.15.0 signal detail "Proč zainvestovat" (duvody.json): ✓ list, explanation behind a tap, unmet ones collapsed */
+.d-rs { margin: 10px 0 4px; padding: 12px 14px; border-radius: var(--r-tile, 14px); background: var(--raise); border: 1px solid var(--line); }
+.d-rs-h { font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 6px; }
+.rs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rs-i summary, .rs-i .rs-n { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: 0; font-size: 14px; color: var(--ink); cursor: pointer; list-style: none; }
+.rs-i .rs-n { cursor: default; }
+.rs-i summary::-webkit-details-marker, .rs-no > summary::-webkit-details-marker { display: none; }
+.rs-i summary > span, .rs-i .rs-n > span { flex: 1; min-width: 0; }
+.rs-i.is-ok .icon-xs:first-child { color: var(--up); flex: none; }
+.rs-i.is-no .icon-xs:first-child { color: var(--ink-3, var(--ink-2)); flex: none; }
+.rs-i details > p { margin: 0 0 8px 24px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.rs-chev { flex: none; color: var(--ink-3, var(--ink-2)); transition: transform .2s; }
+.rs-i details[open] .rs-chev, .rs-no[open] > summary .rs-chev { transform: rotate(180deg); }
+.rs-no { margin-top: 6px; border-top: 1px solid var(--line); }
+.rs-no > summary { display: flex; align-items: center; justify-content: space-between; min-height: 40px; font-size: 13.5px; color: var(--ink-2); cursor: pointer; list-style: none; }
+.rs-no .rs-i summary, .rs-no .rs-i .rs-n { color: var(--ink-2); }
+.d-rs .pd-rs-note { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3, var(--ink-2)); }

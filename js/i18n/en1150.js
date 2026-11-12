@@ -106,4 +106,5 @@ export default {
   "next.open.s": "The US market is open (15:30–22:00 Prague time). Every 20 minutes the robot checks the market and sends a signal the moment the entry is right.",
   "next.session.s": "From the US open it checks the market every 20 minutes (first check at {scan}) and sends a signal the moment the entry is right.",
   "sig.preview.t": "Found by the robot during the session (data up to 15 min delayed). Confirmed or cancelled after the close.",
+  'rs.no': 'Not met yet',
 };

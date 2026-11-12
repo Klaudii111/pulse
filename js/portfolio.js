@@ -216,6 +216,19 @@ export function reasonsFor(id, lang = 'cs') {
   return ok.length ? ok : null;
 }
 
+/* 1.15.0 signal detail: the fulfilled AND the not-yet-fulfilled reasons ({ ok, no } each [{ name, why }]), or null.
+   Never a count or a score (the owner: the number of reasons does not predict the result). */
+export function reasonsSplit(id, lang = 'cs') {
+  if (!rs || !id) return null;
+  const sig = rs.signals[id] || Object.entries(rs.signals).find(([k]) => twin(k) === twin(id))?.[1];
+  if (!sig || !Array.isArray(sig.duvody)) return null;
+  const en = lang === 'en';
+  const one = (x) => ({ name: (en ? x.nazev_en : x.nazev_cs) || x.nazev_cs || x.klic || '', why: (en ? x.vysvetleni_en : x.vysvetleni_cs) || '' });
+  const ok = sig.duvody.filter((x) => x && x.splneno === true).map(one).filter((x) => x.name);
+  const no = sig.duvody.filter((x) => x && x.splneno === false).map(one).filter((x) => x.name);
+  return ok.length ? { ok, no } : null;
+}
+
 /* the signal behind a trade (an intraday preview id is matched to its official twin) */
 export function signalOf(data, p) {
   if (!p?.sigId) return null;

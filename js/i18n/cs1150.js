@@ -110,4 +110,5 @@ export default {
   "next.session.s": "Od otevření burzy v USA kontroluje trh každých 20 minut (první kontrola v {scan}) a signál pošle hned, jak je správný vstup.",
   "sig.preview.t": "Signál našel robot během obchodování (data se zpožděním do 15 min). Po zavření burzy ho potvrdí, nebo zruší.",
   "jak.s1.s": "Během obchodování v USA každých 20 minut prověří stovky akcií a fondů a signál pošle hned, jak je správný vstup.",
+  'rs.no': 'Co zatím nesplňuje',
 };
