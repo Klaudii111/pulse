@@ -85,11 +85,18 @@ export default {
   'ev.ordPlaced': '{sym}: order placed at {v}',
   /* 1.15.1 iPhone: Home Screen first (before the access code) */
   'ios1.t': 'Add PULSE to your Home Screen',
-  'ios1.s': 'It takes 10 seconds on an iPhone. You then enter the code only once and your trades stay.',
+  'ios1.s': 'It takes 10 seconds. You then enter the code only once and your trades stay.',
   'ios1.1': 'Tap Share (the square with an arrow)',
-  'ios1.2': 'Choose Add to Home Screen',
+  'ios1.2': 'Scroll down and choose Add to Home Screen',
   'ios1.3': 'Open PULSE from the Home Screen',
-  'ios1.note': 'No Share button? Open this link in Safari.',
+  'ios1.note': 'No Share button? Tap ••• next to the address, then Share.',
   'ios1.go': 'Continue here in the browser',
   'ios1.goS': 'The app on the Home Screen has its own memory – what you enter here in the browser will not be in it.',
+  /* 1.15.2 iPhone inside another app (Instagram, Facebook, Messenger …): Safari first */
+  'ios1.app.t': 'Open PULSE in Safari',
+  'ios1.app.s': 'Here, inside another app, PULSE cannot be added to the Home Screen.',
+  'ios1.app.1': 'Tap ⋯ at the top',
+  'ios1.app.2': 'Choose Open in browser (Safari)',
+  'ios1.app.3': 'In Safari, add PULSE to the Home Screen',
+  'ios1.app.note': 'Not working? Copy the link and paste it into Safari.',
 };

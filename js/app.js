@@ -690,18 +690,22 @@ async function gate() {
    Not shown: in the app from the icon, on a device that is already unlocked, after "Pokračovat tady v prohlížeči". */
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (/Macintosh/.test(navigator.userAgent || '') && navigator.maxTouchPoints > 1);
 const isStandalone = () => navigator.standalone === true || !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+/* 1.15.2: inside another app's browser (Instagram, Facebook, Messenger ...) there is no "Add to Home Screen" - the screen
+   then says how to open the link in Safari first */
+const isInApp = () => { const u = navigator.userAgent || ''; return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|MicroMessenger|Line\/|TikTok|musical_ly|Snapchat|Twitter|LinkedInApp|Pinterest|GSA\//i.test(u) || (/iPhone|iPad|iPod/.test(u) && !/Safari\//.test(u)); };
 async function iosInstallFirst() {
   if (!CONFIG.ACCESS_GATE_ENABLED || !isIOS() || isStandalone() || store.get('iosSkip') === 1 || store.get('unlocked') === CONFIG.ACCESS_CODE_SHA256) return;
   const g = document.getElementById('gate');
   g.hidden = false;
   g.className = 'gate ios1';
+  const k = isInApp() ? 'ios1.app.' : 'ios1.';
   const html = () => `<div class="gate-inner">
     <div class="gate-lang">${langSwitch()}</div>
     <img class="gate-mark" src="./icons/icon-192.png" alt="" width="72" height="72">
-    <h1>${t('ios1.t')}</h1>
-    <p>${t('ios1.s')}</p>
-    <ol class="ios1-steps"><li><span>1</span><b>${t('ios1.1')}</b></li><li><span>2</span><b>${t('ios1.2')}</b></li><li><span>3</span><b>${t('ios1.3')}</b></li></ol>
-    <p class="ios1-note">${t('ios1.note')}</p>
+    <h1>${t(k + 't')}</h1>
+    <p>${t(k + 's')}</p>
+    <ol class="ios1-steps"><li><span>1</span><b>${t(k + '1')}</b></li><li><span>2</span><b>${t(k + '2')}</b></li><li><span>3</span><b>${t(k + '3')}</b></li></ol>
+    <p class="ios1-note">${t(k + 'note')}</p>
     <button class="btn btn-secondary btn-block" type="button" id="ios1-go">${t('ios1.go')}</button>
     <p class="gate-foot">${t('ios1.goS')}</p>
   </div>`;

@@ -42,11 +42,18 @@ export default {
   'den.disc': 'Zkušební robot, jen fiktivní peníze. Jeho výsledky se počítají zvlášť.',
   /* 1.15.1 iPhone: nejdřív na plochu (před přístupovým kódem) */
   'ios1.t': 'Přidej si PULSE na plochu',
-  'ios1.s': 'Na iPhonu to trvá 10 vteřin. Kód pak zadáš jen jednou a obchody ti zůstanou.',
+  'ios1.s': 'Trvá to 10 vteřin. Kód pak zadáš jen jednou a obchody ti zůstanou.',
   'ios1.1': 'Klepni na Sdílet (čtvereček se šipkou)',
-  'ios1.2': 'Zvol Přidat na plochu',
+  'ios1.2': 'Sjeď níž a zvol Přidat na plochu',
   'ios1.3': 'Otevři PULSE z plochy',
-  'ios1.note': 'Nevidíš Sdílet? Otevři tento odkaz v Safari.',
+  'ios1.note': 'Nevidíš Sdílet? Klepni na ••• u adresy a pak na Sdílet.',
   'ios1.go': 'Pokračovat tady v prohlížeči',
   'ios1.goS': 'Aplikace z plochy má vlastní paměť – co zadáš tady v prohlížeči, v ní nebude.',
+  /* 1.15.2 iPhone uvnitř jiné aplikace (Instagram, Facebook, Messenger …): nejdřív do Safari */
+  'ios1.app.t': 'Otevři PULSE v Safari',
+  'ios1.app.s': 'Tady uvnitř jiné aplikace si PULSE na plochu přidat nejde.',
+  'ios1.app.1': 'Klepni na ⋯ nahoře',
+  'ios1.app.2': 'Zvol Otevřít v prohlížeči (Safari)',
+  'ios1.app.3': 'V Safari si PULSE přidej na plochu',
+  'ios1.app.note': 'Nejde to? Zkopíruj odkaz a vlož ho do Safari.',
 };

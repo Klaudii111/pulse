@@ -243,3 +243,14 @@ body::after { content: none; display: none; }
 /* ---------- 1.15.0 polish: the daily robot's small "?" gets the same invisible 44 px tap area as every other small control ---------- */
 .den-q { position: relative; }
 .den-q::after { content: ''; position: absolute; z-index: 1; left: 50%; top: 50%; width: 44px; height: 44px; border-radius: 50%; transform: translate(-50%, -50%); }
+
+/* ---------- 1.15.2 PC ---------- */
+@media (min-width: 1100px) {
+  /* Dnes: the tall right column (today's signals) spans three rows and its extra height used to be shared by all of them -
+     holes of ~420 px under "Kolik mám" and under the trades. Now only the last row stretches; the left column stacks tight. */
+  .d2-grid { grid-template-rows: auto auto 1fr; }
+  /* a wide monitor: the page sits in the middle of the space next to the menu (it used to stick to the left, half the screen empty) */
+  .view { margin-left: auto; margin-right: auto; }
+  /* the dark veil behind a page title was a visible box with hard edges over the waves - now a soft oval that fades out */
+  .page-head::before, .pd-head::before { inset: -40px -40px -34px -160px; background: radial-gradient(ellipse 320px 50% at 300px 50%, rgba(2, 10, 13, 0.8) 0%, rgba(2, 10, 13, 0.55) 50%, rgba(2, 10, 13, 0) 100%); }
+}
