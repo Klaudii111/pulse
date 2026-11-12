@@ -16,7 +16,15 @@ const tone = (v) => (v > 0.005 ? 'up' : v < -0.005 ? 'down' : '');
 /* ================= Journal ================= */
 export function renderJournal(ctx) {
   if (!ctx.data?.signals) return head(t('title.denik')) + skBlock(200);
+  const body = journalBody(ctx);
+  return head(t('title.denik'), t('jr.sub')) + (body || `<div class="empty"><h3>${t('jr.empty.t')}</h3><p>${t('jr.empty.s')}</p><a class="btn btn-secondary btn-small" style="margin-top:16px" href="#/signaly">${t('jr.empty.btn')}</a></div>`) +
+    `<p class="jnote" style="margin-top:16px">${t('jr.foot')}</p>`;
+}
+/* 1.13.3: the journal entries (stats + list) – also a section of Historie when there are entries; '' when none */
+export function journalBody(ctx) {
+  if (!ctx.data?.signals) return '';
   const rows = D.journalRows(ctx.data);
+  if (!rows.length) return '';
   const ins = rows.filter((r) => r.e.state === 'in');
   const outs = rows.filter((r) => r.e.state === 'out');
   const myR = ins.reduce((a, r) => a + (r.my?.r || 0), 0);
@@ -26,7 +34,7 @@ export function renderJournal(ctx) {
   const ccy = D.calcState().ccy;
   const showR = D.showR(ctx.data);
   const myPct = ins.reduce((a, r) => a + (r.my?.pct || 0), 0) / (ins.length || 1);
-  return head(t('title.denik'), t('jr.sub')) + (rows.length ? `
+  return `
     <div class="stats stats-3">
       ${showR ? `<div class="stat"><p class="stat-l">${t('jr.me')}</p><p class="stat-v num ${tone(myR)}">${F.sr(myR)}</p></div>
       <div class="stat"><p class="stat-l">${t('jr.botSame')}</p><p class="stat-v num ${tone(botR)}">${F.sr(botR)}</p></div>`
@@ -45,8 +53,7 @@ export function renderJournal(ctx) {
         <span class="hist-res"><span class="hist-r num ${r.e.state === 'in' ? tone(v) : 'flat'}" style="display:block">${r.e.state === 'in' && r.my ? F.spct(r.my.pct, 2) : '–'}</span>
           <span class="hist-p num" style="display:block">${showR ? t('jr.meBot', { me: v != null && r.e.state === 'in' ? F.sr(v) : '–', bot: r.botR != null ? F.sr(r.botR) : '–' }) : t('jr.posChange')}</span></span>
       </button>`;
-    }).join('')}</div>` : `<div class="empty"><h3>${t('jr.empty.t')}</h3><p>${t('jr.empty.s')}</p><a class="btn btn-secondary btn-small" style="margin-top:16px" href="#/signaly">${t('jr.empty.btn')}</a></div>`) +
-    `<p class="jnote" style="margin-top:16px">${t('jr.foot')}</p>`;
+    }).join('')}</div>`;
 }
 
 /* ================= Calendar ================= */

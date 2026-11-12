@@ -11,6 +11,7 @@ import * as B from '../brief.js';
 import * as Comm from '../community.js';
 import { t } from '../i18n/index.js';
 import { icon, skBlock, toast } from '../ui.js';
+import { journalBody } from './extra.js';
 
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 const sm = (v, c, dec = 0) => (v > 0.5 ? '+' : v < -0.5 ? '−' : '') + F.money(Math.abs(v) < 0.5 ? 0 : Math.abs(v), c, dec);
@@ -58,7 +59,7 @@ export function renderWallet(ctx) {
       <span><small>${t('wl.free')}</small><b>${F.money(Math.max(0, s.free), c, 0)}</b></span>
       <span><small>${t('acc.inPlay')}</small><b>${F.money(s.used + s.reserved, c, 0)}</b>${s.rows.length ? `<em class="${tone(s.open)}">${t('wl.now', { v: sm(s.open, c) })}</em>` : ''}</span>
     </div>
-    ${s.used + s.reserved > 0 ? `<p class="wl-inplay num">${t(s.reserved > 0 ? 'zi.split' : 'zi.split0', { a: F.money(s.used, c, 0), b: F.money(s.reserved, c, 0) })}</p>` : ''}
+    ${s.reserved > 0 ? `<p class="wl-inplay num">${t('zi.split', { a: F.money(s.used, c, 0), b: F.money(s.reserved, c, 0) })}</p>` : ''}
     <div hidden>
     </div>
     <div class="wl-btns"><button type="button" class="btn btn-primary" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('wl.topup')}</button>
@@ -193,6 +194,7 @@ export function renderHistory(ctx) {
   return head + `
   <h2 class="d-h hi-h">${t('hi.mine')}</h2>
   ${mine(ctx)}
+  ${(() => { const jb = journalBody(ctx); return jb ? `<section class="d-block hi-journal"><h2 class="d-h">${t('hi.journal')}</h2>${jb}</section>` : ''; })()}
   <section class="d-block"><h2 class="d-h">${t('cm.title')}</h2>${people()}${shareBox()}</section>
   <p class="disclaimer">${icon('info')}${F.esc(t('disclaimer'))}</p>`;
 }

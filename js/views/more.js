@@ -12,29 +12,29 @@ import * as B from '../brief.js';
 import * as W from '../wallet.js';
 
 /* 1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
+/* 1.13.3: Více in three groups – the main five on top (Peněženka, Historie, Robot, Jak to funguje, Nastavení),
+   then Pro pokročilé (Kalkulačka, Simulátor, MetaTrader 5, Předplatné), then the rest. Můj deník lives in Historie
+   (its own section there when it has entries); the #/denik page stays for old links. */
 export const MORE_ITEMS = [
-  { group: 'more.g.you', items: [
-    { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
+  { group: 'more.g.main', items: [
     { id: 'penezenka', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(W.equityNow(), w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
     { id: 'historie', icon: 'history', sub: () => { const w = store.get('wallet', null); const n = w?.closed?.length || 0; return n ? t('more.historie.s', { n }) : t('more.historie.s0'); } },
-    { id: 'auto', action: true, icon: 'robot', sub: () => t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off') },
-    { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
-    { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
-  ] },
-  { group: 'more.g.robot', items: [
     { id: 'robot', icon: 'shield', sub: () => t('more.robot.s2') },
     { id: 'jak', icon: 'help', sub: () => t('more.jak.s2') },
-    { id: 'duvera', icon: 'check', sub: () => t('more.duvera.s') },
+    { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
   ] },
-  { group: 'more.g.tools', items: [
+  { group: 'more.g.adv', items: [
     { id: 'kalkulacka', icon: 'calc', sub: () => t('more.kalkulacka.s') },
-    { id: 'kalendar', icon: 'calendar', sub: () => t('more.kalendar.s') },
     { id: 'simulator', icon: 'sim', sub: () => t('more.simulator.s') },
     { id: 'mt5', icon: 'external', sub: () => t('more.mt5.s') },
-  ] },
-  { group: 'more.g.app', items: [
-    { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
     { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
+  ] },
+  { group: 'more.g.other', items: [
+    { id: 'auto', action: true, icon: 'robot', sub: () => t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off') },
+    { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
+    { id: 'duvera', icon: 'check', sub: () => t('more.duvera.s') },
+    { id: 'kalendar', icon: 'calendar', sub: () => t('more.kalendar.s') },
+    { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
   ] },
 ];
 
@@ -46,7 +46,7 @@ export function pushCta() {
     : st === 'ios' ? `<a class="btn btn-secondary btn-small" href="#/stahnout">${t('pcta.iosBtn')}</a>`
     : `<a class="btn btn-secondary btn-small" href="${CONFIG.APP_URL}">${t('pcta.elseBtn')}</a>`;
   return `<div class="pcta" role="region" aria-label="${t('pcta.t')}">
-    <span class="pcta-ic">${icon('alert')}</span>
+    <span class="pcta-ic">${icon('bell')}</span>
     <div><p class="nudge-t">${t('pcta.t')}</p><p class="nudge-s">${t(`pcta.s.${st}`)}</p></div>
     <div class="nudge-actions">${btn}<button class="icon-btn" type="button" data-action="dismiss-pcta" aria-label="${t('nudge.later')}">${icon('close', 'icon-sm')}</button></div>
   </div>`;

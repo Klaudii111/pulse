@@ -3192,3 +3192,41 @@ body::after {
 /* the profile chip carries risk + leverage: name on the first line, "2 % · 1:2" under it */
 .cc-chip { display: grid; justify-items: center; gap: 1px; padding: 5px 2px; white-space: nowrap; }
 .cc-chip small { display: block; }
+
+/* ---------- 1.13.3 ---------- */
+/* detail: the sticky Zainvestovat bar sits on the real bottom edge (the scroller's padding no longer leaves a gap under it
+   where the chart showed through); a spacer after the content lets the last lines scroll above the bar */
+.sheet-body:has(> .sheet-cta) { padding-bottom: 0; }
+.sheet-body:has(> .sheet-cta)::after { content: ''; display: block; height: calc(var(--sab) + 132px); }
+.sheet-cta { background: var(--raise); isolation: isolate; }
+.sheet-cta::before { top: -32px; height: 32px; background: linear-gradient(180deg, rgba(0,0,0,0), var(--raise) 85%); }
+/* Obchodovat: ONE chart control row – 1D 5D 1M 6M 1R + Svíčky / Čára */
+.term-main .br-ctl { flex-wrap: nowrap; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.term-main .br-ctl::-webkit-scrollbar { display: none; }
+.term-main .br-ctl .range-chips, .term-main .br-type { flex: none; gap: 2px; }
+.term-main .br-type { padding-left: 6px; border-left: 1px solid var(--line-2); }
+@media (max-width: 420px) { .term-main .br-ctl .range-chip { padding: 0 9px; } }
+/* Sledované grafy: "1 graf · 2 grafy · 4 grafy" with icons (desktop / tablet only) */
+.w-lay { display: inline-flex; align-items: center; gap: 6px; }
+.watch-top > .btn { margin-left: auto; }
+/* PRODAT with a position: the short trade is a visible secondary button */
+.tk-new { margin-top: 14px; gap: 8px; }
+/* wallet lines: nothing wraps in the middle of "Teď −1 Kč"; no leading dot */
+.nw { white-space: nowrap; }
+.wl-line .big-acc-row { white-space: nowrap; }
+/* Zainvestováno: robot-for-me status */
+.zi-robot { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--raise-2); border: 1px solid var(--line-2); color: var(--ink); text-decoration: none; font-size: 13.5px; }
+.zi-robot > .icon:first-child { color: var(--gold); flex: none; }
+.zi-robot span { flex: 1; min-width: 0; }
+.zi-robot > .icon:last-child { color: var(--ink-3); flex: none; }
+/* Více: the notification banner keeps its distance from the first group */
+.pcta + .group-l { margin-top: 22px; }
+/* toast moved under the top bar (it would cover the button in front of it) */
+.toast-root.is-top .toast { animation-name: toast-in-top; }
+@keyframes toast-in-top { from { opacity: 0; transform: translateY(-10px) scale(0.98); } }
+/* onboarding: the profile examples are averages */
+.onb-pnote { margin: 10px 2px 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+/* Historie: the journal section */
+.hi-journal .stats { margin-top: 4px; }
+/* Sledované grafy on desktop: the single-chart grid stays hidden under the watch list (display:grid beat [hidden]) */
+.term-grid[hidden] { display: none; }

@@ -182,6 +182,8 @@ function closeInternal(entry) {
 
 export function closeTopSheet() {
   if (!stack.length) return;
+  /* 1.13.3: a sheet on its way out no longer counts as open for toasts (they used to sit above a sheet that was leaving) */
+  stack[stack.length - 1].el.classList.add('is-closing');
   // Pop the history entry we pushed; popstate handler then closes the sheet.
   closingViaHistory = true;
   history.back();
@@ -202,12 +204,43 @@ window.addEventListener('popstate', () => {
 /* ---------- Toast ---------- */
 /* 1.13.2: every toast stays 3 s (5 s with a button) and never covers an open sheet's buttons:
    it sits above the sheet when there is room, otherwise just under the sheet's head (taps go through it) */
+/* 1.13.3: an amount field shown with spaces while typing ("7 507", "10 000") like the first-run amount;
+   the caret stays after the same digit. Returns the whole number typed (0 when empty). */
+export function groupInput(inp) {
+  const pos = inp.selectionStart ?? inp.value.length;
+  const before = inp.value.slice(0, pos).replace(/\D/g, '').length;
+  const digits = inp.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 10);
+  const v = digits ? +digits : 0;
+  inp.value = digits ? F.num(v, 0) : '';
+  let k = 0, c = 0;
+  while (c < inp.value.length && k < before) { if (/\d/.test(inp.value[c])) k++; c++; }
+  try { inp.setSelectionRange(c, c); } catch { /* not focused */ }
+  return v;
+}
+
+/* 1.13.3: a toast never covers the button the user is about to press: when it would overlap a visible primary
+   action (card Zainvestovat, Koupit / Prodat …) it moves under the top bar */
+const CTA_SEL = '.btn-primary, .cc-go, .btn-invest, .trade-btn, .d-cta .btn';
+function dodgeCta(root, el) {
+  const r = el.getBoundingClientRect();
+  if (!r.height) return;
+  const hit = [...document.querySelectorAll(`#view ${CTA_SEL.split(', ').join(', #view ')}`)].some((b) => {
+    const q = b.getBoundingClientRect();
+    return q.height > 0 && q.bottom > r.top - 4 && q.top < r.bottom + 4 && q.right > r.left && q.left < r.right;
+  });
+  if (!hit) return;
+  const tb = document.querySelector('.topbar');
+  const top = tb && tb.getBoundingClientRect().height ? tb.getBoundingClientRect().bottom : 12;
+  root.style.top = `${Math.round(top + 8)}px`; root.style.bottom = 'auto';
+  root.classList.add('is-top');
+}
+
 export function toast(msg, { action = null, timeout = 3000 } = {}) {
   const root = document.getElementById('toast-root');
   root.querySelectorAll('.toast').forEach((n) => n.remove());
   timeout = action ? 5000 : 3000;
-  root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over');
-  const sh = [...document.querySelectorAll('.sheet.is-open')].pop();
+  root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top');
+  const sh = [...document.querySelectorAll('.sheet.is-open:not(.is-closing)')].pop();
   if (sh) {
     const r = sh.getBoundingClientRect();
     if (r.top >= 72) root.style.bottom = `${Math.round(window.innerHeight - r.top + 8)}px`;
@@ -224,8 +257,9 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   el.innerHTML = `<span>${msg}</span>${action ? `<button class="btn btn-primary" type="button">${F.esc(action.label)}</button>` : ''}`;
   if (action) el.querySelector('button').addEventListener('click', () => { action.fn(); hide(); });
   root.append(el);
+  if (!sh) dodgeCta(root, el);
   let timer = setTimeout(hide, timeout);
-  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over'); } }, 260); }
+  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); } }, 260); }
   return hide;
 }
 

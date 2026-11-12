@@ -93,6 +93,7 @@ function slideP() {
     <h2 class="onb-t">${t('onb.p.t')}</h2>
     <p class="onb-s">${t('onb.p.s')}</p>
     <div class="onb-profs" id="onb-profs" role="radiogroup" aria-label="${F.esc(t('onb.p.t'))}">${profCards()}</div>
+    <p class="onb-pnote">${t('onb.p.note')}</p>
   </section>`;
 }
 

@@ -352,6 +352,8 @@ export function testGrowth(bt, ccy) {
 }
 export function levNums({ side, entry, amount, sl, tp, lev, bt }) {
   const o = W.outcome({ side, entry, amount, lev, sl, tp });
+  /* 1.13.3: no stop-loss = nothing limits the loss but the deposit itself -> "Nejhůř" = the whole deposit */
+  if (!(sl > 0) && amount > 0) o.atStop = -amount;
   const risk = sl > 0 && entry > 0 ? Math.abs(amount * lev * (sl - entry) / entry) : null;
   const capped = o.atStop != null && o.atStop <= -amount + 0.5;
   /* stop-out before the stop: the test average (made with the full stop) does not apply -> no average */
@@ -418,20 +420,29 @@ export function moneyBlock(m) {
     return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
-      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
-      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p>${dd}</div>`;
+      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>${dd}</div>`;
   };
   const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
+  /* 1.13.3: a trade without a signal is sized by the deposit cap, not by the risk % -> its columns show the REAL share of
+     the wallet lost at worst (computed), never the profile's nominal "riziko 1 %" */
+  const eq = D.sizingBase(null);
+  const riskOf = (c) => {
+    if (m.s || !(eq > 0) || c.n.worst == null) return F.num(c.pct, 0);
+    const v = Math.abs(c.n.worst) / eq * 100;
+    return F.num(v, v < 1 ? 1 : 0);
+  };
   const cell = (c) => `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
-      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${t('mb.risk', { v: F.num(c.pct, 0) })}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
+      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl" data-risk>${t('mb.risk', { v: riskOf(c) })}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
       <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
   const own = tk ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
       <span>${t('mb.own')}</span><b class="num mb-own-v">${onId ? '' : `1:${tk.lev}`}</b>${icon('chev-down', 'icon-xs')}</button>
     <div class="mb-own"${tk.open ? '' : ' hidden'}>${levChips(m.sym, tk.lev)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>` : '';
+  /* 1.13.3: the worst share of the deposit across the profiles of THIS signal / trade (max loss / deposit) */
+  const maxPct = Math.round(Math.max(0, ...cols.filter((c) => c.a > 0 && c.n.worst != null).map((c) => Math.abs(c.n.worst) / c.a * 100)));
   const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote2')}</p>`;
+      ${cols.map(cell).join('')}</div>${own}<p class="mb-note" data-maxpct="${maxPct}">${t('mb.levNote3', { p: maxPct })}</p>`;
   return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
 }

@@ -9,7 +9,7 @@ import * as store from '../store.js';
 import { orderRow, histList, tradeRow, closeConfirm } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
-import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable } from './signals.js';
+import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ } from './signals.js';
 import { paperHero } from './paper.js';
 import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
@@ -191,14 +191,32 @@ export function renderInvested(ctx) {
   return head + `
   <section class="d-acc"><div class="d-acc-l"><p class="d-k">${t('acc.inPlay')}${B.qh('VEHRE')}</p>
     <p class="d-acc-v"><b class="num">${F.money(sm.used + sm.reserved, c, 0)}</b><span>${t('d.fict')}</span></p>
-    <p class="d-acc-s num">${t(sm.reserved > 0 ? 'zi.split' : 'zi.split0', { a: F.money(sm.used, c, 0), b: F.money(sm.reserved, c, 0) })}${sm.rows.length ? ` · <span class="${open.tone}">${t('zi.result', { v: open.text })}</span>` : ''}</p></div>
+    ${(() => {
+      /* 1.13.3: the split only when a purchase is waiting (else "Ve hře" = "v obchodech", said twice); "Teď −1 Kč" never wraps */
+      const res = sm.rows.length ? `<span class="nw ${open.tone}">${t('zi.result', { v: open.text })}</span>` : '';
+      const split = sm.reserved > 0 ? t('zi.split', { a: F.money(sm.used, c, 0), b: F.money(sm.reserved, c, 0) }) : '';
+      return split || res ? `<p class="d-acc-s num">${split}${split && res ? ' · ' : ''}${res}</p>` : '';
+    })()}</div>
     <a class="btn btn-secondary d-trade" href="#/penezenka">${icon('wallet', 'icon-sm')}<span>${t('wl.title')}</span></a></section>
+  ${ziRobot(sm)}
   <section class="d-block"><h2 class="d-h">${t('zi.open')}<span class="num"> · ${sm.rows.length}</span></h2>${sm.rows.length ? myInvestRows(ctx, sm) : `<p class="d-empty">${t('d.mine0')}</p>`}</section>
   <section class="d-block"><h2 class="d-h">${t('zi.orders')}<span class="num"> · ${sm.w.orders.length}</span></h2>${ords ? `<div class="tp-list">${ords}</div>` : `<p class="d-empty">${t('zi.orders0')}</p>`}</section>
   <a class="hs-row zi-hrow" href="#/historie">${icon('history', 'icon-xs')}<span>${hs.n ? t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) }) : t('zi.histLine0')}</span>${icon('chev-right', 'icon-xs')}</a>
   ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.compact(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;
 }
 
+
+/* 1.13.3 Zainvestováno: robot-for-me ON -> one line what it is doing (waiting for a new signal / how many it opened) */
+function ziRobot(sm) {
+  const ac = store.get('autoCopy', null);
+  if (!ac?.on) return '';
+  const copied = new Set(Array.isArray(sm.w.copied) ? sm.w.copied : []);
+  const mine = (x) => x.auto || (x.sigId && copied.has(x.sigId));
+  const n = (sm.w.positions || []).filter(mine).length;
+  const k = (sm.w.orders || []).filter(mine).length;
+  const txt = n ? t('zi.robotOn', { n }) : t('zi.robotOn0');
+  return `<a class="zi-robot" href="#/robot">${icon('robot', 'icon-sm')}<span>${txt}${k ? ` · ${t('zi.robotWait', { n: k })}` : ''}</span>${icon('chev-right', 'icon-xs')}</a>`;
+}
 
 /* 4 ROBOT: one line -> the robot page */
 export function robotLine1(ctx) {
@@ -213,7 +231,9 @@ export function robotLine1(ctx) {
   const c = D.walletCcy();
   const v = (sum > 0.5 ? '+' : sum < -0.5 ? '−' : '') + F.money(Math.abs(D.convert(sum, 'USD', c, ctx.data)), c, 0);
   const since = ctx.data?.performance?.equity?.[0]?.date;
-  return `<p class="d-robot">${icon('shield', 'icon-sm')}<span>${t('d.robot2', { n, u: F.unit('trade', n), p: F.spct(pct, 2), v, d: since ? F.dm(since) : '–' })}</span></p>`;
+  /* 1.13.3: open and closed counted apart ("8 otevřených · 0 uzavřených"), the closed ones = Výsledky (visible horizons) */
+  const closed = (ctx.data?.history?.signals || []).filter((x) => VISIBLE_HZ().includes(x.horizon)).length;
+  return `<p class="d-robot">${icon('shield', 'icon-sm')}<span>${t('d.robot3', { o: n, c: closed, p: F.spct(pct, 2), v, d: since ? F.dm(since) : '–' })}</span></p>`;
 }
 
 export const actions = {

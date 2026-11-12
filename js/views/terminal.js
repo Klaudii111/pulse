@@ -16,13 +16,16 @@ import * as store from '../store.js';
 import { t } from '../i18n/index.js';
 import { INSTR } from '../instruments.js';
 import { gloss } from '../explain.js';
-import { icon, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic } from '../ui.js';
+import { icon, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic, groupInput } from '../ui.js';
 import { priceChart } from '../charts.js';
 import * as Bars from '../bars.js';
 import { mountTV, tvSymbol } from './detail.js';
 
 let chartRef = null, liveOff = null, tvOn = false, autoTicketFor = null, stampTimer = null;
-let tab = 'pos', cmode = 'bars';
+let tab = 'pos';
+/* 1.13.3: ONE control row under the price – 1D 5D 1M 6M 1R + Svíčky / Čára (Bars.controls); "Živě" is the dot + "před X s"
+   in the price block; the old Graf trhu / Živě / TradingView switch (a second "Svíčky" chip) is gone */
+const cmode = 'bars';
 let barsRef = null, barsDead = false; // 1.10.0: real history from /api/bars; dead = endpoint missing -> old ticks chart
 
 const money = (v, ccy, dec = 0) => F.money(v, ccy, dec);
@@ -77,7 +80,7 @@ export function walletCard(ctx) {
 export function bigAcc(sm) {
   const c = sm.w.ccy;
   return `<section class="wl-line" id="big-acc" aria-label="${F.esc(t('acc.big'))}">
-    <a class="wl-line-l" href="#/penezenka">${icon('wallet', 'icon-xs')}<span class="wl-line-k">${t('acc.big')}</span><b class="num big-acc-v">${money(sm.equity, c, 0)}</b><span class="num big-acc-row">· ${t('acc.free')} ${money(Math.max(0, sm.free), c, 0)}</span></a>
+    <a class="wl-line-l" href="#/penezenka">${icon('wallet', 'icon-xs')}<span class="wl-line-k">${t('acc.big')}</span><b class="num big-acc-v">${money(sm.equity, c, 0)}</b><span class="num big-acc-row">${t('acc.free')} ${money(Math.max(0, sm.free), c, 0)}</span></a>
     <button type="button" class="btn btn-secondary btn-small" data-action="w-load">${t('wl.topupShort')}</button>
   </section>`;
 }
@@ -273,10 +276,12 @@ function watchCard(sym, data, i) {
 }
 function watchView(ctx) {
   const l = watchList();
-  const n = watchN();
+  /* 1.13.3: a phone (< 600 px) shows the charts as one vertical list (up to 4) – the 1 / 2 / 4 layout chips are desktop only */
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 599px)').matches;
+  const n = phone ? 4 : watchN();
   const shown = l.slice(0, n), rest = l.slice(n);
   return `<section class="watch">
-    <div class="watch-top"><div class="range-chips" role="group" aria-label="${F.esc(t('watch.layout'))}">${[1, 2, 4].map((k) => `<button type="button" class="range-chip" data-action="w-n" data-id="${k}" aria-pressed="${k === n}">${t('watch.n', { n: k })}</button>`).join('')}</div>
+    <div class="watch-top">${phone ? '' : `<div class="range-chips w-lays" role="group" aria-label="${F.esc(t('watch.layout'))}">${[1, 2, 4].map((k) => `<button type="button" class="range-chip w-lay${k > 1 ? ' w-lay-multi' : ''}" data-action="w-n" data-id="${k}" aria-pressed="${k === n}">${icon(`lay${k}`, 'icon-xs')}${t('watch.n', { n: k })}</button>`).join('')}</div>`}
       <button type="button" class="btn btn-secondary btn-small" data-action="w-add">${icon('plus-square', 'icon-sm')}${t('watch.addBtn')}</button></div>
     ${shown.length ? `<div class="watch-grid n${n}">${shown.map((s, i) => watchCard(s, ctx.data, i)).join('')}</div>` : `<p class="d-empty">${t('watch.empty')}</p>`}
     ${rest.length ? `<p class="watch-rest-l">${t('watch.rest')}</p><div class="chips">${rest.map((s) => `<button type="button" class="chip" data-action="w-front" data-sym="${F.esc(s)}">${F.esc(whatOf(s, ctx.data).name)}</button>`).join('')}</div>` : ''}
@@ -322,12 +327,6 @@ export function render(ctx) {
       </div>
       <div class="term-btnrow"><button type="button" class="btn btn-secondary btn-small term-change" data-action="t-pick">${icon('search', 'icon-sm')}${t('term.change')}</button>${watchStar(sym)}</div>
       ${sig ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t('term.fromSig', { side: F.SIDE[sig.action], e: F.price(sig.entry), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
-      <div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
-        ${barsDead ? '' : `<button type="button" class="range-chip" data-action="t-cmode" data-id="bars" aria-pressed="${cmode === 'bars'}">${t('bars.mode')}</button>`}
-        <button type="button" class="range-chip" data-action="t-cmode" data-id="live" aria-pressed="${cmode === 'live'}">${t('term.chartLive')}</button>
-        ${barsDead ? `<button type="button" class="range-chip" data-action="t-cmode" data-id="c1" aria-pressed="${cmode === 'c1'}">${t('term.chartC1')}</button>` : ''}
-        <button type="button" class="range-chip" data-action="t-cmode" data-id="tv" aria-pressed="${cmode === 'tv'}">${t('det.chartTV')}</button>
-      </div>
       <div class="t-bars" id="t-bars" ${cmode === 'bars' ? '' : 'hidden'}>${Bars.controls('tb')}</div>
       <div class="pchart-box term-chart" id="t-chart" ${cmode === 'live' ? '' : 'hidden'}></div>
       <div class="pchart-box term-chart cndl-box" id="t-c1" ${cmode === 'c1' ? '' : 'hidden'}></div>
@@ -522,6 +521,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
   const sess = () => { const o = M.nextOpen(sym); return { o, e: M.sessionEnd(sym) }; };
   const fmtIn = (v) => (v == null ? '' : String(v));
+  /* 1.13.3: the deposit is shown with spaces like the first-run amount ("7 507", "10 000") – also while typing */
+  const amtIn = (v) => (v > 0 ? F.num(Math.round(v), 0) : '');
   const validItems = () => [{ id: 'day', label: t('term.valid.day') }, { id: 'gtc', label: t('term.valid.gtc') }].concat(sigOpen ? [{ id: 'sig', label: t('term.valid.sig') }] : []);
   /* plain-language line about the limit: when it fills, how far, until when */
   const limLine = () => {
@@ -565,7 +566,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     ${useSig ? `<p class="tk-sig">${icon('signals', 'icon-xs')}${t('term.tkFromSig')}</p>` : ''}
     <p class="sheet-label">${t('inv.howMuch')}</p>
     <div class="chips tk-chips">${presets.map((v) => `<button type="button" class="chip" data-amt="${v}" aria-pressed="${st.risk == null && st.amount === v}">${money(v, c)}</button>`).join('')}</div>
-    <label class="tk-in"><span>${t('inv.own', { c })}</span><input class="jin num" inputmode="decimal" data-in="amount" value="${fmtIn(st.amount)}"></label>
+    <label class="tk-in"><span>${t('inv.own', { c })}</span><input class="jin num" inputmode="numeric" autocomplete="off" data-in="amount" value="${amtIn(st.amount)}"></label>
     <div id="tk-out">${preview()}</div>
     <details class="tk-adv"><summary>${t('inv.adv')}${icon('chev-down', 'icon-xs')}</summary>
     <p class="sheet-label">${t('inv.riskL')}</p>
@@ -601,13 +602,13 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         go.disabled = blocked();
         root.querySelector('#tk-block').hidden = !blocked();
         root.querySelectorAll('[data-amt]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk == null && +b.dataset.amt === st.amount)));
-        const ai = root.querySelector('[data-in="amount"]'); if (ai && document.activeElement !== ai) ai.value = String(st.amount);
+        const ai = root.querySelector('[data-in="amount"]'); if (ai && document.activeElement !== ai) ai.value = amtIn(st.amount);
         root.querySelectorAll('[data-risk]').forEach((b) => b.setAttribute('aria-pressed', String(st.risk === +b.dataset.risk)));
       };
       const applyRisk = () => {
         if (st.risk == null) { resize(); return; }
         const a = W.amountForRisk(W.get(), { entry: basePx(), sl: st.sl, lev: st.lev, riskPct: st.risk });
-        if (a) { st.amount = Math.min(a, Math.floor(sm.free)); root.querySelector('[data-in="amount"]').value = String(st.amount); }
+        if (a) { st.amount = Math.min(a, Math.floor(sm.free)); root.querySelector('[data-in="amount"]').value = amtIn(st.amount); }
       };
       root.addEventListener('click', (ev) => {
         const a = ev.target.closest('[data-amt]'); const r = ev.target.closest('[data-risk]');
@@ -616,7 +617,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const va = ev.target.closest('[data-seg-name="tvalid"]');
         if (ty) { st.type = ty.dataset.otype; root.querySelectorAll('[data-otype]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.otype === st.type))); root.querySelector('#tk-limf').hidden = !isLim(); applyRisk(); haptic(); upd(); }
         if (va) { ev.preventDefault(); ev.stopPropagation(); st.valid = va.dataset.id; segMove(root, 'tvalid', st.valid); haptic(); upd(); }
-        if (a) { st.risk = null; st.auto = false; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
+        if (a) { st.risk = null; st.auto = false; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = amtIn(st.amount); haptic(); upd(); }
         if (r) { st.risk = +r.dataset.risk; st.auto = false; applyRisk(); haptic(); upd(); }
         /* a one-off leverage for THIS ticket: never reaches the global profile handler */
         if (lv) {
@@ -667,7 +668,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       });
       root.addEventListener('input', (ev) => {
         const k = ev.target.dataset.in; if (!k) return;
-        const v = F.parseNum(ev.target.value);
+        const v = k === 'amount' ? groupInput(ev.target) : F.parseNum(ev.target.value);
         if (k === 'amount') { st.risk = null; st.auto = false; st.amount = v > 0 ? v : 0; }
         if (k === 'sl') { st.sl = v > 0 ? v : null; applyRisk(); }
         if (k === 'tp') st.tp = v > 0 ? v : null;
@@ -829,7 +830,7 @@ function exitOrNew(ctx, side, sym, sig, mine) {
     html: `<div class="sheet-head"><div><p class="sheet-title">${t(sell ? 'ex.titleSell' : 'ex.titleBuy', { n: F.esc(nm) })}</p><p class="sheet-sub">${t('term.demo')}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
       <div class="sheet-body"><p class="ex-s">${t(sell ? 'ex.sSell' : 'ex.sBuy', { n: F.esc(nm) })}</p>${rows}
-      <button type="button" class="btn btn-ghost btn-block tk-new" data-new>${t(sell ? 'ex.short' : 'ex.long')}</button>
+      <button type="button" class="btn btn-secondary btn-block tk-new" data-new>${icon(sell ? 'down' : 'up', 'icon-sm')}${t(sell ? 'ex.short' : 'ex.long')}</button>
       <p class="ex-s2">${t(sell ? 'ex.shortS' : 'ex.longS')}</p></div>`,
     onMount(sh) {
       sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
@@ -949,20 +950,6 @@ export const actions = {
   't-sym'(el, ev, ctx) { choose(ctx, el.dataset.sym); },
   't-close'(el, ev, ctx) { closeConfirm(ctx, el.dataset.id); },
   't-reset'(el, ev, ctx) { resetSheet(ctx); },
-  't-cmode'(el, ev, ctx) {
-    cmode = el.dataset.id;
-    const root = document.getElementById('view');
-    root.querySelectorAll('[data-action="t-cmode"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === cmode)));
-    root.querySelector('#t-chart').hidden = cmode !== 'live';
-    root.querySelector('#t-c1').hidden = cmode !== 'c1';
-    const tb = root.querySelector('#t-bars'); if (tb) tb.hidden = cmode !== 'bars';
-    if (cmode === 'bars') barsRef && barsRef.refresh();
-    const tv = root.querySelector('#t-tv'); tv.hidden = cmode !== 'tv';
-    const sym = currentSym(ctx).sym;
-    if (cmode === 'tv' && !tvOn) { tvOn = true; mountTV(tv, M.tvSym(sym) || tvSymbol(sym)); }
-    if (cmode === 'live') chartRef && chartRef.refresh();
-    if (cmode === 'c1') drawCandles(root.querySelector('#t-c1'), sym);
-  },
   seg(el, ev, ctx) {
     if (el.dataset.segName === 'tview') { store.set('termView', el.dataset.id); ctx.rerender({ soft: true }); return true; }
     if (el.dataset.segName !== 'ttab') return false;
