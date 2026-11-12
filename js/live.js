@@ -195,6 +195,13 @@ let extraFn = () => [];
 export const setExtraSymbols = (fn) => { extraFn = fn; };
 const symbols = () => [...new Set(extraFn().concat(openSignals(getData()).map((s) => s.symbol), 'SPY'))].slice(0, 60);
 export const quote = (sym) => prices.get(sym) || null;
+/* P2-05: the day-change label – "dnes {v}" only when the newest price is from today (same midnight as todayOf in
+   wallet.js), else "poslední den {v}" (a weekend / holiday / before the session) */
+export function dayChText(sym, ch) {
+  const q = prices.get(sym);
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  return t(q && q.t > 0 && q.t < +d0 ? 'term.lastCh' : 'term.dayCh', { v: F.spct(ch, 2) });
+}
 /* 1.15.0 (B1): the previous close of sym consistent with dayChange() (the server's close wins; a change that disagrees with
    the server's by > 2 points uses the server's change) – null when unknown */
 export function prevClose(sym) {

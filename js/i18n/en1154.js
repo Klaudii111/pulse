@@ -57,4 +57,5 @@ export default {
   'rx.meWait': 'you now …',
   /* P1-07: one trade -> singular */
   'rx.sub1': 'The robot has left this trade. Leave too?',
+  'term.lastCh': 'last session {v}',
 };

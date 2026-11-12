@@ -666,7 +666,7 @@ function chartHtml(p, closed, data) {
   const st = closed ? null : mktStamp(p.sym, data);
   const ch = Live.dayChange(p.sym);
   return `<section class="pd-chartc card"><div class="pd-pxrow"><p class="pd-px num" data-d="px">${q ? pxC(p.sym, q.p) : '–'}</p>
-      ${ch != null ? `<span class="term-ch num ${ch >= 0 ? 'up' : 'down'}" data-d="chg">${t('term.dayCh', { v: F.spct(ch, 2) })}</span>` : '<span data-d="chg"></span>'}
+      ${ch != null ? `<span class="term-ch num ${ch >= 0 ? 'up' : 'down'}" data-d="chg">${Live.dayChText(p.sym, ch)}</span>` : '<span data-d="chg"></span>'}
       ${st ? `<p class="live-stamp is-${st.code}" data-d="stamp"><i aria-hidden="true"></i>${F.esc(st.text)}</p>` : ''}</div>
     <div class="t-bars pd-bars" id="pd-bars">${Bars.controls('pdb', { tfKey: 'barsTf.pd' })}</div>
     <p class="pd-legend"><span class="lg-ent">${t('pd.lg.entry')}</span>${p.sl > 0 ? `<span class="lg-sl">${t('lad.stop')}</span>` : ''}${p.tp > 0 ? `<span class="lg-tp">${t('lad.target')}</span>` : ''}<span class="lg-mk">${t(closed ? 'pd.lg.marks2' : 'pd.lg.mark')}</span></p>
@@ -810,7 +810,7 @@ export function mountTrade(el, ctx) {
       const pxEl = el.querySelector('[data-d="px"]');
       if (pxEl && q) { const nv = pxC(p.sym, q.p); if (pxEl.innerHTML !== nv) { pxEl.innerHTML = nv; } }
       const ch = Live.dayChange(p.sym);
-      const chEl = el.querySelector('[data-d="chg"]'); if (chEl && ch != null) { chEl.className = `term-ch num ${ch >= 0 ? 'up' : 'down'}`; chEl.textContent = t('term.dayCh', { v: F.spct(ch, 2) }); }
+      const chEl = el.querySelector('[data-d="chg"]'); if (chEl && ch != null) { chEl.className = `term-ch num ${ch >= 0 ? 'up' : 'down'}`; chEl.textContent = Live.dayChText(p.sym, ch); }
       const k = el.querySelector('[data-d="kolik"]'); if (k) { const h = kolikHtml(p, sm); if (k.innerHTML !== h) k.innerHTML = h; }
       const d = el.querySelector('[data-d="dnes"]'); if (d) { const h = dnesHtml(ctx, p, sm); if (d.innerHTML !== h) d.innerHTML = h; }
       patchRows(el, sm);

@@ -245,7 +245,7 @@ function priceBlock(sym, data) {
   if (st.code === 'live' && M.delayed(sym)) st = { code: 'stale', text: t('term.delayedLive', { s: Math.max(0, Math.round((Date.now() - q.t) / 1000)) }) };
   const ch = q ? Live.dayChange(sym) : null;
   return { q, open, html: `<p class="term-px num" data-px>${q ? pxOf(sym, q.p) : '–'}</p>
-    ${ch != null ? `<p class="term-ch num ${ch >= 0 ? 'up' : 'down'}">${t('term.dayCh', { v: F.spct(ch, 2) })}</p>` : ''}
+    ${ch != null ? `<p class="term-ch num ${ch >= 0 ? 'up' : 'down'}">${Live.dayChText(sym, ch)}</p>` : ''}
     <p class="live-stamp is-${st.code}"><i aria-hidden="true"></i>${F.esc(st.text)}</p>
 ` };
 }

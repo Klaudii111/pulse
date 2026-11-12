@@ -48,4 +48,5 @@ export default {
   /* P1-07: one trade -> singular */
   'rx.sub1': 'Robot z obchodu vystoupil. Chceš taky?',
   'rx.sub': 'Robot z těchto obchodů vystoupil. Chceš taky?',
+  'term.lastCh': 'poslední den {v}',
 };
