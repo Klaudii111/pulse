@@ -83,4 +83,13 @@ export default {
   /* acceptance check 3: two English bell texts that kept the old wording */
   'ev.myOpen.s': 'Stake {a} (play money)',
   'ev.ordPlaced': '{sym}: order placed at {v}',
+  /* 1.15.1 iPhone: Home Screen first (before the access code) */
+  'ios1.t': 'Add PULSE to your Home Screen',
+  'ios1.s': 'It takes 10 seconds on an iPhone. You then enter the code only once and your trades stay.',
+  'ios1.1': 'Tap Share (the square with an arrow)',
+  'ios1.2': 'Choose Add to Home Screen',
+  'ios1.3': 'Open PULSE from the Home Screen',
+  'ios1.note': 'No Share button? Open this link in Safari.',
+  'ios1.go': 'Continue here in the browser',
+  'ios1.goS': 'The app on the Home Screen has its own memory – what you enter here in the browser will not be in it.',
 };

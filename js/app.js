@@ -684,6 +684,39 @@ async function gate() {
   });
 }
 
+/* 1.15.1 iPhone / iPad: the Safari page and the icon on the home screen are two separate apps with separate memory - whoever
+   enters the code (and trades) in Safari starts again from zero after "Add to Home Screen". So before the access code Safari
+   first shows how to add PULSE to the home screen; the code is then entered once, in the app opened from the icon.
+   Not shown: in the app from the icon, on a device that is already unlocked, after "Pokračovat tady v prohlížeči". */
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (/Macintosh/.test(navigator.userAgent || '') && navigator.maxTouchPoints > 1);
+const isStandalone = () => navigator.standalone === true || !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+async function iosInstallFirst() {
+  if (!CONFIG.ACCESS_GATE_ENABLED || !isIOS() || isStandalone() || store.get('iosSkip') === 1 || store.get('unlocked') === CONFIG.ACCESS_CODE_SHA256) return;
+  const g = document.getElementById('gate');
+  g.hidden = false;
+  g.className = 'gate ios1';
+  const html = () => `<div class="gate-inner">
+    <div class="gate-lang">${langSwitch()}</div>
+    <img class="gate-mark" src="./icons/icon-192.png" alt="" width="72" height="72">
+    <h1>${t('ios1.t')}</h1>
+    <p>${t('ios1.s')}</p>
+    <ol class="ios1-steps"><li><span>1</span><b>${t('ios1.1')}</b></li><li><span>2</span><b>${t('ios1.2')}</b></li><li><span>3</span><b>${t('ios1.3')}</b></li></ol>
+    <p class="ios1-note">${t('ios1.note')}</p>
+    <button class="btn btn-secondary btn-block" type="button" id="ios1-go">${t('ios1.go')}</button>
+    <p class="gate-foot">${t('ios1.goS')}</p>
+  </div>`;
+  g.innerHTML = html();
+  document.getElementById('app').setAttribute('aria-hidden', 'true');
+  await new Promise((resolve) => {
+    const onClick = (ev) => {
+      const lb = ev.target.closest('[data-lang-set]');
+      if (lb) { setLang(lb.dataset.langSet); g.innerHTML = html(); onLangChange(); return; }
+      if (ev.target.closest('#ios1-go')) { store.set('iosSkip', 1); g.removeEventListener('click', onClick); resolve(); }
+    };
+    g.addEventListener('click', onClick);
+  });
+}
+
 /* ---------- Boot ---------- */
 async function boot() {
   applyTheme();
@@ -710,6 +743,7 @@ async function boot() {
      background while the modules load; index.html keeps only a long fallback timer */
   { const sp = document.getElementById('splash'); if (sp) { requestAnimationFrame(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 450); }); } }
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
+  await iosInstallFirst();
   await gate();
   /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */
   Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } if (!sheetOpen()) rerender({ soft: true }); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */

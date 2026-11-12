@@ -40,4 +40,13 @@ export default {
   'den.style': '{m}: v testu {p} zisk proti ztrátě {pf} ({n} obchodů, výher {w}); šance, že styl vůbec vydělává: {j}.',
   'den.czNote': '', 'den.czShow': 'Komentář robota',
   'den.disc': 'Zkušební robot, jen fiktivní peníze. Jeho výsledky se počítají zvlášť.',
+  /* 1.15.1 iPhone: nejdřív na plochu (před přístupovým kódem) */
+  'ios1.t': 'Přidej si PULSE na plochu',
+  'ios1.s': 'Na iPhonu to trvá 10 vteřin. Kód pak zadáš jen jednou a obchody ti zůstanou.',
+  'ios1.1': 'Klepni na Sdílet (čtvereček se šipkou)',
+  'ios1.2': 'Zvol Přidat na plochu',
+  'ios1.3': 'Otevři PULSE z plochy',
+  'ios1.note': 'Nevidíš Sdílet? Otevři tento odkaz v Safari.',
+  'ios1.go': 'Pokračovat tady v prohlížeči',
+  'ios1.goS': 'Aplikace z plochy má vlastní paměť – co zadáš tady v prohlížeči, v ní nebude.',
 };
