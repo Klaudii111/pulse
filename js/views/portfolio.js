@@ -643,7 +643,7 @@ function robotLeftHtml(ctx, p, sm) {
   const how = [x.exit ? t('pd.rb.at', { v: pxC(p.sym, x.exit) }) : '', x.pnlPct != null ? `(${F.spct(x.pnlPct, 1)})` : ''].filter(Boolean).join(' ');
   const head = t('pd.rb.head', { d: when, how: how ? ` ${how}` : '' });
   if (P.isFollowOff(p.id)) return `<p class="pd-rb-line" id="pd-rb">${icon('robot', 'icon-xs')}<span>${F.esc(t('pd.rb.kept', { h: head }))}</span></p>`;
-  return `<section class="pd-rb card" id="pd-rb" aria-live="polite"><p class="pd-rb-t">${icon('robot', 'icon-sm')}<span>${F.esc(head)} <b class="num ${tone(p.pnl)}" data-d="rbMine">${F.esc(t('pd.rb.mine', { v: sg(p.pnl, c) }))}</b></span></p>
+  return `<section class="pd-rb card" id="pd-rb" aria-live="polite"><p class="pd-rb-t">${icon('robot', 'icon-sm')}<span>${F.esc(head)} <b class="num ${p.live === false ? '' : tone(p.pnl)}" data-d="rbMine">${F.esc(t('pd.rb.mine', { v: p.live === false ? '…' : sg(p.pnl, c) }))}</b></span></p>
     <div class="pd-rb-b"><button type="button" class="btn btn-primary" data-action="pos-close" data-id="${F.esc(p.id)}">${t('pd.rb.close')}</button><button type="button" class="btn btn-ghost" data-action="pd-follow-off" data-id="${F.esc(p.id)}">${t('pd.rb.keep')}</button></div></section>`;
 }
 
@@ -806,6 +806,8 @@ export function mountTrade(el, ctx) {
       const a = set('pnl', `${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})`); if (a) a.className = tone(p.pnl);
       const b = set('today', sgT(fx.today, c)); if (b) b.className = toneT(fx.today);
       set('ctaV', sg(p.pnl, c));
+      /* the "robot left" block follows the same live result (a quiet "…" until this trade has a price on this device) */
+      { const rb = el.querySelector('[data-d="rbMine"]'); if (rb) { const v = t('pd.rb.mine', { v: p.live === false ? '…' : sg(p.pnl, c) }); if (rb.textContent !== v) rb.textContent = v; rb.className = `num ${p.live === false ? '' : tone(p.pnl)}`; } }
       const q = W.priceOf(p.sym, ctx.data);
       const pxEl = el.querySelector('[data-d="px"]');
       if (pxEl && q) { const nv = pxC(p.sym, q.p); if (pxEl.innerHTML !== nv) { pxEl.innerHTML = nv; } }
