@@ -4,6 +4,7 @@ import * as Feed from '../feed.js';
 import { t } from '../i18n/index.js';
 import { icon } from '../ui.js';
 import * as store from '../store.js';
+import * as B from '../brief.js';
 
 let seenBefore = 0; // read marker before this visit: items newer than it are highlighted
 
@@ -33,7 +34,8 @@ export function tradeHref(e) {
 
 /* What one event says: icon, tone, title, detail, value, and where it leads */
 export function describe(e) {
-  const sym = F.esc(e.sym || '');
+  /* A10 / K3-09: the same market names as the rest of the app ("Zlato", not XAUUSD) */
+  const sym = F.esc(e.sym ? B.whatIs(e.sym, e.name || null).name : '');
   const sig = e.sid ? { action: 'open-signal', id: e.sid } : null;
   const mine = { href: tradeHref(e) };
   switch (e.k) {
@@ -79,7 +81,7 @@ function dayLabel(ts, now) {
 
 export function render(ctx) {
   const now = ctx.now();
-  const list = Feed.events();
+  const list = Feed.display();
   const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('ev.title')}</h1><p class="page-sub">${t('ev.sub')}</p></div></header>`;
   if (!list.length) {
     return head + `<section class="calm ev-empty"><span class="ev-empty-ic">${icon('bell')}</span><div><h3 class="calm-t">${t('ev.empty.t')}</h3><p class="calm-s">${t('ev.empty.s')}</p></div></section>`;
@@ -87,7 +89,7 @@ export function render(ctx) {
   let lastDay = '', i = 0;
   const groups = [];
   list.forEach((e) => {
-    const d = dayLabel(e.at, now);
+    const d = dayLabel(e.ts, now);
     if (d !== lastDay) { groups.push(`<p class="alert-group">${F.esc(d.charAt(0).toUpperCase() + d.slice(1))}</p>`); lastDay = d; }
     groups.push(row(e, i++));
   });

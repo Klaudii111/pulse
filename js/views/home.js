@@ -297,7 +297,7 @@ function tsState(x, now) {
   }
   return { tone: 'flat', text: t('ts.st.ended'), btn: { sig: true, label: t('ts.b.detail') } };
 }
-function tsCard(x, now, i) {
+function tsCard(x, now, i, poor = false) {
   const { s } = x;
   const w = B.whatIs(s.symbol, s.name);
   const sell = s.action === 'SELL';
@@ -312,7 +312,7 @@ function tsCard(x, now, i) {
       ${monogram(s.symbol, w.name)}<span class="ts-id"><b class="ts-name">${F.esc(w.name)}</b><span class="ts-do ${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(`c.side.${sell ? 'SELL' : 'BUY'}`)}</span></span>${icon('chev-right', 'icon-xs ts-chev')}</button>
     <p class="ts-when num">${icon('clock', 'icon-xs')}<span><span class="ts-sent">${F.esc(t('ts.sent', { d: sentText(s, now) }))}</span>${end ? `<span class="ts-until">${F.esc(t('ts.until', { d: D.whenLabel(new Date(end), now) }))}</span>` : ''}</span></p>
     <p class="ts-st tone-${st.tone}"><i aria-hidden="true"></i><span>${F.esc(st.text)}</span></p>
-    ${btn}
+    ${btn}${b.invest && poor ? `<p class="ts-nofree">${t('ts.noFree')} <button type="button" class="link" data-action="w-load">${t('ts.noFreeGo')}</button></p>` : ''}
   </article>`;
 }
 function tsEarlier(list) {
@@ -327,7 +327,10 @@ export function todayBlock(ctx) {
   const now = ctx.now();
   const { main, earlier } = todaySignals(ctx.data, now);
   const when = nextCheck(ctx.data, now);
-  const body = main.length ? `<div class="ts-list">${main.map((x, i) => tsCard(x, now, i)).join('')}</div>`
+  /* A8 / K3-06: no free money for the smallest deposit -> say it under the buy button (with "Dobít") */
+  const sm0 = W.summary(ctx.data);
+  const poor = sm0.free < (D.DEP_MIN[sm0.w.ccy] || 0) + 0.5;
+  const body = main.length ? `<div class="ts-list">${main.map((x, i) => tsCard(x, now, i, poor)).join('')}</div>`
     : `<p class="ts-empty">${il('08_cekani', 56, { lazy: false })}<span>${F.esc(t(earlier.length ? 'ts.none2' : 'ts.none', { when }))}</span></p>`;
   return `<section class="d-block d2-sig" id="d-today" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('ts.h')}${main.length ? `<span class="num"> · ${main.length}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${body}${tsEarlier(earlier)}${main.length ? `<p class="ts-next">${icon('clock', 'icon-xs')}<span>${F.esc(t('ts.next', { when }))}</span></p>` : ''}${offLine(ctx.data)}</section>`;

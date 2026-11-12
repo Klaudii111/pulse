@@ -49,4 +49,6 @@ export default {
   'tk.validUntil': 'platí do {d}',
   /* A6 K1-21 */
   'sty.h.full': 'V testu 2023–26 obvyklý měsíc {m} na {w}, ale největší propad {dd}. Víc rizika v testu nepřineslo víc peněz – Odvážně vydělalo víc.',
+  /* A8 */
+  'ts.noFree': 'Na nákup teď nemáš volné peníze –', 'ts.noFreeGo': 'Dobít',
 };

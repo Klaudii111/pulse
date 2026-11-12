@@ -49,4 +49,6 @@ export default {
   'tk.validUntil': 'valid until {d}',
   /* A6 K1-21 */
   'sty.h.full': 'In the 2023–26 test a usual month {m} on {w}, but the largest drop {dd}. More risk did not bring more money in the test – Bold made more.',
+  /* A8 */
+  'ts.noFree': 'You have no free money to buy right now –', 'ts.noFreeGo': 'Top up',
 };

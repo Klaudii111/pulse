@@ -1016,7 +1016,13 @@ function cancelSheet(ctx, id) {
       sh.querySelector('[data-yes]').addEventListener('click', () => {
         const done = W.cancelOrder(id);
         closeTopSheet();
-        if (done) toast(t('term.ord.cancelled', { sym: done.sym, a: money(done.amount, W.get().ccy) }));
+        /* 1.15.0 (A9 / K3-04): cancelled from the order's own page -> Portfolio, tab "Čekající" (the page itself no longer exists) */
+        if (location.hash.startsWith(`#/obchod/${id}`)) {
+          store.set('pfMode', 'mine'); store.set('pfTab', 'wait');
+          setTimeout(() => { window.__pulseGo('#/portfolio', { replace: true }); if (done) toast(t('term.ord.cancelled', { sym: B.whatIs(done.sym, done.name).name, a: money(done.amount, W.get().ccy) })); }, 400);
+          return;
+        }
+        if (done) toast(t('term.ord.cancelled', { sym: B.whatIs(done.sym, done.name).name, a: money(done.amount, W.get().ccy) }));
         setTimeout(() => ctx.rerender({ soft: true }), 380);
       });
     },

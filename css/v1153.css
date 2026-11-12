@@ -39,3 +39,10 @@
 .rg-btn { background: none; border: 0; padding: 6px 4px; min-height: 40px; text-align: left; cursor: pointer; font: inherit; font-size: 13px; font-weight: 560; color: var(--ink); flex-wrap: wrap; }
 .rg-btn .num { color: var(--ink-3); font-weight: 500; }
 .rg-btn .icon-xs { color: var(--ink-3); }
+
+/* A11 / K3-08: a name or a feed title may take two lines instead of a one-line ellipsis that hides the meaning */
+.ts-card .ts-name, .cc-name, .sc-name, .ev-row .alert-t, .sheet-head:has(.d-name) .sheet-sub {
+  white-space: normal; text-overflow: clip; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word;
+}
+.ts-nofree { margin: 8px 0 0; font-size: 13px; color: var(--down); text-align: center; } .ts-nofree .link { color: var(--gold); font-weight: 600; min-height: 32px; }
