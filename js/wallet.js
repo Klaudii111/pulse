@@ -503,11 +503,13 @@ export function autoOpen(data, sig, mode, onSince = 0) {
   let r;
   /* 1.13.0: never skipped because the price is already at the entry – buy now (market open) or at the open (closed) */
   const mkt = M.isOpen(sig.symbol);
-  const atEntry = marketable(sig.action, sig.entry, q.p);
+  /* 1.13.6: the same max entry as the card and the sheet (D.maxEntry) */
+  const mxE = D.maxEntry(sig);
+  const atEntry = marketable(sig.action, mxE, q.p);
   const lev = autoLev(sig.symbol);
   const base = { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev, sl: sig.stop, tp: sig.target, sigId: sig.id };
   if (mkt && (mode === 'now' || atEntry)) r = open(data, { ...base, auto: true });
-  else r = placeOrder(data, { ...base, limit: sig.entry, valid: 'sig', sig, atOpen: true, quiet: true });
+  else r = placeOrder(data, { ...base, limit: mxE, valid: 'sig', sig, atOpen: true, quiet: true });
   if (!r.ok) return r;
   const w2 = get();
   w2.copied = [sig.id, ...(Array.isArray(w2.copied) ? w2.copied : [])].slice(0, 400);
@@ -523,8 +525,9 @@ export function autoAmount(data, sig, s = null) {
   const sm = s || summary(data);
   /* 1.13.1: the same D.stakeFor as the card (profile leverage, equity, the price the copy starts at) */
   const q = priceOf(sig.symbol, data);
-  const now = M.isOpen(sig.symbol) && q && marketable(sig.action, sig.entry, q.p);
-  const px = now ? q.p + dirOf(sig.action) * M.spread(sig.symbol, q.p) / 2 : sig.entry;
+  const mxE = D.maxEntry(sig);
+  const now = M.isOpen(sig.symbol) && q && marketable(sig.action, mxE, q.p);
+  const px = now ? q.p + dirOf(sig.action) * M.spread(sig.symbol, q.p) / 2 : mxE;
   return Math.floor(Math.min(D.stakeFor(sig, { equity: sm.equity, lev: autoLev(sig.symbol), px }), Math.max(0, sm.free)));
 }
 /* the leverage the robot-for-me uses = the user's leverage profile for that instrument (Konzervativně 1:1 …) */

@@ -158,16 +158,25 @@ export function robotHold(ctx, canBuy) {
   if (!ok(p)) return '';
   const pos = p.positions || [];
   const ord = (p.orders || []).filter((o) => !isLeg(o, pos));
+  /* 1.13.6: a holding whose signal is no longer a current open signal (an old intraday preview, an ended signal) or that
+     the server marks closing: true -> a muted "starší signál – robot ho zavírá" label; current holdings first */
+  const now = D.clock();
+  const sigOf = (x) => (x.signal_id ? D.findSignal(ctx.data, x.signal_id) : null);
+  const isOld = (x) => { const sig = sigOf(x); return x.closing === true || !sig || D.isDoneSig(sig, now) || sig.status !== 'open'; };
   const chip = (x) => {
-    const sig = x.signal_id ? D.findSignal(ctx.data, x.signal_id) : null;
+    const sig = sigOf(x);
+    const old = isOld(x);
     const nm = B.whatIs(x.symbol, sig?.name || '').name;
     const v = +x.pnl_pct;
-    const inner = `<span class="rb-n">${F.esc(nm)}</span><b class="num ${tone(v)}">${Number.isFinite(v) ? F.spct(v, 1) : '–'}</b>`;
-    return sig ? `<button type="button" class="rb-c" data-action="open-signal" data-id="${F.esc(sig.id)}" data-sym="${F.esc(x.symbol)}">${inner}</button>` : `<span class="rb-c" data-sym="${F.esc(x.symbol)}">${inner}</span>`;
+    const note = typeof x.note === 'string' && x.note.trim() ? x.note.trim().slice(0, 160) : '';
+    const inner = `<span class="rb-n">${F.esc(nm)}</span>${old ? `<small class="rb-old"${note ? ` title="${F.esc(note)}"` : ''}>${t('rb.old')}</small>` : ''}<b class="num ${tone(v)}">${Number.isFinite(v) ? F.spct(v, 1) : '–'}</b>`;
+    const cls = `rb-c${old ? ' is-old' : ''}`;
+    return sig && !old ? `<button type="button" class="${cls}" data-action="open-signal" data-id="${F.esc(sig.id)}" data-sym="${F.esc(x.symbol)}">${inner}</button>` : `<span class="${cls}" data-sym="${F.esc(x.symbol)}" data-old="${old ? 1 : 0}">${inner}</span>`;
   };
-  return `<section class="rb-hold" id="rb-hold" data-pos="${pos.length}" data-ord="${ord.length}" data-buy="${canBuy}">
+  const sorted = pos.filter((x) => !isOld(x)).concat(pos.filter(isOld));
+  return `<section class="rb-hold" id="rb-hold" data-pos="${pos.length}" data-ord="${ord.length}" data-buy="${canBuy}" data-old="${pos.filter(isOld).length}">
     <p class="rb-h">${icon('shield', 'icon-xs')}<b>${pos.length ? t('rb.holds', { n: pos.length }) : t('rb.holds0')}</b>${ord.length ? `<span> · ${t('rb.wait', { n: ord.length })}</span>` : ''}</p>
-    ${pos.length ? `<div class="rb-list">${pos.map(chip).join('')}</div>` : ''}
+    ${pos.length ? `<div class="rb-list">${sorted.map(chip).join('')}</div>` : ''}
     <a class="rb-buy" href="#/signaly">${t('rb.canBuy', { n: canBuy })}${icon('chev-right', 'icon-xs')}</a>
   </section>`;
 }

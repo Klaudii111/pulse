@@ -413,23 +413,33 @@ export function entryState(s, now = clock()) {
   const r = s.pnl_r ?? 0;
   const prog = s.progress ?? (s.rr ? r / s.rr : 0);
   if (r > E.LATE_R || prog > E.LATE_PROGRESS) return { code: 'late', label: t('entry.late'), note: t('entry.note.late') };
-  if (r > E.VALID_R) return { code: 'limit', label: t('entry.limit', { price: spx(s, s.entry) }), note: t('entry.note.limit') };
+  if (r > E.VALID_R) return { code: 'limit', label: t('entry.limit', { price: spx(s, maxEntry(s)) }), note: t('entry.note.limit') };
   return { code: 'ok', label: t('entry.ok'), note: s.entry_valid_until ? t('entry.note.ok', { time: F.dmTime(s.entry_valid_until) }) : t('entry.note.okNear') };
 }
 
-/* 1.13.2 ONE "nejvýš za" price (Vstup line, Jak zadat): while the entry is still fine (buy now) up to 0,3 of the
-   stop distance past the entry (CONFIG.ENTRY.VALID_R), otherwise the signal's entry itself */
-export function maxEntry(s, data = null, now = clock(), cs = null) {
-  const c = cs || cardState(s, data, now);
-  if (c.code !== 'buy') return s.entry;
-  const risk = Math.abs((s.entry || 0) - (s.stop || 0));
-  return risk > 0 ? s.entry + (s.action === 'SELL' ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk : s.entry;
+/* 1.13.6 ONE "nejvýš za" price for a signal in EVERY state (market open / closed, card, detail, sheet, toast, robot-for-me):
+   the entry moved by 0,3 of the stop distance (CONFIG.ENTRY.VALID_R) in the trade's direction. Live price at / better
+   than it -> buy now (open) or at the open (closed); past it -> a limit order AT this price. Extra args are ignored
+   (old callers passed data / now / cardState – the value never depends on them any more). */
+export function maxEntry(s) {
+  if (!s || !(s.entry > 0)) return s ? s.entry : null;
+  const risk = Math.abs(s.entry - (s.stop || 0));
+  if (!(risk > 0) || !(s.stop > 0)) return s.entry;
+  const v = s.entry + (s.action === 'SELL' ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk;
+  const k = v >= 10 ? 100 : 10000;
+  return Math.round(v * k) / k;
+}
+/* the live price is past the max entry (a buy above it, a sell below it) */
+export function pastMaxEntry(s, px) {
+  const mx = maxEntry(s);
+  if (!(px > 0) || !(mx > 0)) return false;
+  return s.action === 'SELL' ? px < mx : px > mx;
 }
 /* Order text for "Jak zadat" */
 export function orderLines(s, data = null, now = clock()) {
   const until = s.entry_valid_until || `${s.exit_date}T22:00:00`;
   return [
-    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, maxEntry(s, data, now)), time: F.dmTime(until) }),
+    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, maxEntry(s)), time: F.dmTime(until) }),
     t('order.stop', { price: spx(s, s.stop) }),
     t('order.target', { price: spx(s, s.target) }),
   ];
@@ -592,20 +602,22 @@ export function cardState(s, data = null, now = clock()) {
     return { ...base, code: 'late', tone: 'flat', badge: t('u.chip.late'), text: t('u.do.late'), cta: null, est };
   }
   const mv = base.move ?? 0;
-  /* 1.13.0: the live price came back to the entry (or better) -> it is a "buy now" again, not a wait for the price */
+  /* 1.13.6 ONE rule (= the sheet, the detail, the robot-for-me): the live price at / better than maxEntry -> buy
+     (now or at the open), past it -> wait with a limit AT maxEntry. Without a live price the server's pnl_r decides. */
   const lq = Live.quote(s.symbol)?.p;
-  const atEntry = lq > 0 && s.entry > 0 && (sell ? lq >= s.entry : lq <= s.entry);
-  if (est.code === 'limit' && !atEntry) {
-    return { ...base, code: 'wait', tone: 'gold', est, badge: t('u.chip.wait'), text: t(sell ? 'u.do.waitSell' : 'u.do.wait', { d: F.pct(Math.abs(mv), 1), v: e }), cta: 'limit' };
+  const mx = spx(s, maxEntry(s));
+  const past = lq > 0 ? pastMaxEntry(s, lq) : est.code === 'limit';
+  if (past) {
+    return { ...base, code: 'wait', tone: 'gold', est, badge: t('u.chip.wait'), text: t(sell ? 'u.do.waitSell' : 'u.do.wait', { d: F.pct(Math.abs(mv), 1), v: mx }), cta: 'limit' };
   }
   if (!Live.marketOpen(now)) {
     const o = nextUsOpen(now);
     const days = o ? F.daysUntil(o, now) : 1;
     const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
     return { ...base, code: 'soon', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'),
-      text: t(sell ? 'u.do.soonSell' : 'u.do.soon', { day, time: o ? F.time(o) : '15:30', v: e }), cta: 'limit' };
+      text: t(sell ? 'u.do.soonSell' : 'u.do.soon', { day, time: o ? F.time(o) : '15:30', v: mx }), cta: 'limit' };
   }
-  return { ...base, code: 'buy', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'), text: t(sell ? 'u.do.nowSell' : 'u.do.now', { d: F.spct(mv, 1), v: e }), cta: 'invest' };
+  return { ...base, code: 'buy', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'), text: t(sell ? 'u.do.nowSell' : 'u.do.now', { d: F.spct(mv, 1), v: mx }), cta: 'invest' };
 }
 
 /* 1.12.0 "Vstup: …" – one plain line WHEN and AT WHAT PRICE to enter, built from the same cardState (so the line,
@@ -615,17 +627,17 @@ export function entryLine(s, data = null, now = clock(), cs = null, short = fals
   const c = cs || cardState(s, data, now);
   const sell = s.action === 'SELL';
   const e = spx(s, s.entry);
+  const mxe = spx(s, maxEntry(s));
   if (c.code === 'buy') {
-    const lim = maxEntry(s, data, now, c);
-    return { code: 'now', text: t(sell ? k('nowSell') : k('now'), { c: F.time(new Date(nyCloseAfter(+now))), v: spx(s, lim) }) };
+    return { code: 'now', text: t(sell ? k('nowSell') : k('now'), { c: F.time(new Date(nyCloseAfter(+now))), v: mxe }) };
   }
   if (c.code === 'soon') {
     const o = nextUsOpen(now);
     const days = o ? F.daysUntil(o, now) : 1;
     const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
-    return { code: 'soon', text: t(sell ? k('soonSell') : k('soon'), { day, time: o ? F.time(o) : '15:30', v: e }) };
+    return { code: 'soon', text: t(sell ? k('soonSell') : k('soon'), { day, time: o ? F.time(o) : '15:30', v: mxe }) };
   }
-  if (c.code === 'wait') return { code: 'wait', text: t(sell ? k('waitSell') : k('wait'), { v: e, d: s.exit_date ? F.dm(s.exit_date) : '–' }) };
+  if (c.code === 'wait') return { code: 'wait', text: t(sell ? k('waitSell') : k('wait'), { v: mxe, d: s.exit_date ? F.dm(s.exit_date) : '–' }) };
   if (c.code === 'late') return { code: 'late', text: t(k('late')) };
   if (c.code === 'order' && c.ord) return { code: 'order', text: t(sell ? k('orderSell') : k('order'), { v: spx(s, c.ord.limit) }) };
   return null;
@@ -689,7 +701,8 @@ export function investBase(s, data, now = clock()) {
   const cs = cardState(s, data, now);
   const q = data ? priceOf(s.symbol, data) : null;
   const lim = cs.cta === 'limit' || !M.isOpen(s.symbol);
-  if (lim || !q || !(q.p > 0)) return { px: s.entry, lim: true, mode: cs.cta === 'invest' ? 'now' : 'limit' };
+  /* 1.13.6: a limit / at-open order starts at maxEntry (= the sheet's limit price) */
+  if (lim || !q || !(q.p > 0)) return { px: maxEntry(s), lim: true, mode: cs.cta === 'invest' ? 'now' : 'limit' };
   /* 1.13.1: "buy now" starts at the ask (a sell at the bid) - the same price the sheet's button and the position use */
   return { px: q.p + (s.action === 'SELL' ? -1 : 1) * M.spread(s.symbol, q.p) / 2, lim: false, mode: 'now' };
 }

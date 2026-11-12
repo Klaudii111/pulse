@@ -19,7 +19,8 @@ export const MORE_ITEMS = [
   { group: 'more.g.main', items: [
     { id: 'penezenka', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(W.equityNow(), w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
     { id: 'historie', icon: 'history', sub: () => { const w = store.get('wallet', null); const n = w?.closed?.length || 0; return n ? t('more.historie.s', { n }) : t('more.historie.s0'); } },
-    { id: 'robot', icon: 'shield', sub: () => t('more.robot.s2') },
+    /* 1.13.6: "Robot obchoduje za mě" merged in here (the switch itself lives on Dnes and the Robot page) */
+    { id: 'robot', icon: 'shield', sub: () => `${t('more.robot.s2')} · ${t('pt.auto')}: ${t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off').toLowerCase()}` },
     { id: 'jak', icon: 'help', sub: () => t('more.jak.s2') },
     { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
   ] },
@@ -30,7 +31,6 @@ export const MORE_ITEMS = [
     { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
   ] },
   { group: 'more.g.other', items: [
-    { id: 'auto', action: true, icon: 'robot', sub: () => t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off') },
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
     { id: 'duvera', icon: 'check', sub: () => t('more.duvera.s') },
     { id: 'kalendar', icon: 'calendar', sub: () => t('more.kalendar.s') },
@@ -104,8 +104,7 @@ export function renderSettings(ctx) {
   return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('set.title')}</h1></div></header>
   ${myProfile()}
   <div class="info-layout"><div>
-    ${Live.usesProxy() ? `<h2 class="section-title">${t('live.key.t')}</h2>
-    <div class="card"><div class="card-row"><div><p class="card-t">${t('live.key.t')}</p><p class="card-s up">${t('live.proxy.on')}</p></div></div></div>` : ''}
+    ${'' /* 1.13.6: the info-only "Živé ceny" card removed (nothing to set there) */}
     <h2 class="section-title">${t('set.lang')}</h2>
     <div class="card">${seg({ name: 'lang', small: true, label: t('set.lang'), items: LOCALES.map((l) => ({ id: l.id, label: l.label })), active: lang() })}</div>
     <h2 class="section-title">${t('set.notif')}</h2>

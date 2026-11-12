@@ -3299,3 +3299,37 @@ body::after {
 @media (min-width: 1100px) {
   .toast-root { justify-items: end; padding-right: 28px; }
 }
+
+/* ---------- 1.13.6 ---------- */
+/* Nový obchod: profile switch + ONE money line on top, the rest folds into "Podrobnosti ▾"; the confirm button is a
+   sticky opaque bar on the sheet's bottom edge (the same .sheet-cta as the detail) */
+.tk-out .tk-pf { margin: 0 0 2px; display: grid; gap: 6px; }
+.tk-out .tk-pf .pf-sw-l { font-size: 12px; }
+.tk-out .tk-pf .pf-sw-g { background: var(--raise-3); max-width: none; }
+.tk-out p.tk-ml { display: block; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.tk-out p.tk-ml b { font-size: 15px; }
+.tk-det { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 6px; }
+.tk-det > summary { display: flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; list-style: none; font-size: 13.5px; font-weight: 560; color: var(--ink-2); }
+.tk-det > summary::-webkit-details-marker { display: none; }
+.tk-det[open] > summary .icon { transform: rotate(180deg); }
+.tk-det > .mb { margin-top: 4px; }
+.tk-out .tk-det p.tk-fee { display: flex; margin-top: 10px; }
+.tk-cta { margin-top: 10px; }
+.tk-cta .tk-block { margin: 0; }
+.tk-cta .tk-go { margin-top: 0; }
+#tk > .risk-line { margin-top: 12px; }
+/* Robot: holdings whose signal is no longer current – muted, full row, with the plain label */
+.rb-c.is-old { grid-column: 1 / -1; background: transparent; border-style: dashed; color: var(--ink-3); }
+.rb-c.is-old .rb-n { flex: 0 1 auto; }
+.rb-c.is-old .rb-old { flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-c.is-old b { opacity: .75; }
+.rb-none { display: flex; align-items: flex-start; gap: 6px; }
+.rb-none .icon { flex: none; margin-top: 2px; }
+/* phone toast = a solid strip docked on the tab bar; the page reserves its height (never over card text) */
+@media (max-width: 1099px) {
+  .toast-root.is-dock { bottom: calc(var(--tabbar-h) + var(--sab)); padding: 0; }
+  .toast-root.is-dock .toast { width: 100%; max-width: none; border-radius: 14px 14px 0 0; border-width: 1px 0 0; background: var(--raise-4);
+    box-shadow: 0 -10px 28px rgba(0,0,0,.35); padding: 12px calc(16px + var(--sar)) 12px calc(16px + var(--sal)); }
+  html.has-toast .view { padding-bottom: calc(var(--tabbar-h) + var(--sab) + 28px + var(--toast-pad, 0px)); }
+  html.has-toast .trade-btns { bottom: calc(var(--tabbar-h) + var(--sab) + 8px + var(--toast-pad, 0px)); }
+}

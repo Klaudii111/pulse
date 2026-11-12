@@ -100,7 +100,11 @@ function withLive(d) {
   const end = Math.floor(last.t / d.ms) * d.ms + d.ms; // a partial last bar may carry an unaligned time
   if (q.t < end) { last.c = q.p; last.h = Math.max(last.h, q.p); last.l = Math.min(last.l, q.p); return bars; }
   if (d.ms >= 86400000 && new Date(q.t).toDateString() === new Date(last.t).toDateString()) { last.c = q.p; last.h = Math.max(last.h, q.p); last.l = Math.min(last.l, q.p); return bars; }
-  bars.push({ t: Math.max(end, Math.floor(q.t / d.ms) * d.ms), o: last.c, h: Math.max(last.c, q.p), l: Math.min(last.c, q.p), c: q.p, v: 0, live: true });
+  /* 1.13.6: never one candle spanning a gap (night, weekend, a stale server) – after a gap the live candle starts at
+     the live price itself, not at the last close hours ago */
+  const gap = q.t >= end + 2 * d.ms;
+  const o = gap ? q.p : last.c;
+  bars.push({ t: Math.max(end, Math.floor(q.t / d.ms) * d.ms), o, h: Math.max(o, q.p), l: Math.min(o, q.p), c: q.p, v: 0, live: true });
   return bars;
 }
 
@@ -110,7 +114,8 @@ const tLabel = (ms, d) => (d.ms >= 86400000 ? F.dm(new Date(ms)) : d.range === '
 export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.price(v) } = {}) {
   if (!box) return;
   const w = box.clientWidth || 340, h = box.clientHeight || 220;
-  const all = withLive(d);
+  /* 1.13.6: a flat zero-volume bar (a filler for a closed hour) is no candle – dropped (the newest bar stays) */
+  const all = withLive(d).filter((b, i, a) => i === a.length - 1 || b.live || !(b.v === 0 && b.o === b.h && b.h === b.l && b.l === b.c && d.bars.length > 2 && !d.saved));
   /* 1.11.2: small charts (Sledované grafy) get fewer, wider candles */
   const ks = all.slice(-(type === 'candle' ? (w < 280 ? Math.max(16, Math.floor((w - 70) / 6)) : Math.max(30, Math.min(120, Math.floor(w / 4)))) : 400));
   const lv = levels.filter((x) => x.v > 0);
@@ -118,8 +123,11 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   const span = (hi - lo) || hi * 0.001 || 1; lo -= span * 0.06; hi += span * 0.06;
   const pad = { l: 4, r: 70, t: 10, b: 20 };
   const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
-  const cw = (w - pad.l - pad.r) / ks.length;
-  const X = (i) => pad.l + i * cw + cw / 2;
+  /* 1.13.6: a few bars (the first minutes of a session) are NOT stretched into a few giant candles – a candle chart
+     keeps at least 40 slots (16 on a small chart) and the bars sit at the right edge */
+  const slots = type === 'candle' ? Math.max(ks.length, w < 280 ? 16 : 40) : ks.length;
+  const cw = (w - pad.l - pad.r) / slots;
+  const X = (i) => pad.l + (slots - ks.length + i) * cw + cw / 2;
   const last = ks[ks.length - 1], first = ks[0];
   const up = last.c >= first.o;
   let body;
@@ -133,7 +141,21 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
       return `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(k.h).toFixed(1)}" y2="${Y(k.l).toFixed(1)}" class="ck-w ${u ? 'up' : 'down'}"/><rect x="${(x - cw * 0.36).toFixed(1)}" y="${y1.toFixed(1)}" width="${Math.max(1.2, cw * 0.72).toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" rx="0.6" class="ck-b ${u ? 'up' : 'down'}"/>`;
     }).join('');
   }
-  const lab = lv.map((x) => `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(x.v).toFixed(1)}" y2="${Y(x.v).toFixed(1)}" class="br-lv ${x.cls || ''}"/><text x="${w - pad.r + 8}" y="${(Y(x.v) + 4).toFixed(1)}" class="ck-ax br-lvt ${x.cls || ''}">${F.esc(x.label)}</text>`).join('');
+  /* 1.13.6 label collision: the live price pill stays on its line; the level labels (Vstup / Cíl / Stop) move off it and
+     off each other (min 13 px, inside the plot); the hi / lo axis labels are left out where they would touch any label */
+  const nowY = Y(last.c);
+  const top = pad.t + 6, bot = h - pad.b - 6, GAP = 13, PILL = 16;
+  const ll = lv.map((x) => ({ x, y0: Y(x.v), y: Y(x.v) })).sort((a, b) => a.y0 - b.y0);
+  for (let pass = 0; pass < 4; pass++) {
+    ll.forEach((l) => { if (Math.abs(l.y - nowY) < PILL) l.y = l.y0 <= nowY ? nowY - PILL : nowY + PILL; });
+    ll.forEach((l, i) => { if (i && l.y < ll[i - 1].y + GAP) l.y = ll[i - 1].y + GAP; });
+    for (let i = ll.length - 1; i >= 0; i--) { const lim = i === ll.length - 1 ? bot : ll[i + 1].y - GAP; if (ll[i].y > lim) ll[i].y = lim; }
+    ll.forEach((l) => { if (l.y < top) l.y = top; });
+  }
+  const lab = ll.map(({ x, y }) => `<line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(x.v).toFixed(1)}" y2="${Y(x.v).toFixed(1)}" class="br-lv ${x.cls || ''}"/><text x="${w - pad.r + 8}" y="${(y + 4).toFixed(1)}" class="ck-ax br-lvt ${x.cls || ''}" data-lvl="1">${F.esc(x.label)}</text>`).join('');
+  const taken = ll.map((l) => l.y).concat(nowY);
+  const free = (yc) => taken.every((y) => Math.abs(y - yc) >= GAP + 1);
+  const hiY = pad.t + 4, loY = h - pad.b - 6;
   const grid = [0.25, 0.5, 0.75].map((f) => `<line x1="${pad.l}" x2="${w - pad.r}" y1="${(pad.t + f * (h - pad.t - pad.b)).toFixed(1)}" y2="${(pad.t + f * (h - pad.t - pad.b)).toFixed(1)}" class="br-grid"/>`).join('');
   box.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${F.esc(t('bars.aria', { k: d.key }))}">
     ${grid}${lab}${body}
@@ -141,8 +163,8 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
     <rect x="${w - pad.r + 4}" y="${(Y(last.c) - 9).toFixed(1)}" width="${pad.r - 6}" height="18" rx="5" class="br-now ${up ? 'up' : 'down'}"/>
     <text x="${w - pad.r + 9}" y="${(Y(last.c) + 4).toFixed(1)}" class="ck-lab br-nowt">${F.esc(fmt(last.c))}</text>
     <circle cx="${X(ks.length - 1).toFixed(1)}" cy="${Y(last.c).toFixed(1)}" r="3.2" class="br-dot ${up ? 'up' : 'down'}"/><circle cx="${X(ks.length - 1).toFixed(1)}" cy="${Y(last.c).toFixed(1)}" r="3.2" class="br-pulse ${up ? 'up' : 'down'}"/>
-    <text x="${w - pad.r + 8}" y="${(pad.t + 8).toFixed(1)}" class="ck-ax">${F.esc(fmt(hi))}</text>
-    <text x="${w - pad.r + 8}" y="${(h - pad.b - 2).toFixed(1)}" class="ck-ax">${F.esc(fmt(lo))}</text>
+    ${free(hiY) ? `<text x="${w - pad.r + 8}" y="${(pad.t + 8).toFixed(1)}" class="ck-ax" data-axl="hi">${F.esc(fmt(hi))}</text>` : ''}
+    ${free(loY) ? `<text x="${w - pad.r + 8}" y="${(h - pad.b - 2).toFixed(1)}" class="ck-ax" data-axl="lo">${F.esc(fmt(lo))}</text>` : ''}
     <text x="${pad.l}" y="${h - 5}" class="ck-ax">${F.esc(tLabel(first.t, d))}</text><text x="${w - pad.r}" y="${h - 5}" class="ck-ax" text-anchor="end">${F.esc(tLabel(last.t, d))}</text>
   </svg>`;
 }

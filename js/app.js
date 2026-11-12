@@ -319,7 +319,7 @@ function autoCopy() {
     const r = W.autoOpen(data, s, td.code === 'now' ? 'now' : 'lim', store.get('autoCopy', null)?.at || 0);
     if (!r.ok) return;
     any = true;
-    toast(t(r.pos ? (r.reopen ? 'auto.boughtReopen' : 'auto.bought') : 'auto.waiting', { sym: s.symbol, v: F.price(r.pos ? r.pos.entry : s.entry), a: F.money(r.amount, W.get().ccy, 0) }), { timeout: 7000 });
+    toast(t(r.pos ? (r.reopen ? 'auto.boughtReopen' : 'auto.bought') : 'auto.waiting', { sym: s.symbol, v: F.price(r.pos ? r.pos.entry : D.maxEntry(s)), a: F.money(r.amount, W.get().ccy, 0) }), { timeout: 7000 });
   });
   return any;
 }

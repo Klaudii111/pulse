@@ -162,6 +162,9 @@ export function render(ctx) {
   const range = store.get('range', 'ALL');
   let hz = store.get('resHz', 'ALL');
   if (hz !== 'ALL' && !VISIBLE_HZ().includes(hz)) { hz = 'ALL'; store.set('resHz', 'ALL'); }
+  /* 1.13.6 Robot page: ONE period selector (1M · 3M · Vše under the chart) – no second row of strategy tabs; the
+     per-strategy split stays in "Podle strategie" below */
+  if (ctx.inRobot) hz = 'ALL';
   const showR = D.showR(ctx.data);
   const nClosed = hist.filter((x) => VISIBLE_HZ().includes(x.horizon)).length;
   /* 1.9.1: one count everywhere: running = open and not ended; the robot = positions on its own account */
@@ -174,9 +177,13 @@ export function render(ctx) {
   /* 1.13.2: no empty "0 uzavřených" card on top – before the first closed signal it goes under the chart;
      "Robot se učí" only once on the Robot page (its top line) */
   const hsN = D.headStats(ctx.data, now).n;
-  return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>
+  /* 1.13.6: before the first closed trade the Robot page shows its holdings first and the "none closed yet" as one small
+     line under them (no big empty headline on top) */
+  const small0 = !nClosed && ctx.inRobot;
+  return head + `${small0 ? '' : `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>`}
   ${hsN ? B.statsBig(ctx.data, now) : ''}
   ${robotHold(ctx, buyable(ctx.data, now).length) || `<p class="res-counts num">${counts}</p>`}
+  ${small0 ? `<p class="res-empty-s rb-none">${icon('clock', 'icon-xs')}<span>${t('rb.none')}</span></p>` : ''}
   ${paperLink(ctx)}
   ${ctx.inRobot ? '' : linkLine(ctx.data, now, 'hs-row le-res')}
   <div class="results-layout">
@@ -194,8 +201,8 @@ export function render(ctx) {
         <tbody>${series.filter((_, i) => i % 5 === 0).map((p) => { const v = heroVals(series, p); return `<tr><td>${F.dm(p.date)}</td><td>${F.spct(v.bot)}</td><td>${F.spct(v.spy)}</td></tr>`; }).join('')}</tbody></table>
     </section>
     <div class="results-side">
-      ${seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('u.tab.ALL') }, ...VISIBLE_HZ().map((x) => ({ id: x, label: t(`u.tab.${x}`) }))], active: hz })}
-      <div id="stats">${tiles(perf, hz, hist, showR, nClosed > 0)}</div>
+      ${ctx.inRobot ? '' : seg({ name: 'resHz', small: true, label: t('res.hzStats'), items: [{ id: 'ALL', label: t('u.tab.ALL') }, ...VISIBLE_HZ().map((x) => ({ id: x, label: t(`u.tab.${x}`) }))], active: hz })}
+      <div id="stats">${small0 ? '' : tiles(perf, hz, hist, showR, nClosed > 0)}</div>
       <p class="honest">${icon('info', 'icon-xs')} ${t('res.honest')}</p>
     </div>
   </div>
@@ -229,7 +236,8 @@ export function unmount() { chart && chart.destroy(); chart = null; }
 
 function refreshLower(ctx) {
   const root = document.getElementById('view');
-  const hz = store.get('resHz', 'ALL');
+  /* the Robot page has no strategy tabs (1.13.6) -> always all strategies there */
+  const hz = /^#\/?robot/.test(location.hash) ? 'ALL' : store.get('resHz', 'ALL');
   root.querySelector('#stats').innerHTML = tiles(ctx.data.performance, hz, ctx.data.history.signals, D.showR(ctx.data), ctx.data.history.signals.some((x) => VISIBLE_HZ().includes(x.horizon)));
   root.querySelector('#res-lower').innerHTML = lower(ctx.data.performance, ctx.data.history.signals, hz, D.showR(ctx.data));
 }

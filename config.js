@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.13.5',
+  APP_VERSION: '1.13.6',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */

@@ -235,11 +235,22 @@ function liftOver(root, el, scope) {
   root.style.bottom = `${Math.round(window.innerHeight - top + 8)}px`;
 }
 
+/* 1.13.6: on a phone (no sheet open) the toast is a solid strip docked right on top of the tab bar, and the page
+   reserves its height at the bottom while it is visible – it never floats over card text */
+function unreserve() { const h = document.documentElement; h.classList.remove('has-toast'); h.style.removeProperty('--toast-pad'); }
+function reserve(el) {
+  const h = Math.ceil(el.getBoundingClientRect().height);
+  if (!h) return;
+  const de = document.documentElement;
+  const atEnd = window.innerHeight + window.scrollY >= de.scrollHeight - 48;
+  de.style.setProperty('--toast-pad', `${h}px`); de.classList.add('has-toast');
+  if (atEnd) requestAnimationFrame(() => window.scrollBy({ top: h, behavior: 'smooth' }));
+}
 export function toast(msg, { action = null, timeout = 3000 } = {}) {
   const root = document.getElementById('toast-root');
   root.querySelectorAll('.toast').forEach((n) => n.remove());
   timeout = action ? 5000 : 3000;
-  root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top');
+  root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top', 'is-dock'); unreserve();
   const sh = [...document.querySelectorAll('.sheet.is-open:not(.is-closing)')].pop();
   if (sh) {
     /* the sheet covers the tab bar: the toast goes on top of it, at its bottom edge */
@@ -254,10 +265,13 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   el.setAttribute('role', 'status');
   el.innerHTML = `<span>${msg}</span>${action ? `<button class="btn btn-primary" type="button">${F.esc(action.label)}</button>` : ''}`;
   if (action) el.querySelector('button').addEventListener('click', () => { action.fn(); hide(); });
+  const dock = !sh && window.innerWidth < 1100;
+  root.classList.toggle('is-dock', dock);
   root.append(el);
-  liftOver(root, el, sh || document.getElementById('view') || document.body);
+  if (dock) reserve(el);
+  else liftOver(root, el, sh || document.getElementById('view') || document.body);
   let timer = setTimeout(hide, timeout);
-  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); } }, 260); }
+  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top', 'is-dock'); unreserve(); } }, 260); }
   return hide;
 }
 
@@ -268,7 +282,7 @@ export function clearToasts(minAge = 350) {
   if (!root) return;
   const now = Date.now();
   root.querySelectorAll('.toast').forEach((n) => { if (now - (+n.dataset.at || 0) >= minAge) n.remove(); });
-  if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top'); }
+  if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top', 'is-dock'); unreserve(); }
 }
 
 /* ---------- Skeletons ---------- */

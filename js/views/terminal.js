@@ -309,7 +309,7 @@ function refreshWatch(el, ctx) {
 }
 
 export function render(ctx) {
-  const head = `<header class="page-head"><div><h1 class="page-title">${t('term.title')}</h1><p class="page-sub">${t('term.sub')} <span class="demo-chip is-big">${t('term.demo')}</span></p></div></header>`;
+  const head = `<header class="page-head"><div><h1 class="page-title">${t('term.title')}</h1><p class="page-sub">${t('term.sub')}</p></div></header>`;
   if (!ctx.data?.signals) return head;
   const { sym, sig } = currentSym(ctx);
   const sm = W.summary(ctx.data);
@@ -326,7 +326,7 @@ export function render(ctx) {
         <div class="term-pxbox" id="t-px">${pb.html}</div>
       </div>
       <div class="term-btnrow"><button type="button" class="btn btn-secondary btn-small term-change" data-action="t-pick">${icon('search', 'icon-sm')}${t('term.change')}</button>${watchStar(sym)}</div>
-      ${sig ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t('term.fromSig', { side: F.SIDE[sig.action], e: F.price(sig.entry), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
+      ${sig ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t(sig.action === 'SELL' ? 'term.fromSigSell' : 'term.fromSig', { side: F.SIDE[sig.action], e: F.price(D.maxEntry(sig)), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
       <div class="t-bars" id="t-bars" ${cmode === 'bars' ? '' : 'hidden'}>${Bars.controls('tb')}</div>
       <div class="pchart-box term-chart" id="t-chart" ${cmode === 'live' ? '' : 'hidden'}></div>
       <div class="pchart-box term-chart cndl-box" id="t-c1" ${cmode === 'c1' ? '' : 'hidden'}></div>
@@ -462,8 +462,8 @@ function drawCandles(box, sym) {
     <line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(last.c).toFixed(1)}" y2="${Y(last.c).toFixed(1)}" class="ck-last"/>
     ${bars}
     <text x="${w - pad.r + 8}" y="${(Y(last.c) + 4).toFixed(1)}" class="ck-lab">${F.esc(pxOf(sym, last.c))}</text>
-    <text x="${w - pad.r + 8}" y="${(Y(hi) + 4).toFixed(1)}" class="ck-ax">${F.esc(pxOf(sym, hi))}</text>
-    <text x="${w - pad.r + 8}" y="${(Y(lo) + 4).toFixed(1)}" class="ck-ax">${F.esc(pxOf(sym, lo))}</text>
+    ${Math.abs(Y(hi) - Y(last.c)) >= 14 ? `<text x="${w - pad.r + 8}" y="${(Y(hi) + 4).toFixed(1)}" class="ck-ax">${F.esc(pxOf(sym, hi))}</text>` : ''}
+    ${Math.abs(Y(lo) - Y(last.c)) >= 14 ? `<text x="${w - pad.r + 8}" y="${(Y(lo) + 4).toFixed(1)}" class="ck-ax">${F.esc(pxOf(sym, lo))}</text>` : ''}
     <text x="${pad.l}" y="${h - 4}" class="ck-ax">${F.esc(F.time(t0))}</text><text x="${w - pad.r}" y="${h - 4}" class="ck-ax" text-anchor="end">${F.esc(F.time(t1))}</text>
   </svg>`;
 }
@@ -493,12 +493,15 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const dec = M.get(sym) ? M.decimals(sym, q.p) : (q.p < 10 ? 4 : 2);
   const round = (v) => +(+v).toFixed(dec);
   /* the robot's signals are LIMIT entries: price already past the entry (above it for a buy) -> wait for the entry price */
-  const sigLim = useSig && sig.entry > 0 && dir * (q.p - sig.entry) > 0;
+  /* 1.13.6 ONE rule with the card and the detail (D.maxEntry): price at / better than the max entry -> buy now (market
+     open) or at the open (closed); only a price past it -> a limit order AT the max entry */
+  const sigMx = useSig ? D.maxEntry(sig) : null;
+  const sigLim = useSig && sigMx > 0 && dir * (q.p - sigMx) > 0;
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
   /* 1.13.1: closed market without a signal -> the default is "Koupit při otevření" (a market order at the next open);
      a limit price only under Pokročilé */
   const st = { side, amount: 0, auto: true, prof: D.profId(), lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
-    type: useSig ? ((opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt') : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false };
+    type: useSig ? (sigLim || !open ? 'lim' : 'mkt') : 'mkt', limit: useSig ? sigMx : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false, detOpen: false };
   /* 1.13.0 BLOCKER fix: the live price is already at / better than the signal's entry -> the default is a plain
      "Koupit hned za X" (market open) or "koupí se při otevření, nejvýš za X" (closed). Never an error on the default path. */
   if (st.type === 'lim' && useSig && st.limit > 0 && W.marketable(side, st.limit, q.p) && open) st.type = 'mkt';
@@ -551,13 +554,19 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   };
   const preview = () => {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
-    /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
+    /* 1.13.6: on top ONE money line + the profile switch (this sheet only); the profile table, "Příklady pák", the notes and
+       the fee fold into "Podrobnosti ▾" (B.moneyBlock = the same numbers as the card and the detail) */
+    const mm = { s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp };
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
-      ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
+      ${B.tkProfSwitch(sym, st.prof, st.lev)}
+      ${B.tkMoneyLine({ ...mm, lev: st.lev })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
-      <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
+      <details class="tk-det"${st.detOpen ? ' open' : ''}><summary data-tkdet>${t('tk.details')}${icon('chev-down', 'icon-xs')}</summary>
+      ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
+      ${B.levExamples({ ...mm, sel: st.lev, exOpen: st.exOpen })}
+      <p class="tk-fee"><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
       ${isLim() || mktOpen() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
+      </details>
     </div>${limLine()}${openLine()}`;
   };
   const body = () => `
@@ -584,9 +593,10 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     ${costLine()}
     <details class="gloss tk-gloss"><summary>${t('term.whatLimit')}</summary><ul>${['LIMIT', 'PLATNOST', 'PAKA', 'PAKAMT', 'MARZE', 'STOPOUT', 'SPREAD', 'SWAP'].map((k) => `<li>${F.esc(gloss(k))}</li>`).join('')}</ul></details>
     </details>
+    <p class="risk-line">${t('risk.line')}</p>
+    <div class="sheet-cta tk-cta">
     <p class="tk-block" id="tk-block" ${blocked() ? '' : 'hidden'}>${icon('clock', 'icon-xs')}<span>${t('term.closedWhy', { h: F.esc(M.hours(sym)) })}</span></p>
-    <button type="button" class="btn btn-primary btn-block tk-go" data-go ${blocked() ? 'disabled' : ''}>${goText()}</button>
-    <p class="risk-line">${t('risk.line')}</p>`;
+    <button type="button" class="btn btn-primary btn-block tk-go" data-go ${blocked() ? 'disabled' : ''}>${goText()}</button></div>`;
   openSheet({
     small: true, label: t('term.ticket'),
     html: `<div class="sheet-head"><div><p class="sheet-title">${t('term.ticket')}</p><p class="sheet-sub">${t('term.demo')}</p></div>
@@ -630,6 +640,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */
         if (ev.target.closest('[data-action="lev-own-open"]')) st.ownOpen = !st.ownOpen;
         const lx = ev.target.closest('[data-lx]'); if (lx) st.exOpen = !lx.parentElement.open;
+        const dt = ev.target.closest('[data-tkdet]'); if (dt) st.detOpen = !dt.parentElement.open;
         const goB = ev.target.closest('[data-go]');
         if (!goB || goB.disabled) return;
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
