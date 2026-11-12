@@ -538,7 +538,7 @@ export function tkMoneyLine(m) {
   const n = D.moneyAt({ side: m.side, base: m.base, amount: m.amount, lev: m.lev, sl: m.sl, tp: m.tp, horizon: m.s?.horizon || null, prof: m.prof || null });
   const x = styleTxt(n, m.ccy, { deposit: m.deposit ?? null });
   const nw = (v) => `<span class="nw">${v}</span>`;
-  return `<p class="cc-ml tk-ml sty-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-win="${Math.round(n.win)}" data-loss="${Math.round(n.loss)}" data-lv="${x.lv ? x.lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> <span class="sty-ml-l">${m.lev > 1 ? `1:${m.lev}` : t('mb.noLev')}</span> → <span class="up">${t('sty.cWin', { v: nw(x.win) })}</span> · <span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${n.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
+  return `<p class="cc-ml tk-ml sty-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-win="${Math.round(n.win)}" data-loss="${Math.round(n.loss)}" data-lv="${x.lv ? x.lv.v : ''}"><span class="sty-ml-a"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> <span class="sty-ml-l">${m.lev > 1 ? `1:${m.lev}` : t('mb.noLev')}</span> →</span><span class="up">${t('sty.cWin', { v: nw(x.win) })}</span><span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${n.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
 }
 /* 1.13.9 one short honest line where 1:20 can be chosen: a real EU broker gives 1:20 on shares only to professional clients */
 export const euNote = (sym = null) => `<p class="why-s pf-eu">${t('pf.wipe20', { v: F.num(D.wipePct(D.AGGR_LEV), 0) })}${!sym || ['stock', 'crypto'].includes(M.levKind(sym)) ? ` ${t(sym && M.levKind(sym) === 'crypto' ? 'pf.euCrypto' : 'pf.eu')}` : ''}</p>`;
@@ -704,7 +704,7 @@ export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true
     const x0 = D.styleNums(s, data, { prof: c.id, base: n.base, now });
     const x = styleTxt(x0, n.ccy);
     const nw = (v) => `<span class="nw">${v}</span>`;
-    return `<p class="cc-ml sty-ml num" data-p="${c.id}" data-l="${x0.lev}" data-a="${x0.amount}" data-win="${Math.round(x0.win)}" data-loss="${Math.round(x0.loss)}" data-lv="${x.lv ? x.lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(x0.amount, n.ccy, 0)}</b> <span class="sty-ml-l">${x0.lev > 1 ? `1:${x0.lev}` : t('mb.noLev')}</span> → <span class="up">${t('sty.cWin', { v: nw(x.win) })}</span> · <span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${x0.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
+    return `<p class="cc-ml sty-ml num" data-p="${c.id}" data-l="${x0.lev}" data-a="${x0.amount}" data-win="${Math.round(x0.win)}" data-loss="${Math.round(x0.loss)}" data-lv="${x.lv ? x.lv.v : ''}"${c.id === pid ? '' : ' hidden'}><span class="sty-ml-a"><b class="nw">${F.money(x0.amount, n.ccy, 0)}</b> <span class="sty-ml-l">${x0.lev > 1 ? `1:${x0.lev}` : t('mb.noLev')}</span> →</span><span class="up">${t('sty.cWin', { v: nw(x.win) })}</span><span class="down">${t('sty.cLoss', { v: nw(x.loss) })}${x0.wiped ? ` <small>(${t('mb.all')})</small>` : ''}</span></p>`;
   };
   /* chips: the old three profile chips are gone – ONE style row above a list (profSwitch) */
   const chips = withChips ? S.styleRow({ sigId: s.id }) : '';
