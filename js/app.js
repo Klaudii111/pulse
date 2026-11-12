@@ -245,8 +245,10 @@ function watchMoving() {
   document.addEventListener('mousedown', press, o);
   document.addEventListener('mouseup', () => { pressAt = 0; }, o);
   document.addEventListener('focusin', (ev) => { if (field(ev)) pickAt = Date.now(); }, o);
+  document.addEventListener('pointerdown', (ev) => { if (field(ev)) pickAt = Date.now(); }, o);   // opened again while it still has the focus
   document.addEventListener('focusout', (ev) => { if (field(ev)) pickAt = 0; }, o);
-  document.addEventListener('change', (ev) => { if (field(ev)) pickAt = 0; }, o);   // a value was chosen: the picker is closed
+  /* a value was chosen: the picker closes – the hold ends 0.6 s later (not at once, so a repaint never races the closing) */
+  document.addEventListener('change', (ev) => { if (field(ev)) pickAt = Date.now() - PICK_MAX_MS + 600; }, o);
   window.addEventListener('blur', () => { pressAt = 0; });
   document.addEventListener('visibilitychange', () => { pressAt = 0; });
 }
