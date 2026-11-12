@@ -51,4 +51,8 @@ export default {
   'sty.h.full': 'V testu 2023–26 obvyklý měsíc {m} na {w}, ale největší propad {dd}. Víc rizika v testu nepřineslo víc peněz – Odvážně vydělalo víc.',
   /* A8 */
   'ts.noFree': 'Na nákup teď nemáš volné peníze –', 'ts.noFreeGo': 'Dobít',
+  /* A14 */
+  'ld.all': 'Vše ({v})',
+  /* A16 */
+  'st.nearEnd': 'Pozor, blízko konce kvůli páce',
 };

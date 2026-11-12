@@ -19,6 +19,7 @@ import { gloss } from '../explain.js';
 import { icon, il, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic, groupInput } from '../ui.js';
 import { priceChart } from '../charts.js';
 import * as Bars from '../bars.js';
+import * as P from '../portfolio.js';
 import { mountTV, tvSymbol } from './detail.js';
 
 let chartRef = null, liveOff = null, tvOn = false, autoTicketFor = null, stampTimer = null;
@@ -73,7 +74,7 @@ export function walletCard(ctx) {
   const sm = W.summary(ctx.data);
   return `<a class="wal-card" href="#/terminal">
     <span class="wal-k">${icon('spark', 'icon-sm')}${t('term.myAcc')}<span class="demo-chip">${t('term.demo')}</span></span>
-    <span class="wal-v num">${money(sm.equity, sm.w.ccy)}</span>
+    <span class="wal-v num">${money(W.parts(sm).eq, sm.w.ccy, 0)}</span>
     <span class="wal-s num ${tone(sm.open)}">${t('term.openPnl', { v: smoney(sm.open, sm.w.ccy), n: sm.rows.length })}</span>
   </a>`;
 }
@@ -93,9 +94,9 @@ function accBar(sm) {
   const lvl = sm.level != null ? `<p class="acc-lvl ${sm.call ? 'is-call' : ''}">${icon(sm.call ? 'alert' : 'shield', 'icon-xs')}<span>${sm.call ? t('term.call', { v: F.num(sm.level, 0) }) : t('term.level', { v: F.num(Math.min(sm.level, 99999), 0) })}</span></p>` : '';
   return `<div class="acc-bar" id="acc-bar">
     <div><p class="acc-l">${t('term.balance')}</p><p class="acc-v num">${money(sm.balance, c)}</p></div>
-    <div><p class="acc-l">${t('term.equity')}</p><p class="acc-v num">${money(sm.equity, c)}</p></div>
-    <div><p class="acc-l">${t('term.today')}</p><p class="acc-v num ${tone(sm.today)}">${smoney(sm.today, c)}</p></div>
-    <div><p class="acc-l">${t('term.free')}${qm('MARZE')}</p><p class="acc-v num">${money(sm.free, c)}</p></div>
+    <div><p class="acc-l">${t('term.equity')}</p><p class="acc-v num">${money(W.parts(sm).eq, c, 0)}</p></div>
+    <div><p class="acc-l">${t('term.today')}</p>${sm.todayReady === false ? `<p class="acc-v dh-wait">${t('dh.todayWait')}</p>` : `<p class="acc-v num ${tone(sm.today)}">${smoney(sm.today, c)}</p>`}</div>
+    <div><p class="acc-l">${t('term.free')}${qm('MARZE')}</p><p class="acc-v num">${money(W.parts(sm).free, c, 0)}</p></div>
   </div>
   <div class="acc-act">
     <span class="acc-tot num">${t('u.acc.putIn', { a: money(sm.putIn, c), r: `<b class="${tone(sm.total)}">${smoney(sm.total, c)} (${F.mpct(sm.totalPct, sm.total)})</b>` })}</span></div>
@@ -132,7 +133,13 @@ export function posStatus(p) {
   const toS = near(p.sl), toT = near(p.tp);
   const prog = p.tp ? (p.px - p.entry) / (p.tp - p.entry) : 0;
   const progS = p.sl ? (p.px - p.entry) / (p.sl - p.entry) : 0;
-  if (p.sl && (progS >= D.NEAR_PROGRESS || toS <= D.proximityPct())) return { tone: 'down', text: `${t('st.nearStop')} · ${t('st.toStop', { v: F.pct(toS, 1) })}` };
+  /* 1.15.0 (A16): with leverage the trade can end before the stop (P.facts endPx) - then the distance is to that end,
+     in the trade page's words */
+  let f = null; try { f = p.closedAt == null ? P.facts(p, { w: W.get() }) : null; } catch { f = null; }
+  if (f && f.endPx != null && f.toEnd != null) {
+    const progE = (p.px - p.entry) / (f.endPx - p.entry);
+    if (progE >= D.NEAR_PROGRESS || f.toEnd <= D.proximityPct()) return { tone: 'down', text: `${t('st.nearEnd')} · ${t('pd.d.toEnd', { v: F.pct(f.toEnd, 1) })}` };
+  } else if (p.sl && (progS >= D.NEAR_PROGRESS || toS <= D.proximityPct())) return { tone: 'down', text: `${t('st.nearStop')} · ${t('st.toStop', { v: F.pct(toS, 1) })}` };
   if (p.tp && (prog >= D.NEAR_PROGRESS || toT <= D.proximityPct())) return { tone: 'up', near: 'target', text: t('st.nearTarget', { v: F.pct(toT, 1) }) };
   /* leverage: how far the price may still go against me before the deposit is gone */
   if (p.lev > 1 && p.margin > 0) {
@@ -891,8 +898,11 @@ export function loadSheet(ctx, mode = 'dep') {
   const body = () => `
     ${seg({ name: 'wmode', small: true, label: t('u.acc.k'), items: [{ id: 'dep', label: t('u.acc.load') }, { id: 'wd', label: t('u.acc.wd') }], active: m })}
     <p class="ld-s">${m === 'dep' ? t('ld.depS') : t('ld.wdS', { v: money(free(), c) })}</p>
-    <div class="chips tk-chips">${chips.map((v) => (fits(v) ? `<button type="button" class="chip" data-ld="${v}" aria-pressed="${v === amt}">${money(v, c)}</button>`
-    : `<button type="button" class="chip is-off" disabled aria-disabled="true" title="${F.esc(t('ld.wdS', { v: money(free(), c) }))}">${money(v, c)}</button>`)).join('')}</div>
+    <div class="chips tk-chips">${m === 'wd'
+    /* 1.15.0 (A14): Vybrat offers only what fits + "Vše" (all free money) - no disabled chips */
+    ? chips.filter((v) => v <= free()).map((v) => `<button type="button" class="chip" data-ld="${v}" aria-pressed="${v === amt}">${money(v, c)}</button>`).join('')
+      + (free() > 0 ? `<button type="button" class="chip" data-ld="${free()}" aria-pressed="${amt === free()}">${t('ld.all', { v: money(free(), c) })}</button>` : '')
+    : chips.map((v) => `<button type="button" class="chip" data-ld="${v}" aria-pressed="${v === amt}">${money(v, c)}</button>`).join('')}</div>
     <label class="tk-in"><span>${t('ld.own', { c })}</span><input class="jin num" inputmode="numeric" autocomplete="off" data-ldin value="${amt > 0 ? F.num(amt, 0) : ''}"></label>
     <button type="button" class="btn btn-primary btn-block" data-ldgo style="margin-top:14px">${t(m === 'dep' ? 'ld.go' : 'ld.goWd', { v: money(amt || 0, c) })}</button>
     <p class="jnote" style="margin-top:10px">${t('ld.note')}</p>`;
