@@ -46,3 +46,11 @@
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word;
 }
 .ts-nofree { margin: 8px 0 0; font-size: 13px; color: var(--down); text-align: center; } .ts-nofree .link { color: var(--gold); font-weight: 600; min-height: 32px; }
+
+/* A13 the signal's money line: the "·" belongs to the red part and disappears when that part starts a new line
+   (same pattern as .pf-chg / .sty-c3 in skin.css); "amount + leverage + →" never breaks inside */
+.cc-ml.sty-ml, .tk-out p.cc-ml.sty-ml { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; gap: 2px 0; margin-left: -0.9em; clip-path: inset(0 0 0 0.9em); }
+.cc-ml.sty-ml[hidden], .tk-out p.cc-ml.sty-ml[hidden] { display: none; }
+.cc-ml.sty-ml > span { position: relative; padding-left: 0.9em; }
+.cc-ml.sty-ml > .sty-ml-a { white-space: nowrap; }
+.cc-ml.sty-ml > .down::before { content: '·'; position: absolute; left: 0.3em; top: 0; color: var(--ink-3); font-weight: 400; }
