@@ -63,3 +63,13 @@
 /* in Czech crowns only (data-ccy on the row): in EUR / USD the result is 70-87 px wide and the row's own minimum
    already holds it - 110 px there would only take room from the trade's name */
 .pf-row[data-pid][data-ccy="CZK"]:not(.is-compact) .pf-v { min-width: 110px; }
+
+/* 1.15.4 smooth scrolling on phones, step 2 */
+/* while a finger moves the page nothing pulses (app.js sets html.is-moving): the pulsing dots animate a box-shadow,
+   which repaints its surroundings on every frame */
+html.is-moving .live-dot, html.is-moving .live-badge i, html.is-moving .live-stamp i, html.is-moving .pa-mode i, html.is-moving .st-line i,
+html.is-moving .regime-dot::after, html.is-moving .radar i, html.is-moving .pc-ping, html.is-moving .br-pulse, html.is-moving .aurora i,
+html.is-moving .sk::after { animation-play-state: paused; }
+/* phones: the three big cards blurred only the still page background behind them; without the blur the phone no longer
+   has to blur a moving area on every frame */
+@media (hover: none) and (pointer: coarse) { .d-hero, .wl-hero, .pf-hero { -webkit-backdrop-filter: none; backdrop-filter: none; } }

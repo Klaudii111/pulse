@@ -185,7 +185,10 @@ function renderChrome() {
    · after it the block the user was looking at stays where it was (Safari has no scroll anchoring of its own) and the
      scroll position is touched only when the repaint really moved it.
    Repaints the user asked for (a tap, a tab, a route) are never delayed. */
-const REST_MS = 200;        // the page counts as resting this long after the last scroll event / finger move
+/* 1.15.4: 2.5 s (was 0.2 s). Prices tick every second, so with 0.2 s a repaint of the whole screen landed in every short
+   pause between two swipes – exactly where the next swipe starts. Now automatic painting comes only after a real pause. */
+const QUIET_MS = 2500;      // automatic painting waits this long after the last finger move / scroll event
+const POLL_MS = 250;        // how often a waiting repaint looks whether the page is quiet
 const PRESS_MAX_MS = 4000;  // a press that has not moved for this long is neither a scroll nor a tap – never wait for ever
 const PICK_MAX_MS = 8000;   // an open picker (a focused select / input in the view) holds repaints at most this long
 const SHEET_WAIT_MS = 450;  // a sheet's closing animation
@@ -198,7 +201,7 @@ let paintedHtml = null;     // what the view shows now, as rendered
 /* a finger (or the mouse button) is down, or the page is still gliding */
 const pageMoving = () => {
   const n = Date.now();
-  return (pressAt > 0 && n - pressAt < PRESS_MAX_MS) || n - movedAt < REST_MS;
+  return (pressAt > 0 && n - pressAt < PRESS_MAX_MS) || n - movedAt < QUIET_MS;
 };
 /* … or a picker in the view is open: the view must not be replaced (its numbers may still be patched in place) */
 const pageBusy = () => pageMoving() || (pickAt > 0 && Date.now() - pickAt < PICK_MAX_MS);
@@ -206,13 +209,13 @@ function autoRender() {
   /* under an open sheet the screen below is repainted once the sheet is closed (the request is kept, not dropped) */
   if (!pageBusy() && !sheetOpen()) { autoFor = null; rerender({ soft: true, auto: true }); return; }
   autoFor = route.name;
-  if (!autoTimer) autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : REST_MS);
+  if (!autoTimer) autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : POLL_MS);
 }
 function autoFlush() {
   autoTimer = null;
   if (!autoFor) return;
   if (autoFor !== route.name) { autoFor = null; return; }   // the user went elsewhere: that screen was painted fresh
-  if (pageBusy() || sheetOpen()) { autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : REST_MS); return; }
+  if (pageBusy() || sheetOpen()) { autoTimer = setTimeout(autoFlush, sheetOpen() ? SHEET_WAIT_MS : POLL_MS); return; }
   autoFor = null;
   rerender({ soft: true, auto: true });
 }
@@ -223,7 +226,7 @@ let liveTimer = null;
 function livePaint() {
   liveTimer = null;
   if (!liveDue) return;
-  if (pageMoving()) { liveTimer = setTimeout(livePaint, REST_MS); return; }
+  if (pageMoving()) { liveTimer = setTimeout(livePaint, POLL_MS); return; }
   liveDue = false;
   if (['dnes', 'signaly'].includes(route.name)) { autoRender(); if (sheetOpen()) renderChrome(); }
   else renderChrome();
@@ -231,15 +234,66 @@ function livePaint() {
      by 1 Kč; patched in place, so a button being tapped is never replaced */
   if (route.name === 'penezenka') Wal.paintHero(data);
   document.dispatchEvent(new CustomEvent('pulse:live'));
+  liveN++;
+}
+/* 1.15.4: how smooth scrolling really is on the user's own device (nobody building this has an iPhone). While a
+   finger scrolls, the gaps between animation frames are counted; once the page is quiet, a few anonymous numbers (no
+   id, no content) go to the web server with one tiny GET that only lands in its access log. Never from a local test
+   server; at most one every 20 s and 40 a day. */
+const PERF_ON = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+let paintN = 0;             // whole-view repaints
+let liveN = 0;              // price ticks painted in place
+let perf = null;
+let perfSentAt = 0;
+function perfStart() {
+  if (!PERF_ON || perf) return;
+  const p = perf = { t0: performance.now(), last: 0, f: 0, a: 0, b: 0, c: 0, w: 0, p0: paintN, l0: liveN, y0: window.scrollY, far: 0 };
+  const frame = (now) => {
+    if (perf !== p) return;
+    if (p.last) { const g = now - p.last; p.f++; if (g > 34) p.a++; if (g > 50) p.b++; if (g > 100) p.c++; if (g > p.w) p.w = g; }
+    p.last = now;
+    const y = Math.abs(window.scrollY - p.y0); if (y > p.far) p.far = y;
+    if (!(pressAt > 0) && Date.now() - movedAt > 1000) { perfEnd(p, now); return; }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+function perfEnd(p, now) {
+  perf = null;
+  const dur = now - p.t0 - 1000;   // without the quiet second that ended it
+  if (dur < 800 || p.f < 30 || p.far < 200 || Date.now() - perfSentAt < 20000) return;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const d = store.get('perfDay', null);
+    const n = d && d.d === day ? +d.n || 0 : 0;
+    if (n >= 40) return;
+    store.set('perfDay', { d: day, n: n + 1 });
+  } catch { /* storage off: still send */ }
+  perfSentAt = Date.now();
+  const q = `v=${CONFIG.APP_VERSION}&r=${route.name}&d=${Math.round(dur)}&f=${p.f}&a=${p.a}&b=${p.b}&c=${p.c}&w=${Math.round(p.w)}&p=${paintN - p.p0}&l=${liveN - p.l0}&y=${Math.round(p.far)}`
+    + `&sa=${isStandalone() ? 1 : 0}&dpr=${Math.round((window.devicePixelRatio || 1) * 10) / 10}&vw=${window.innerWidth}`;
+  try { fetch(`./api/perf.gif?${q}`, { cache: 'no-store', keepalive: true }).catch(() => {}); } catch { /* ignore */ }
 }
 function watchMoving() {
   const o = { passive: true, capture: true };
   const press = () => { pressAt = Date.now(); };
   const lift = (ev) => { pressAt = ev.touches && ev.touches.length ? Date.now() : 0; };
+  /* 1.15.4: while the page moves nothing pulses (CSS: html.is-moving … animation-play-state: paused) – a pulsing dot
+     animates a box-shadow, which repaints its surroundings on every frame */
+  let movingOn = false;
+  const still = () => {
+    if ((pressAt > 0 && Date.now() - pressAt < PRESS_MAX_MS) || Date.now() - movedAt < 500) { setTimeout(still, 250); return; }
+    movingOn = false; document.documentElement.classList.remove('is-moving');
+  };
+  const moved = () => {
+    movedAt = Date.now();
+    if (movingOn) return;
+    movingOn = true; document.documentElement.classList.add('is-moving'); setTimeout(still, 250); perfStart();
+  };
   const field = (ev) => !!ev.target && /^(SELECT|INPUT|TEXTAREA)$/.test(ev.target.tagName || '') && !!ev.target.closest('#view');
-  window.addEventListener('scroll', () => { movedAt = Date.now(); }, o);   // capture: rows that scroll sideways too
+  window.addEventListener('scroll', moved, o);   // capture: rows that scroll sideways too
   document.addEventListener('touchstart', press, o);
-  document.addEventListener('touchmove', () => { pressAt = movedAt = Date.now(); }, o);
+  document.addEventListener('touchmove', () => { pressAt = Date.now(); moved(); }, o);
   document.addEventListener('touchend', lift, o);
   document.addEventListener('touchcancel', lift, o);
   document.addEventListener('mousedown', press, o);
@@ -305,6 +359,7 @@ function rerender(opts = {}) {
   const anchor = auto ? anchorOf(el) : null;
   el.innerHTML = html;
   paintedHtml = html;
+  paintN++;
   if (data.signals) el.dataset.hadData = '1';
   if (!opts.soft || firstData) {
     el.classList.remove('is-enter'); void el.offsetWidth; el.classList.add('is-enter');
