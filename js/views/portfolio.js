@@ -51,6 +51,7 @@ const sparks = new Map();      // sym -> values of the newest session
 let hist = null;               // { key, data } of the account chart
 let drCache = new Map();       // sym -> { at, v } today's range
 let lastPd = null;             // the trade the detail chart was last opened for
+let rsAsked = null;            // the trade id the 'Proč zainvestovat' repaint was already asked for (one repaint, no loop)
 let pdBars = null;
 let curCtx = null;            // the Portfolio's ctx (range chips)
 function cleanup() { off.forEach((f) => { try { f(); } catch { /* ignore */ } }); off = []; pdBars && pdBars.destroy(); pdBars = null; }
@@ -709,7 +710,15 @@ export function mountTrade(el, ctx) {
     const dr = drCache.get(p0.sym);
     if (!dr || Date.now() - dr.at > 60000) P.dayRange(p0.sym).then((v) => { drCache.set(p0.sym, { at: Date.now(), v }); paint(); }).catch(() => {});
   }
-  if (p0.sigId) P.loadReasons().then((r) => { if (r && el.isConnected && !el.querySelector('#pd-why .pd-rs') && P.reasonsFor(P.signalOf(ctx.data, p0)?.id || p0.sigId, lang())) ctx.rerender({ soft: true }); });
+  /* "Proč zainvestovat" arrives later (duvody.json): ONE repaint per trade id at most, never on an order page (it has no
+     #pd-why) and only when the page can show the list (its signal is known) – else every repaint asked again = endless loop */
+  if (p0.sigId && !f.order && rsAsked !== id) {
+    rsAsked = id;
+    P.loadReasons().then((r) => {
+      const sig = P.signalOf(ctx.data, p0);
+      if (r && sig && el.isConnected && ctx.route.sub === id && !el.querySelector('#pd-why .pd-rs') && P.reasonsFor(sig.id || p0.sigId, lang())) ctx.rerender({ soft: true });
+    });
+  }
   function paint() {
     if (!el.isConnected) return;
     const g = P.find(ctx.data, id);
