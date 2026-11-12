@@ -49,14 +49,17 @@ export function paperHero(ctx) {
   const pnl = +a.pnl_usd || (eq(p) - (+a.start_equity || 100000));
   const pct = a.pnl_pct != null && Number.isFinite(+a.pnl_pct) ? +a.pnl_pct : (pnl / (+a.start_equity || 100000)) * 100;
   const pos = p.positions || [];
-  return `<a class="pa-hero tone-${tone(pnl)}" href="#/robot">
+  /* 1.15.1: on the Robot page itself the card opens its "Účet nanečisto" tab (a link to #/robot from #/robot did nothing) */
+  const inRobot = ctx.route?.name === 'robot';
+  const open = inRobot ? `<button type="button" class="pa-hero tone-${tone(pnl)}" data-action="seg" data-seg-name="rbtab" data-id="ucet">` : `<a class="pa-hero tone-${tone(pnl)}" href="#/robot">`;
+  return `${open}
     <span class="pa-glow" aria-hidden="true"></span>
     <span class="pa-top"><span class="pa-k">${icon('shield', 'icon-sm')}${t('pa.acc')}</span>${modeBadge(p)}</span>
     <span class="pa-vrow"><span class="pa-v num">${dual(eq(p), ctx.data)}</span></span>
     <span class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${kc(pnl, ctx.data, true)}</b> ${t('pa.heroS', { start: kc(+a.start_equity || 100000, ctx.data) })}</span>
     <span class="pa-bigger">${icon('info', 'icon-xs')}${t('pa.bigger')}</span>
     <span class="pa-foot"><span>${t('pa.posN', { n: pos.length })}</span><span>${t('pa.ordN', { n: (p.orders || []).filter((o) => !isLeg(o, pos)).length })}</span><span class="pa-more">${t('pa.more')}${icon('chev-right', 'icon-xs')}</span></span>
-  </a>`;
+  </${inRobot ? 'button' : 'a'}>`;
 }
 
 function posRow(x, data) {

@@ -262,7 +262,7 @@ function allocHtml(sm) {
       ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share)}</span></p>`).join('')}</div>` : '';
   return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
     <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.inPlay, c, 0) }))}">${donutSvg(al)}
-      <div class="al-mid"><small>${t('al.mid')}</small><b class="num" data-al-inplay="${al.inPlay}">${F.money(al.inPlay, c, 0)}</b></div></div>
+      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.inPlay, c, 0).length > 10 ? ' is-long' : ''}" data-al-inplay="${al.inPlay}">${F.money(al.inPlay, c, 0)}</b></div></div>
       <div class="al-legend">${legend}</div></div>
     ${second}<p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
 }
