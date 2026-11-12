@@ -136,4 +136,5 @@ export default {
   'den.gs.bezi': 'running', 'den.gs.pozastaveno': 'paused',
   'den.s.groups': 'Parts of the robot',
   'den.pausedG': 'Paused: {list}. No signals come from there now; the rest of the robot keeps running.',
+  'den.onM': '{m}',
 };

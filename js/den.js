@@ -43,7 +43,7 @@ const cs = () => lang() === 'cs';
 const mktName = (k) => (k ? (t(`mkt.k.${k}`) !== `mkt.k.${k}` ? t(`mkt.k.${k}`) : String(k)) : '–');
 /* "DAX (DE40)"; a name that already carries its own bracket or the code ("CAC 40 (Francie)", "Ropa WTI") stays as it is */
 const mkt = (k) => { if (!k) return '–'; const n = mktName(k); return n === String(k) || n.includes('(') || n.includes(String(k)) ? n : `${n} (${k})`; };
-const ms = (iso) => { const v = Date.parse(iso || 0); return v > 0 ? v : null; };
+const ms = (iso) => { if (!iso) return null; const v = Date.parse(iso); return v > 0 ? v : null; };
 /* the robot's own (Czech) text, with local number / date formats */
 const hum = (x) => F.esc(F.human(String(x ?? '')));
 /* plural-aware key: base.one / base.few / base.many / base.other (falls back to .other) */
@@ -64,6 +64,8 @@ export function pragueDay(v) {
 const dayLabel = (x) => `${F.weekdayShort(new Date(x))} ${F.dm(new Date(x))}`;
 const period = (p) => { const y = /(\d{4}).*?(\d{4})/.exec(String(p || '')); return y ? `${y[1]}–${y[2]}` : '2023–2026'; };
 /* list of market names: "S&P 500, Nasdaq 100 a DAX" */
+/* a market list that stands alone (a list item): kinds get their preposition ("na indexech …") */
+const mktLabel = (trhy) => { const n = new Set(arr(trhy).filter(Boolean)).size; return n > 4 ? t('den.onM', { m: mktList(trhy) }) : mktList(trhy); };
 const join = (l) => (l.length === 1 ? l[0] : `${l.slice(0, -1).join(', ')} ${t('den.and')} ${l[l.length - 1]}`);
 /* 1.15.3: more than four markets -> the kinds instead: "indexech (USA, Německo, Francie), zlatě, ropě a kryptoměnách" */
 const IDX_CTY = { US500: 'US', US100: 'US', US30: 'US', DE40: 'DE', FR40: 'FR', UK100: 'UK', JP225: 'JP' };
@@ -188,7 +190,7 @@ export function sigState(j, s, now = D.clock()) {
   const k = s?.stav;
   if (k === 'uzavreno') { const o = outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
   if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
-  if (ENTRY_OPEN.includes(k)) return { ...base, code: 'over' };
+  if (ENTRY_OPEN.includes(k)) return { ...base, code: untilMs ? 'over' : 'other' };
   if (k === 'neuzavreno_chybi_data') return { ...base, code: 'nodata' };
   return { ...base, code: 'other' };
 }
@@ -387,7 +389,7 @@ function certainty(v) {
   return cs() ? F.human(String(v)) : '–';
 }
 /* the robot's style groups: order of the markets as the user reads them (USA first) */
-const styleLines = (j) => arr(j?.styly).filter((y) => y && y.test).map((y) => `<li>${F.esc(t('den.style', { m: mktList(y.trhy), p: period(y.test.obdobi), pf: n2(y.test.pf, 2), n: y.test.obchodu ?? '–', w: y.test.vyhry_pct != null ? F.pct(+y.test.vyhry_pct, 0) : '–', j: certainty(y.test.jistota_pct) }))}</li>`).join('');
+const styleLines = (j) => arr(j?.styly).filter((y) => y && y.test).map((y) => `<li>${F.esc(t('den.style', { m: mktLabel(y.trhy), p: period(y.test.obdobi), pf: n2(y.test.pf, 2), n: y.test.obchodu ?? '–', w: y.test.vyhry_pct != null ? F.pct(+y.test.vyhry_pct, 0) : '–', j: certainty(y.test.jistota_pct) }))}</li>`).join('');
 
 /* the four groups with their state (běží / pozastaveno) – "Pro pokročilé" on #/den */
 function groupsHtml(j) {
@@ -398,7 +400,7 @@ function groupsHtml(j) {
     const k = String(y.kod);
     const stv = pg.includes(k) ? 'pozastaveno' : y.stav === 'bezi' || !y.stav ? 'bezi' : String(y.stav);
     const lbl = t(`den.gs.${stv}`) !== `den.gs.${stv}` ? t(`den.gs.${stv}`) : '–';
-    return `<li data-den-group="${F.esc(k)}">${F.esc(`${gName(k)} – ${mktList(y.trhy)}: `)}<b class="${stv === 'bezi' ? 'up' : 'down'}">${F.esc(lbl)}</b>${k === 'PB' ? ` ${pbTag()}` : ''}</li>`;
+    return `<li data-den-group="${F.esc(k)}">${F.esc(`${gName(k)} – ${mktLabel(y.trhy)}: `)}<b class="${stv === 'bezi' ? 'up' : 'down'}">${F.esc(lbl)}</b>${k === 'PB' ? ` ${pbTag()}` : ''}</li>`;
   }).join('');
   return `<h3>${t('den.s.groups')}</h3><ul class="den-ul den-groups">${li}</ul>`;
 }
@@ -412,7 +414,9 @@ export function render(ctx) {
   try {
     const sigs = arr(j.signaly);
     const s0 = sigs.slice().sort((a, b) => (ms(b?.cas_signalu) || 0) - (ms(a?.cas_signalu) || 0))[0];
-    const v = j.vysledek || {}, ts = v.test || {}, pj = v.pojistka || {};
+    const v = j.vysledek || {}, ts = v.test || {};
+    /* v3: one safety rule per group (vysledek.pojistky) – they are the same; the first one stands for all */
+    const pj = v.pojistka || Object.values(v.pojistky && typeof v.pojistky === 'object' ? v.pojistky : {}).find((x) => x && typeof x === 'object') || {};
     const row = (k, a1, b1) => `<tr><th>${k}</th><td class="num">${a1}</td><td class="num">${b1}</td></tr>`;
     const resTbl = `<table class="den-tbl"><thead><tr><th></th><th class="num">${t('den.r.now', { d: v.od ? F.dm(v.od) : '–' })}</th><th class="num">${t('den.r.test', { p: period(ts.obdobi) })}</th></tr></thead><tbody>
       ${row(t('den.r.n'), +v.obchodu || 0, ts.obchodu ?? '–')}
@@ -466,7 +470,7 @@ export const actions = {
   'den-pb'() {
     const y = arr(st.j?.styly).find((z) => z?.kod === 'PB');
     /* the robot's own sentence about the expectation ("… očekávání je kolem nuly …"), else its first sentence */
-    const sents = y?.co_cekat ? String(y.co_cekat).split(/(?<=[.!?:])\s+|\s*⚠\s*/).map((x) => x.trim()).filter(Boolean) : [];
+    const sents = y?.co_cekat ? String(y.co_cekat).split(/(?<=[.!?])\s+|\s*⚠\s*/).map((x) => x.trim()).filter(Boolean) : [];
     const first = sents.find((x) => /očekáván/i.test(x)) || sents[0] || '';
     const robot = first ? (cs() ? `<p class="th-text den-st">${t('den.pb.robot')} ${hum(first)}</p>` : `<details class="den-cz"><summary>${t('den.czShow')}</summary><p class="th-text" lang="cs">${hum(y.co_cekat)}</p></details>`) : '';
     openSheet({

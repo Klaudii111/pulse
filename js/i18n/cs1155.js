@@ -92,4 +92,5 @@ export default {
   'den.gs.bezi': 'běží', 'den.gs.pozastaveno': 'pozastaveno',
   'den.s.groups': 'Části robota',
   'den.pausedG': 'Pozastaveno: {list}. Odtud teď signály nechodí, zbytek robota běží dál.',
+  'den.onM': 'na {m}',
 };
