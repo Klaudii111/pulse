@@ -10,6 +10,8 @@ import * as D from './domain.js';
 import { t, lang } from './i18n/index.js';
 import { icon, openSheet, closeTopSheet } from './ui.js';
 import { ownTicket } from './views/terminal.js';
+import * as Live from './live.js';
+import * as M from './market.js';
 
 const URL0 = './data/den.json';
 const STALE_MS = 70 * 60000;      // older than this during the US session -> "data not available"
@@ -103,8 +105,11 @@ export function resultLine(j) {
 }
 
 /* ---------- one signal -> what the client can do now ---------- */
+/* 1.15.3 den.json v3: European indices come as 'over_u_brokera' (their data are 15 min late) – actionable like 'plati',
+   shown with a sentence "check the price at the broker" */
+const ENTRY_OPEN = ['plati', 'over_u_brokera'];
 export function canTrade(j, s, now = D.clock()) {
-  if (j?.robot?.stav !== 'bezi' || s?.stav !== 'plati') return false;
+  if (j?.robot?.stav !== 'bezi' || !ENTRY_OPEN.includes(s?.stav)) return false;
   if (s.vstup_stav === 'pozde' || s.pozde_pri_zapisu === true) return false;
   const until = ms(s.vstup?.plati_do);
   if (until && +now > until) return false;
@@ -129,7 +134,7 @@ export function sigState(j, s, now = D.clock()) {
   const k = s?.stav;
   if (k === 'uzavreno') { const o = outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
   if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
-  if (k === 'plati') return { ...base, code: 'over' };
+  if (ENTRY_OPEN.includes(k)) return { ...base, code: 'over' };
   if (k === 'neuzavreno_chybi_data') return { ...base, code: 'nodata' };
   return { ...base, code: 'other' };
 }
@@ -153,15 +158,37 @@ function lastOld(j, now) {
   return h[0] || null;
 }
 
-/* the full block of an actionable signal: direction, entry table and the button "Koupit v demo" */
+/* can the demo trade this market now? (the ticket needs a price: W.priceOf -> Live.quote; before the first price answer
+   the instrument list decides). FR40 has no price today -> no button, only a grey line */
+export function demoOk(sym) {
+  if (!sym) return false;
+  if (Live.quote(sym)) return true;
+  return !Live.loaded() && !!M.get(sym);
+}
+/* plural-aware "minut" */
+const minW = (n) => tp('den.minW', n);
+/* the full block of an actionable signal: direction, entry table (or the broker sentence) and the button "Koupit v demo" */
 function sigBlock(j, s) {
   const sell = side(s) === 'SELL';
   const v = s.vstup || {};
   const until = ms(v.plati_do) ? F.time(new Date(ms(v.plati_do))) : '–';
   const out = nyClock(s.vystup, s.cas_signalu || j.vytvoreno);
   const entry = sell ? t('den.e.min', { v: px(v.nejniz) }) : t('den.e.max', { v: px(v.nejvys) });
-  const btn = `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`;
-  return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go"><p class="den-sig-t"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span></p>
+  const btn = demoOk(s.trh)
+    ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
+    : `<p class="den-note den-nodemo" data-den-nodemo="1">${t('den.noDemo')}</p>`;
+  const title = `<p class="den-sig-t"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span></p>`;
+  if (s.stav === 'over_u_brokera') {
+    const at = ms(s.cas_signalu);
+    const n = Number.isFinite(+s.data_zpozdena_min) ? Math.round(+s.data_zpozdena_min) : 0;
+    const p = { at: at ? F.time(new Date(at)) : '–', n, w: minW(n), v: px(sell ? v.nejniz : v.nejvys), until };
+    const txt = t(`den.brk${n > 0 ? '' : '0'}.${sell ? 'sell' : 'buy'}`, p);
+    return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go" data-den-variant="broker">${title}
+    <p class="den-brk">${F.esc(txt)}</p>
+    <dl class="den-kv num"><dt>${t('den.k.stop')}</dt><dd>${px(s.stop)}</dd>
+      <dt>${t('den.k.exit')}</dt><dd>${F.esc(out ? t('den.exitAt', { v: F.time(out) }) : '–')}</dd></dl>${btn}</div>`;
+  }
+  return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go">${title}
     <dl class="den-kv num"><dt>${t('den.k.entry')}</dt><dd>${F.esc(entry)}</dd>
       <dt>${t('den.k.until')}</dt><dd>${F.esc(until)}</dd>
       <dt>${t('den.k.stop')}</dt><dd>${px(s.stop)}</dd>
@@ -213,6 +240,7 @@ export function cardHtml(now = D.clock()) {
 export function mount(el) {
   const paint = () => { const c = el.querySelector('#den-card'); if (c && el.isConnected) c.outerHTML = cardHtml(D.clock()); };
   load().then(paint).catch(() => {});
+  if (!Live.loaded()) { const off = Live.onLive(() => { if (!Live.loaded()) return; off(); if (el.isConnected && st.tried) paint(); }); setTimeout(off, 120000); }
   const iv = setInterval(() => { if (!el.isConnected) { clearInterval(iv); return; } load(true).then(paint).catch(() => {}); }, 5 * 60000);
 }
 

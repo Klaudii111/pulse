@@ -36,3 +36,7 @@
 .gate.ios1 .ios1-steps li { padding: 10px 12px; }
 .gate.ios1 .gate-foot { margin-top: 12px; }
 @media (max-height: 720px) { .gate.ios1 .gate-mark { display: none; } }
+
+/* 1.15.3 den.json v3 (E): the broker sentence of a delayed-data signal; the grey line when the demo has no price */
+.den-brk { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); }
+.den-nodemo { font-size: 14px; color: var(--ink-3); }

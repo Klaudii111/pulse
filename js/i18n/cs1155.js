@@ -56,4 +56,11 @@ export default {
   'ios1.app.2': 'Zvol Otevřít v prohlížeči (Safari)',
   'ios1.app.3': 'V Safari si PULSE přidej na plochu',
   'ios1.app.note': 'Nejde to? Zkopíruj odkaz a vlož ho do Safari.',
+  /* 1.15.3 den.json v3 (E): evropské indexy se zpožděnými daty – vstup jen po kontrole ceny; trh bez ceny v demu */
+  'den.brk.buy': 'Signál vznikl v {at}, ale data tohoto trhu jsou o {n} {w} zpožděná. V demu vstup jen, když je cena pořád nejvýš {v}. Platí do {until}.',
+  'den.brk.sell': 'Signál vznikl v {at}, ale data tohoto trhu jsou o {n} {w} zpožděná. V demu vstup jen, když je cena pořád nejníž {v}. Platí do {until}.',
+  'den.brk0.buy': 'Signál vznikl v {at}. V demu vstup jen, když je cena pořád nejvýš {v}. Platí do {until}.',
+  'den.brk0.sell': 'Signál vznikl v {at}. V demu vstup jen, když je cena pořád nejníž {v}. Platí do {until}.',
+  'den.minW.one': 'minutu', 'den.minW.few': 'minuty', 'den.minW.many': 'minuty', 'den.minW.other': 'minut',
+  'den.noDemo': 'V demu tento trh zatím není – signál je jen pro informaci.',
 };

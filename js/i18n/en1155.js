@@ -99,4 +99,11 @@ export default {
   'ios1.app.2': 'Choose Open in browser (Safari)',
   'ios1.app.3': 'In Safari, add PULSE to the Home Screen',
   'ios1.app.note': 'Not working? Copy the link and paste it into Safari.',
+  /* 1.15.3 den.json v3 (E): European indices with delayed data – enter only after checking the price; a market without a demo price */
+  'den.brk.buy': 'The signal came at {at}, but this market’s data are {n} {w} late. In the demo, enter only if the price is still at most {v}. Valid until {until}.',
+  'den.brk.sell': 'The signal came at {at}, but this market’s data are {n} {w} late. In the demo, enter only if the price is still at least {v}. Valid until {until}.',
+  'den.brk0.buy': 'The signal came at {at}. In the demo, enter only if the price is still at most {v}. Valid until {until}.',
+  'den.brk0.sell': 'The signal came at {at}. In the demo, enter only if the price is still at least {v}. Valid until {until}.',
+  'den.minW.one': 'minute', 'den.minW.other': 'minutes',
+  'den.noDemo': 'This market is not in the demo yet – the signal is for information only.',
 };
