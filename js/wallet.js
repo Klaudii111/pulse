@@ -237,7 +237,9 @@ export function editLevels(data, id, { sl = null, tp = null }) {
 export function parts(sm) {
   const eq = Math.round(sm.equity);
   const inPlay = Math.round(sm.used + sm.reserved);
-  const free = Math.max(0, Math.round(sm.cash));
+  /* 1.15.0: whole units, rounded DOWN - the "Volné" every screen shows is then exactly what the buy ticket and
+     "Vybrat vše" accept (rounded to the nearest it could be 1 Kč / 1 € more than could really be taken) */
+  const free = Math.max(0, Math.floor(sm.cash + 1e-9));
   return { eq, free, inPlay, open: eq - free - inPlay };
 }
 /* the wallet (Peněženka = equity) with the last known data – header, Dnes, Více, Nastavení and the sizing read this one number */
