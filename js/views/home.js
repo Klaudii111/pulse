@@ -368,12 +368,14 @@ export function robotExitCard(ctx) {
     const r = x.row;
     const when = x.at ? whenText(x.at, now) : '';
     const res = x.pnlPct != null ? ` (${F.spct(x.pnlPct, 1)})` : '';
-    const mt = D.moneyTone(r.pnl, c, r.pnlPct);
-    const mine = mt.zero ? `±${F.money(0, c, 0)}` : mt.text;
+    /* P2-01: no price on this device yet -> a quiet "ty teď …" (never a wrong number for the first second), like "Dnes …" */
+    const wait = r.live === false || r.today === null;
+    const mt = wait ? { tone: 'flat wait' } : D.moneyTone(r.pnl, c, r.pnlPct);
+    const mine = wait ? '' : mt.zero ? `±${F.money(0, c, 0)}` : mt.text;
     return `<div class="rx-row${i >= 3 ? ' is-extra' : ''}" data-rx="${F.esc(r.id)}">
       <a class="rx-main" href="#/obchod/${F.esc(r.id)}">${monogram(r.sym, nm(x))}<span class="rx-id"><b class="rx-n">${F.esc(nm(x))}</b>
         <span class="rx-s num">${F.esc(when ? t('rx.when', { d: when, r: res }) : t('rx.when0', { r: res }))}</span>
-        <span class="rx-me num tone-${mt.tone}">${F.esc(t('rx.me', { v: mine }))}</span></span></a>
+        <span class="rx-me num tone-${mt.tone}">${F.esc(wait ? t('rx.meWait') : t('rx.me', { v: mine }))}</span></span></a>
       <span class="rx-b"><button type="button" class="btn btn-primary btn-small" data-action="h-close" data-id="${F.esc(r.id)}">${t('rx.close')}</button>
         <button type="button" class="btn btn-ghost btn-small rx-keep" data-action="rx-keep" data-id="${F.esc(r.id)}">${t('rx.keep')}</button></span>
     </div>`;

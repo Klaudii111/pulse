@@ -36,3 +36,5 @@
 .pf-row .pf-v { flex-shrink: 0; }
 /* fixer D (P2-02): the style's deposit was cut to the free money */
 .tk-clamp-m { color: var(--ink-2); font-size: 12.5px; line-height: 1.35; max-width: 34ch; }
+/* fixer D (P2-01): no price yet -> quiet grey, no number */
+.rx-me.tone-wait { color: var(--ink-3); font-weight: 500; }

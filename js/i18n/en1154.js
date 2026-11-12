@@ -54,4 +54,5 @@ export default {
   'cf.fee': 'after the currency conversion fee {v} (0.5% of the result)',
   'tk.clamp': 'Your style would put in {w}, you have {f} free – putting in {v}.',
   'tk.clampOwn': 'You entered {w}, you have {f} free – putting in {v}.',
+  'rx.meWait': 'you now …',
 };
