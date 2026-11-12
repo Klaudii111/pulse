@@ -180,6 +180,14 @@ export function miniChart(s) {
 }
 
 /* exact publish time - shown before any result (trust) */
+/* 1.15.1 "dnes 16:05" / "včera 22:46" / "10. 11. 16:05" – when the robot SENT the signal (cards, detail, Dnes) */
+export function sentWhen(s, now = D.clock()) {
+  const at = Date.parse(s?.created_at || s?.issued_at || 0);
+  if (!(at > 0)) return '';
+  const d0 = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
+  const k = Math.round((d0(at) - d0(+now)) / 86400000);
+  return `${k === 0 ? t('fmt.today') : k === -1 ? t('po.yesterday') : F.dm(new Date(at))} ${F.time(new Date(at))}`;
+}
 export function published(s) {
   const at = s.created_at || s.issued_at;
   if (!at) return '';
@@ -763,7 +771,8 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   const en = cs.code === 'mine' || ph === 'closed' ? null : D.entryLine(s, data, now, cs, true);
   /* the exact entry rides in one small pill ("Vstup teď do 22:00" / "Vstup zítra od 15:30") – the long line is in the detail */
   const enPill = en && en.code !== 'late' && !(en.code === 'order' && cs.code === 'order') ? `<span class="cc-pill is-${en.code} num">${F.esc(enShort(s, en, now))}</span>` : '';
-  const pills = `<span class="cc-pill">${t(`c.typeS.${s.horizon}`)}</span>${s.exit_date && ph !== 'closed' ? `<span class="cc-pill num">${t('cc.until', { d: F.dm(s.exit_date) })}</span>` : ''}${enPill}${['order', 'late', 'done'].includes(cs.code) && !cs.my ? `<span class="cc-pill tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="cc-pill is-preview">${t('sig.preview')}</span>` : ''}`;
+  const sw = sentWhen(s, now);
+  const pills = `${sw ? `<span class="cc-pill is-sent num">${F.esc(t('ts.sent', { d: sw }))}</span>` : ''}<span class="cc-pill">${t(`c.typeS.${s.horizon}`)}</span>${s.exit_date && ph !== 'closed' ? `<span class="cc-pill num">${t('cc.until', { d: F.dm(s.exit_date) })}</span>` : ''}${enPill}${['order', 'late', 'done'].includes(cs.code) && !cs.my ? `<span class="cc-pill tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="cc-pill is-preview">${t('sig.preview')}</span>` : ''}`;
   let mid = '', foot = '';
   if (ph === 'closed') {
     const r = D.closedNums(s);

@@ -8,13 +8,16 @@ import * as D from './domain.js';
 import * as P from './pwa.js';
 import * as W from './wallet.js';
 import * as store from './store.js';
-import { t, lang } from './i18n/index.js';
-import { icon, il, ladder, toast } from './ui.js';
+import { t, lang, setLang } from './i18n/index.js';
+import { icon, il, ladder, toast, langSwitch } from './ui.js';
 import { howStrip } from './views/help.js';
 import * as H from './health.js';
 import * as B from './brief.js';
 
 let root = null;
+let langCb = null;
+/* the app re-renders behind the guide when the language changes there */
+export function onLang(fn) { langCb = fn; }
 
 /* Boot: fresh users only. Someone who already set the calculator (older version) is not interrupted. */
 export function maybeShow(onDone, dataFn = null) {
@@ -28,6 +31,7 @@ const DEMO = { action: 'BUY', entry: 100, stop: 95, target: 110, last_price: 104
 
 function slideA() {
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="1 / 4">
+    <div class="onb-lang">${langSwitch()}</div>
     <div class="onb-art" aria-hidden="true">
       <span class="onb-orb o1"></span><span class="onb-orb o2"></span>
       <div class="onb-card">
@@ -136,7 +140,9 @@ function slideC() {
 
 export const isOpen = () => !!root;
 
+let lastDone = null;
 export function open(onDone, dataFn = null) {
+  lastDone = onDone;
   if (dataFn) getData = dataFn;
   if (root) return;
   root = document.createElement('div');
@@ -213,6 +219,18 @@ export function open(onDone, dataFn = null) {
   };
 
   el.addEventListener('click', async (ev) => {
+    const lb = ev.target.closest('[data-lang-set]');
+    if (lb) {
+      /* 1.15.1 CS | EN on the first step: the guide is rebuilt in the new language (nothing is saved as done) */
+      if (lb.dataset.langSet === lang()) return;
+      setLang(lb.dataset.langSet);
+      const cb = lastDone;
+      el.remove(); root = null;
+      open(cb);
+      root?.classList.add('is-in');
+      langCb && langCb();
+      return;
+    }
     const b = ev.target.closest('[data-onb], [data-ccy], [data-prof]');
     if (!b) return;
     if (b.dataset.ccy) {

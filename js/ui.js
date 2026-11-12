@@ -1,5 +1,5 @@
 import * as F from './format.js';
-import { t } from './i18n/index.js';
+import { t, lang } from './i18n/index.js';
 import * as D from './domain.js';
 import { cls as mktCls } from './market.js';
 
@@ -9,6 +9,11 @@ export const il = (name, size = 64, { cls = '', lazy = true } = {}) =>
   `<img class="il ${cls}" src="./img/il/${name}.webp" alt="" width="${size}" height="${size}" decoding="async"${lazy ? ' loading="lazy"' : ''}>`;
 
 /* ---------- Segmented control ---------- */
+/* 1.15.1 the language switch anyone finds: CS | EN (access code, first onboarding step, top of Více, Nastavení) */
+export function langSwitch(cls = '') {
+  const cur = lang();
+  return `<div class="lang-sw ${cls}" role="group" aria-label="Jazyk / Language">${[['cs', 'CS', 'Čeština'], ['en', 'EN', 'English']].map(([id, l, n]) => `<button type="button" data-lang-set="${id}" aria-pressed="${id === cur}" lang="${id}" aria-label="${n}">${l}</button>`).join('')}</div>`;
+}
 export function seg({ name, items, active, small = false, label = '' }) {
   const i = Math.max(0, items.findIndex((x) => x.id === active));
   return `<div class="seg ${small ? 'seg-sm' : ''}" role="tablist" aria-label="${F.esc(label)}" style="--n:${items.length};--i:${i}" data-seg="${name}">
