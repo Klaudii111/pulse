@@ -4,6 +4,9 @@ import * as D from './domain.js';
 import { cls as mktCls } from './market.js';
 
 export const icon = (name, cls = '') => `<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+/* 1.15.0: 3D glass illustrations (img/il/*.webp, 512 px source). Decorative -> alt="". lazy = below the fold. */
+export const il = (name, size = 64, { cls = '', lazy = true } = {}) =>
+  `<img class="il ${cls}" src="./img/il/${name}.webp" alt="" width="${size}" height="${size}" decoding="async"${lazy ? ' loading="lazy"' : ''}>`;
 
 /* ---------- Segmented control ---------- */
 export function seg({ name, items, active, small = false, label = '' }) {

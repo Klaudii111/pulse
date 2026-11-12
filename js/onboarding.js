@@ -9,7 +9,7 @@ import * as P from './pwa.js';
 import * as W from './wallet.js';
 import * as store from './store.js';
 import { t, lang } from './i18n/index.js';
-import { icon, ladder, toast } from './ui.js';
+import { icon, il, ladder, toast } from './ui.js';
 import { howStrip } from './views/help.js';
 import * as H from './health.js';
 import * as B from './brief.js';
@@ -56,6 +56,7 @@ const typedCap = () => +(store.get('calc', {}) || {}).account || D.calcState().a
 function slideB() {
   const cs = D.calcState();
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="2 / 4">
+    ${il('01_penezenka', 72, { cls: 'onb-il', lazy: false })}
     <p class="onb-k">${t('onb.step', { n: 2 })}</p>
     <h2 class="onb-t">${t('onb.b.t')}</h2>
     <p class="onb-s">${t('onb.b.s')}</p>
@@ -91,6 +92,7 @@ function profCards() {
 }
 function slideP() {
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="3 / 4">
+    ${il('06_stit', 72, { cls: 'onb-il', lazy: false })}
     <p class="onb-k">${t('onb.step', { n: 3 })}</p>
     <h2 class="onb-t">${t('onb.p.t')}</h2>
     <p class="onb-s">${t('onb.p.s')}</p>
@@ -119,6 +121,7 @@ function installBlock() {
 
 function slideC() {
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="4 / 4">
+    ${il('03_signal', 64, { cls: 'onb-il', lazy: false })}
     <p class="onb-k">${t('onb.step', { n: 4 })}</p>
     <h2 class="onb-t">${t('onb.c.t')}</h2>
     <p class="onb-s">${t('onb.c.s')}</p>

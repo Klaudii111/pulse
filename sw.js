@@ -7,6 +7,7 @@
 const VERSION = 'pulse-v1.15.0';
 const SHELL = `${VERSION}-shell`;
 const DATA = 'pulse-data';
+const IMG = 'pulse-img'; /* 1.15.0: illustrations, stale-while-revalidate (kept across versions) */
 
 const SHELL_FILES = [
   './',
@@ -100,6 +101,11 @@ const SHELL_FILES = [
   './icons/favicon-16.png',
   './icons/mark-64.png',
   './icons/mark-128.png',
+  /* 1.15.0: only the illustrations of the first screen (Dnes); the rest -> runtime cache IMG below */
+  './img/il/05_svickovy_graf.webp',
+  './img/il/13_puls_sipka.webp',
+  './img/il/02_robot.webp',
+  './img/il/08_cekani.webp',
 ];
 
 self.addEventListener('install', (event) => {
@@ -133,6 +139,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(req));
     return;
   }
+  // 1.15.0 illustrations: stale-while-revalidate (shell precache first, so the 4 first-screen ones never wait)
+  if (url.pathname.includes('/img/')) {
+    event.respondWith(staleWhileRevalidate(req, event));
+    return;
+  }
   // Navigations: serve cached shell when offline
   if (req.mode === 'navigate') {
     event.respondWith(
@@ -155,6 +166,19 @@ self.addEventListener('fetch', (event) => {
     }))
   );
 });
+
+async function staleWhileRevalidate(req, event) {
+  const pre = await caches.match(req, { ignoreSearch: true, cacheName: SHELL });
+  if (pre) return pre;
+  const cache = await caches.open(IMG);
+  const hit = await cache.match(req, { ignoreSearch: true });
+  const net = fetch(req).then((res) => {
+    if (res.ok && res.type === 'basic') cache.put(req, res.clone());
+    return res;
+  }).catch(() => null);
+  if (hit) { event.waitUntil(net); return hit; }
+  return (await net) || Response.error();
+}
 
 async function networkFirst(req) {
   const cache = await caches.open(DATA);

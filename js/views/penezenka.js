@@ -10,7 +10,7 @@ import * as store from '../store.js';
 import * as B from '../brief.js';
 import * as Comm from '../community.js';
 import { t } from '../i18n/index.js';
-import { icon, skBlock, toast } from '../ui.js';
+import { icon, il, skBlock, toast } from '../ui.js';
 import { journalBody } from './extra.js';
 import * as Sync from '../sync.js';
 
@@ -57,7 +57,7 @@ export function renderWallet(ctx) {
   const rows = ledger(s.w);
   const pt = W.parts(s);
   return head + `
-  <section class="big-acc wl-hero" id="wl-hero"><p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('wl.title')}<span class="demo-chip">${t('badge.paperShort')}</span></p>
+  <section class="big-acc wl-hero has-il" id="wl-hero">${il('01_penezenka', 72, { cls: 'wl-il', lazy: false })}<p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('wl.title')}<span class="demo-chip">${t('badge.paperShort')}</span></p>
     <p class="big-acc-v num" data-eq="${pt.eq}">${F.money(pt.eq, c, 0)}</p>
     <div class="wl-split num" data-free="${pt.free}" data-inplay="${pt.inPlay}" data-open="${pt.open}">
       <span><small>${t('wl.free')}</small><b>${F.money(pt.free, c, 0)}</b></span>
@@ -136,7 +136,7 @@ function mine(ctx) {
   const c = s.w.ccy;
   const m = myStats(s.w);
   if (!m.n) {
-    return `<section class="hi-card"><p class="d-empty">${t(s.rows.length ? 'hi.none.open' : 'hi.none')}</p>
+    return `<section class="hi-card"><p class="d-empty has-il">${il(s.rows.length ? '08_cekani' : '09_prazdno', 64)}<span>${t(s.rows.length ? 'hi.none.open' : 'hi.none')}</span></p>
       ${s.rows.length ? '' : `<a class="btn btn-primary btn-small" href="#/signaly">${t('hi.none.go')}</a>`}</section>`;
   }
   const by = ['MESIC', 'TYDEN', 'DNY', 'DEN', 'own'].filter((h) => m.by[h]).map((h) => {

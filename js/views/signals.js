@@ -6,7 +6,7 @@ import * as Live from '../live.js';
 import { t, L } from '../i18n/index.js';
 import { pricePoints } from '../charts.js';
 import { sparkline } from '../ui.js';
-import { icon, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
+import { icon, il, seg, segMove, ladder, pill, skCard, liveState, haptic, monogram, calmArt, statusLine, track } from '../ui.js';
 import * as B from '../brief.js';
 import * as H from '../health.js';
 import { offLine } from './learn.js';
@@ -277,7 +277,7 @@ function sigBody(ctx) {
   const offL = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
   const off = scan + offL;
   if (!list.length) {
-    if (ph === 'open') return scan + (offL || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`) + mineHtml;
+    if (ph === 'open') return scan + (offL || `<p class="empty-line has-il">${il('08_cekani', 56)}<span>${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</span></p>`) + mineHtml;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
   const shown = list.slice(0, 60);

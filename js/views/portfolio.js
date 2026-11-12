@@ -14,7 +14,7 @@ import * as Live from '../live.js';
 import * as Bars from '../bars.js';
 import * as store from '../store.js';
 import { t, L, lang } from '../i18n/index.js';
-import { icon, monogram, sparkline, openSheet, closeTopSheet, toast, copyText, skBlock, haptic } from '../ui.js';
+import { icon, il, monogram, sparkline, openSheet, closeTopSheet, toast, copyText, skBlock, haptic } from '../ui.js';
 import { pxOf, pxC, closeConfirm, mktStamp, openWhen, limitDistance, validText, buyMore, actions as TermActions } from './terminal.js';
 import { myStats } from './penezenka.js';
 import { ziRobot } from './home.js';
@@ -126,7 +126,7 @@ export function render(ctx) {
   ${ziRobot(sm)}
   <section class="d-block" id="pf-open"><h2 class="d-h">${t('zi.open')}<span class="num"> · ${rows.length}</span></h2>
     ${rows.length ? `<div class="pf-list">${rows.map((p) => row(p, sm)).join('')}</div>`
-    : `<div class="pf-empty"><p>${t(ords.length ? 'po.open0ord' : 'po.open0')}</p>${ords.length ? '' : `<div class="pf-empty-b"><a class="btn btn-primary btn-small" href="#/signaly">${icon('signals', 'icon-sm')}${t('nav.signaly')}</a><a class="btn btn-secondary btn-small" href="#/terminal">${icon('chart', 'icon-sm')}${t('nav.terminal')}</a></div>`}</div>`}</section>
+    : `<div class="pf-empty${ords.length ? '' : ' has-il'}">${ords.length ? '' : il('04_portfolio', 72)}<p>${t(ords.length ? 'po.open0ord' : 'po.open0')}</p>${ords.length ? '' : `<div class="pf-empty-b"><a class="btn btn-primary btn-small" href="#/signaly">${icon('signals', 'icon-sm')}${t('nav.signaly')}</a><a class="btn btn-secondary btn-small" href="#/terminal">${icon('chart', 'icon-sm')}${t('nav.terminal')}</a></div>`}</div>`}</section>
   ${ords.length ? `<section class="d-block" id="pf-ord"><h2 class="d-h">${t('po.orders')}<span class="num"> · ${ords.length}</span></h2><div class="pf-list">${ords.map((o) => ordRow(o, ctx.data, c)).join('')}</div></section>` : ''}
   <a class="hs-row zi-hrow" href="#/historie">${icon('history', 'icon-xs')}<span>${hs.n ? t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) }) : t('zi.histLine0')}</span>${icon('chev-right', 'icon-xs')}</a>
   ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.compact(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;

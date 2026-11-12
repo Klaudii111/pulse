@@ -2,7 +2,7 @@ import { CONFIG } from '../../config.js';
 import * as F from '../format.js';
 import * as D from '../domain.js';
 import { t, L } from '../i18n/index.js';
-import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline, toast } from '../ui.js';
+import { icon, il, skBlock, ladderGeometry, liveState, monogram, sparkline, toast } from '../ui.js';
 import * as B from '../brief.js';
 import * as W from '../wallet.js';
 import * as store from '../store.js';
@@ -127,10 +127,10 @@ function paths() {
   const on = !!store.get('autoCopy', null)?.on;
   return `<section class="how-card" aria-label="${t('pt.aria')}">
     <p class="d-k">${t('pt.aria')}</p>
-    <div class="how-chips">
-      <a class="hw-chip hw-link" href="#/terminal" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.terminal') }))}">${icon('chart', 'icon-sm')}<span>${t('pt.self')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
-      <a class="hw-chip hw-link" href="#/signaly" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.signaly') }))}">${icon('signals', 'icon-sm')}<span>${t('pt.sig')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
-      <button type="button" class="hw-chip hw-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">${icon('robot', 'icon-sm')}<span>${t('pt.auto')}</span><span class="auto-sw" aria-hidden="true"><i></i></span></button>
+    <div class="how-chips has-il">
+      <a class="hw-chip hw-link" href="#/terminal" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.terminal') }))}">${il('05_svickovy_graf', 56, { cls: 'hw-il', lazy: false })}<span>${t('pt.self')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
+      <a class="hw-chip hw-link" href="#/signaly" aria-label="${F.esc(t('pt.linkAria', { p: t('nav.signaly') }))}">${il('13_puls_sipka', 56, { cls: 'hw-il', lazy: false })}<span>${t('pt.sig')}</span>${icon('chev-right', 'icon-xs hw-arr')}</a>
+      <button type="button" class="hw-chip hw-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">${il('02_robot', 56, { cls: 'hw-il', lazy: false })}<span>${t('pt.auto')}</span><span class="auto-sw" aria-hidden="true"><i></i></span></button>
     </div>
     <p class="how-st"><b class="${on ? 'up' : ''}">${t(on ? 'pt.on' : 'pt.off')}</b> · <a class="link" href="#/nastaveni">${F.esc(profText())}</a></p>
   </section>`;
@@ -270,7 +270,7 @@ export function render(ctx) {
   <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${scanLine(ctx.data, now)}
     ${offLine(ctx.data)}
-    ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
+    ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty has-il">${il('08_cekani', 56, { lazy: false })}<span>${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</span></p>`}
   </section>
   ${hasTrades ? '' : mineSec('d-c3')}
   </div>

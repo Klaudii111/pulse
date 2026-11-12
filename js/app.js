@@ -3,7 +3,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts } from './ui.js';
+import { icon, il, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts } from './ui.js';
 import { linkLine } from './views/learn.js';
 import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
@@ -104,7 +104,7 @@ const rbTab = () => { const x = store.get('rbTab', 'vysledky'); return RB_TABS.i
 function robotView(c) {
   const tab = rbTab();
   const inner = tab === 'ucet' ? Paper.render(c) : tab === 'uceni' ? Learn.render(c) : Results.render({ ...c, inRobot: true });
-  return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('rb.title')}</h1><p class="page-sub">${t('rb.sub')}</p></div></header>
+  return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('rb.title')}</h1><p class="page-sub">${t('rb.sub')}</p></div>${il('02_robot', 72, { cls: 'head-il', lazy: false })}</header>
   <div class="rb-top">${Home.robotLine1(c)}${linkLine(c.data, c.now(), 'd-robot d-learn')}</div>
   <div class="seg-wrap rb-tabs">${seg({ name: 'rbtab', label: t('rb.title'), items: RB_TABS.map((id) => ({ id, label: t(`rb.tab.${id}`) })), active: tab })}</div>
   <div class="rb-in">${inner}</div>`;

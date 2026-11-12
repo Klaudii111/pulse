@@ -15,7 +15,7 @@ import * as store from './store.js';
 import * as W from './wallet.js';
 import * as F from './format.js';
 import { t } from './i18n/index.js';
-import { icon, openSheet, closeTopSheet, toast, copyText } from './ui.js';
+import { icon, il, openSheet, closeTopSheet, toast, copyText } from './ui.js';
 
 const API = './api/account/';
 const META = 'syncMeta';
@@ -420,7 +420,7 @@ function paintStatus() {
 /* the card (Peněženka full, Více compact) */
 export function card({ compact = false } = {}) {
   const linked = !!accountId();
-  return `<section class="card sync-card" id="sync-card" aria-label="${F.esc(t('sync.title'))}">
+  return `<section class="card sync-card has-il" id="sync-card" aria-label="${F.esc(t('sync.title'))}">${il('10_propojeni', compact ? 56 : 64, { cls: 'sync-il' })}
     <p class="big-acc-k">${icon('share', 'icon-xs')}${t('sync.title')}</p>
     <h2 class="sheet-title">${t('sync.cardT')}</h2>
     ${compact ? '' : `<p class="sheet-sub">${t('sync.cardS')}</p>`}

@@ -16,7 +16,7 @@ import * as store from '../store.js';
 import { t } from '../i18n/index.js';
 import { INSTR } from '../instruments.js';
 import { gloss } from '../explain.js';
-import { icon, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic, groupInput } from '../ui.js';
+import { icon, il, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic, groupInput } from '../ui.js';
 import { priceChart } from '../charts.js';
 import * as Bars from '../bars.js';
 import { mountTV, tvSymbol } from './detail.js';
@@ -181,7 +181,7 @@ function ordList(sm, data) {
   const rows = sm.rows.filter((p) => p.sl || p.tp);
   const lim = pend.length
     ? `<div class="tp-list">${pend.map((o) => orderRow(o, data)).join('')}</div>`
-    : `<p class="quiet">${t('term.ord.none')}</p>`;
+    : `<p class="quiet has-il">${il('09_prazdno', 56)}<span>${t('term.ord.none')}</span></p>`;
   const help = `<p class="why-s ord-help">${t('term.ord.help')}</p>`;
   if (!rows.length) return lim + help + `<p class="sheet-label ord-sub">${t('term.ord.slTp')}</p><p class="quiet">${t('term.ord.noSlTp')}</p>`;
   return lim + help + `<p class="sheet-label ord-sub">${t('term.ord.slTp')}</p><div class="tp-list">${rows.map((p) => `<div class="tp-row is-static"><span class="tp-main">${monogram(p.sym, p.name)}

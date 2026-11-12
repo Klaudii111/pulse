@@ -3808,3 +3808,24 @@ body::before, body::after, :root[data-theme='light'] body::before, :root[data-th
 .pd-held .icon-xs { flex: none; color: var(--gold); }
 /* Dnes / Obchodovat trade row, Historie, Peněženka: the row is a link to the trade detail */
 a.tr-main, a.hi-main, a.wl-row.is-link { color: inherit; text-decoration: none; }
+
+/* ---------- 1.15.0 illustrations (img/il, 3D glass) – layout only, colours live in skin.css ---------- */
+.il { display: block; flex: none; object-fit: contain; }
+.how-chips.has-il { grid-template-columns: 1fr 1fr 1fr; }
+.how-chips.has-il .hw-chip { position: relative; flex-direction: column; justify-content: flex-start; gap: 4px; min-height: 0; min-width: 0; padding: 10px 6px 12px; text-align: center; }
+.how-chips.has-il .hw-il { width: 56px; height: 56px; }
+.how-chips.has-il .hw-chip > span:not(.auto-sw) { font-size: 13.5px; line-height: 1.25; overflow-wrap: anywhere; }
+.how-chips.has-il .hw-arr { position: absolute; top: 8px; right: 8px; margin: 0; }
+.how-chips.has-il .hw-auto { justify-content: flex-start; text-align: center; }
+.d-empty.has-il, .empty-line.has-il, .quiet.has-il { display: flex; align-items: center; gap: 12px; }
+.pf-empty.has-il { text-align: center; }
+.pf-empty.has-il .il { margin: 0 auto 10px; }
+.pf-empty.has-il .pf-empty-b { justify-content: center; }
+.wl-hero.has-il { position: relative; }
+.wl-hero .wl-il { position: absolute; top: 8px; right: 10px; width: 72px; height: 72px; pointer-events: none; }
+.sync-card.has-il { position: relative; }
+.sync-card .sync-il { position: absolute; top: 12px; right: 12px; pointer-events: none; }
+.sync-card.has-il > .big-acc-k, .sync-card.has-il > .sheet-title, .sync-card.has-il > .sheet-sub { padding-right: 76px; }
+.page-head .head-il { width: 72px; height: 72px; align-self: center; }
+.onb-il { width: 72px; height: 72px; margin: 0 0 8px; }
+@media (max-width: 360px) { .how-chips.has-il { grid-template-columns: 1fr 1fr; } }
