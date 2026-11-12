@@ -116,14 +116,14 @@ function installBlock() {
 
 function slideC() {
   return `<section class="onb-slide" aria-roledescription="slide" aria-label="4 / 4">
-    ${il('03_signal', 64, { cls: 'onb-il', lazy: false })}
     <p class="onb-k">${t('onb.step', { n: 4 })}</p>
     <h2 class="onb-t">${t('onb.c.t')}</h2>
     <p class="onb-s">${t('onb.c.s')}</p>
-    <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('bell')}</span><div><p class="onb-bt">${t('onb.c.pushT')}</p><p class="onb-bs">${t('onb.c.pushS')}</p></div></div><div id="onb-push">${pushBlock()}</div></div>
-    <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('plus-square')}</span><div><p class="onb-bt">${t('onb.c.installT')}</p><p class="onb-bs">${t('onb.c.installS')}</p></div></div><div id="onb-inst">${installBlock()}</div></div>
+    <!-- 1.15.0 (A4): the choice that changes what happens to my money comes first, fully above the bottom bar -->
     <div class="onb-box onb-auto"><div class="onb-box-h"><span class="onb-ic">${icon('spark')}</span><div><p class="onb-bt">${t('onb.c.autoT')}</p><p class="onb-bs">${t('onb.c.autoS')}</p></div></div>
       <div class="onb-yn" role="radiogroup" aria-label="${t('onb.c.autoT')}"><button type="button" class="chip" role="radio" data-onb="auto-yes" aria-checked="${!!store.get('autoCopy', null)?.on}">${t('onb.c.autoYes')}</button><button type="button" class="chip" role="radio" data-onb="auto-no" aria-checked="${store.get('autoCopy', null)?.on === false}">${t('onb.c.autoNo')}</button></div></div>
+    <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('bell')}</span><div><p class="onb-bt">${t('onb.c.pushT')}</p><p class="onb-bs">${t('onb.c.pushS')}</p></div></div><div id="onb-push">${pushBlock()}</div></div>
+    <div class="onb-box"><div class="onb-box-h"><span class="onb-ic">${icon('plus-square')}</span><div><p class="onb-bt">${t('onb.c.installT')}</p><p class="onb-bs">${t('onb.c.installS')}</p></div></div><div id="onb-inst">${installBlock()}</div></div>
     <button type="button" class="btn btn-ghost btn-block onb-how" data-onb="how">${icon('help', 'icon-sm')}${t('onb.c.how')}</button>
     <p class="onb-fine">${t('risk.line')}<br>${F.esc(t('disclaimer'))}</p>
   </section>`;
@@ -144,7 +144,7 @@ export function open(onDone, dataFn = null) {
   root.innerHTML = `<div class="onb-in">
     <div class="onb-top"><img src="./icons/icon-192.png" alt="" width="30" height="30"><span class="onb-brand">${F.esc(CONFIG.APP_NAME)}</span><button type="button" class="onb-skip" data-onb="skip">${t('onb.skip')}</button></div>
     <div class="onb-track" id="onb-track">${slideA()}${slideB()}${slideP()}${slideC()}</div>
-    <div class="onb-foot"><div class="onb-dots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="onb-foot"><button type="button" class="btn btn-ghost onb-back" data-onb="back" hidden>${t('onb.back')}</button><div class="onb-dots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
       <button type="button" class="btn btn-primary onb-next" data-onb="next">${t('onb.next')}</button></div>
   </div>`;
   document.body.append(root);
@@ -163,6 +163,8 @@ export function open(onDone, dataFn = null) {
     const i = idx();
     dots.forEach((d, k) => d.classList.toggle('on', k === i));
     next.textContent = t(i >= LAST ? 'onb.done' : 'onb.next');
+    /* A12: a quiet "Zpět" from step 2 on */
+    const bk = el.querySelector('[data-onb="back"]'); if (bk) bk.hidden = i < 1;
   };
   track.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
 
@@ -242,6 +244,7 @@ export function open(onDone, dataFn = null) {
     const a = b.dataset.onb;
     if (a === 'skip') finish('skipped');
     else if (a === 'next') { const i = idx(); if (i >= LAST) finish('done'); else go(i + 1); }
+    else if (a === 'back') go(Math.max(0, idx() - 1));
     else if (a === 'auto-yes' || a === 'auto-no') {
       /* 1.13.0: from the first-run guide the robot takes only NEW signals (never the running ones at once) */
       store.set('autoCopy', { on: a === 'auto-yes', at: Date.now(), skip: [] });

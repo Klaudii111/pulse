@@ -206,10 +206,25 @@ export function closeAllSheets() {
 
 export const sheetOpen = () => stack.length > 0;
 
+/* 1.15.0 (A7): every open layer = exactly one history entry; Back closes only the top layer and the route handler in
+   app.js skips that popstate (consumePop) - it used to close every sheet below too, leaving dead Back presses. */
+let popConsumed = false;
+let unwindCb = null, unwindTimer = 0;
+export const consumePop = () => { const v = popConsumed; popConsumed = false; return v; };
 window.addEventListener('popstate', () => {
   closingViaHistory = false;
-  if (stack.length) closeInternal(stack[stack.length - 1]);
+  if (unwindCb) { const f = unwindCb; unwindCb = null; clearTimeout(unwindTimer); popConsumed = true; closeAllSheets(); f(); return; }
+  if (stack.length) { popConsumed = true; closeInternal(stack[stack.length - 1]); }
 });
+/* navigating away while sheets are open: first take their history entries back (one step), then run cb (the new route) -
+   so no stale sheet entries stay behind to make a later Back press do nothing */
+export function unwindSheets(cb) {
+  if (!stack.length) { cb(); return; }
+  if (stack.some((e) => e.el.classList.contains('is-closing'))) { setTimeout(() => unwindSheets(cb), 380); return; }
+  unwindCb = cb;
+  try { history.go(-stack.length); } catch { /* ignore */ }
+  unwindTimer = setTimeout(() => { if (unwindCb) { const f = unwindCb; unwindCb = null; closeAllSheets(); f(); } }, 450);
+}
 
 /* ---------- Toast ---------- */
 /* 1.13.2: every toast stays 3 s (5 s with a button) and never covers an open sheet's buttons:

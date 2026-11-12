@@ -477,7 +477,7 @@ export function moneyBlock(m) {
         <p class="sty-k is-win"><span class="sty-kl">${t('sty.win')}${qh('POTOLD')}</span><b class="num up" data-win="${Math.round(n.win)}">${x.win}</b>${n.est ? `<small>${t('sty.winEst')}</small>` : ''}</p>
         <p class="sty-k is-loss"><span class="sty-kl">${t('sty.loss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${x.lv?.v ?? ''}">${x.loss}</b>${x.note ? `<small>${x.note}</small>` : ''}</p>
       </div>
-      ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}</div>`;
+      ${wf && !n.wiped && id !== 'aggr' ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : '' /* A6 / K2-15: the signal's win rate is not true where leverage ends the trade before the stop */}</div>`;
   };
   const mains = tk ? main('cur', tk.amount, tk.lev, true, pid) : cols.map((c) => main(c.id, c.a, c.lev, c.id === pid, c.id)).join('');
   const own = tk && !tk.ro ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b" data-action="lev-own-open" aria-expanded="${!!tk.open}">
@@ -657,7 +657,7 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
     foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
   } else if (cs.cta) {
     const lim = cs.cta === 'limit';
-    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${lim ? t('inv.btnLim', { v: D.spx(s, D.maxEntry(s)) }) : t('sc.invest')}</span></button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+    foot = `<div class="sc-btns"><button type="button" class="btn btn-primary sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${lim ? t('inv.btnLim', { v: D.spx(s, D.maxEntry(s)) }) : t(s.action === 'SELL' ? 'sc.investSell' : 'sc.invest')}</span></button>${notNow ? `<button type="button" class="btn btn-ghost sc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
   let money = '';
   if (ph === 'closed') money = closedLines(s, now);
@@ -759,7 +759,7 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   }
   if (!foot && cs.cta) {
     const lim = cs.cta === 'limit';
-    foot = `<div class="cc-act"><button type="button" class="btn btn-primary cc-go sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${t('sc.invest')}</span></button>${notNow ? `<button type="button" class="link cc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+    foot = `<div class="cc-act"><button type="button" class="btn btn-primary cc-go sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${t(s.action === 'SELL' ? 'sc.investSell' : 'sc.invest')}</span></button>${notNow ? `<button type="button" class="link cc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
   }
   return `<article class="cc sc is-${cs.code} ph-${ph}${isNew ? ' is-new' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="cc-head sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">

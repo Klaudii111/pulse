@@ -3,7 +3,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, il, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts, langSwitch } from './ui.js';
+import { icon, il, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts, langSwitch, consumePop, unwindSheets } from './ui.js';
 import { linkLine } from './views/learn.js';
 import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
@@ -452,7 +452,7 @@ const GLOBAL = {
   'w-withdraw'() { Term.loadSheet(ctx(), 'wd'); },
   'w-reset'() { Term.resetSheet(ctx()); },
   /* guided tour on the real screens (Dnes "?", Více, after the first-run guide) */
-  tour() { if (sheetOpen()) closeAllSheets(); store.set('faq3off', 0); Tour.start(); },
+  tour() { unwindSheets(() => { store.set('faq3off', 0); Tour.start(); }); },
   /* "Robot obchoduje za mě (nanečisto)" switch (Dnes account card, platform) */
   'auto-toggle'(el, ev, gated = false) {
     const on = !store.get('autoCopy', null)?.on;
@@ -706,6 +706,9 @@ async function boot() {
   rerender();
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
   P.initSW();
+  /* 1.15.0 (A6 / K1-16): the splash in index.html stays until the app has drawn its first screen (or the gate) - no empty
+     background while the modules load; index.html keeps only a long fallback timer */
+  { const sp = document.getElementById('splash'); if (sp) { requestAnimationFrame(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 450); }); } }
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
   /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */
@@ -719,6 +722,8 @@ async function boot() {
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).
   window.__pulseGo = (href, opt = {}) => {
+    /* A7: open sheets give their history entries back first (no dead Back press later) */
+    if (sheetOpen()) { unwindSheets(() => window.__pulseGo(href, opt)); return; }
     window.__pulseHash = href;
     try { if (location.hash !== href) { history[opt.replace ? 'replaceState' : 'pushState'](null, '', href); window.__pulsePushed = true; } } catch (e) { window.__pulsePushed = false; /* sandboxed: keep virtual route */ }
     onRoute(opt);
@@ -731,7 +736,8 @@ async function boot() {
     ev.preventDefault(); window.__pulseGo(href, { replace: !!a.closest('.pd-side') && route.name === 'obchod' });
   });
   /* 1.15.0: Back that only closed a style sheet over another sheet (Vyber styl / its confirmation) keeps the sheet below */
-  window.addEventListener('popstate', () => { if (Sty.justClosed() && sheetOpen()) return; window.__pulseHash = null; onRoute({ pop: true }); });
+  /* A7: a Back that closed one sheet layer (ui.js consumePop) is never a route change */
+  window.addEventListener('popstate', () => { if (consumePop()) return; if (Sty.justClosed() && sheetOpen()) return; window.__pulseHash = null; onRoute({ pop: true }); });
   Live.setExtraSymbols(W.watched);
   Live.initLive(() => data);
   Live.onStatus(() => renderChrome());

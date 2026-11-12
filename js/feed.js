@@ -17,7 +17,23 @@ function sigCode(s) {
 
 export const events = () => { const e = store.get(EV, []); return Array.isArray(e) ? e : []; };
 export const seenAt = () => store.get(SEEN, 0) || 0;
-export const unread = () => { const s = seenAt(); return events().filter((e) => e.at > s).length; };
+/* 1.15.0 (A10 / K3-03): what the screen shows - duplicates dropped (same id, or same kind + trade / order / signal + minute),
+   newest first by the time the thing HAPPENED (e.t), so the day groups never come as Dnes … Včera … Dnes */
+export const evTime = (e) => { const x = typeof e.t === 'number' ? e.t : Date.parse(e.t || ''); return Number.isFinite(x) && x > 0 ? x : e.at; };
+export function display() {
+  const seen = new Set(), out = [];
+  events().forEach((e) => {
+    if (!e || !e.k) return;
+    const ts = evTime(e);
+    const k1 = e.id ? `id|${e.id}` : null;
+    const k2 = `${e.k}|${e.pid || e.sid || e.sym || ''}|${e.lim ?? ''}|${Math.floor(ts / 60000)}`;
+    if ((k1 && seen.has(k1)) || seen.has(k2)) return;
+    if (k1) seen.add(k1); seen.add(k2);
+    out.push({ ...e, ts });
+  });
+  return out.sort((a, b) => b.ts - a.ts);
+}
+export const unread = () => { const s = seenAt(); return display().filter((e) => e.at > s).length; };
 export function markSeen() { store.set(SEEN, Date.now()); }
 
 /* Compare the current data with the last snapshot, add new events. Returns the number of new events. */
