@@ -272,7 +272,8 @@ function sigBody(ctx) {
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
   const shown = list.slice(0, 60);
-  return `${off}${B.firstMoneyIdx(shown, data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list" data-list="${ph}">${shown.map((x, i) => B.compact(x, { data, now, i })).join('')}</div>${mineHtml}`;
+  /* 1.13.7: the profile is chosen in the control row above (sgControls) – no second switch above the list */
+  return `${off}<div class="sc-list" data-list="${ph}">${shown.map((x, i) => B.compact(x, { data, now, i })).join('')}</div>${mineHtml}`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {
@@ -288,8 +289,13 @@ function phDesc(ph, data = null, now = D.clock()) {
   }
   return t(`sg.phS.${ph}`, { a: F.money(D.EXAMPLE_DEP[c] || 10000, c, 0) });
 }
-function hzChips(hz) {
-  return `<div class="range-chips sg-hz" role="group" aria-label="${F.esc(t('sg.hz'))}">${HZ_TABS.map((h) => `<button type="button" class="range-chip" data-action="sig-hz" data-id="${h}" aria-pressed="${h === hz}">${h === 'ALL' ? t('sg.hzAll') : t(`u.tab.${h}`)}</button>`).join('')}</div>`;
+/* 1.13.7 ONE control row under the tabs: Délka ▾ + Profil ▾ (compact native selects; data-chg -> the same actions) */
+function sgControls(hz) {
+  const pid = D.profId();
+  const chev = icon('chev-down', 'icon-xs sg-sel-i');
+  const hzSel = `<label class="sg-sel sg-sel-hz"><span class="sg-sel-l">${t('sg.hzSel', { v: '' }).trim()}</span><select data-chg="sig-hz" aria-label="${F.esc(t('sg.hz'))}">${HZ_TABS.map((h) => `<option value="${h}"${h === hz ? ' selected' : ''}>${F.esc(h === 'ALL' ? t('sg.hzAll') : t(`u.tab.${h}`))}</option>`).join('')}</select>${chev}</label>`;
+  const pfSel = `<label class="sg-sel sg-sel-pf"><span class="sg-sel-l">${t('sg.profSel', { v: '' }).trim()}</span><select data-chg="lev-prof" aria-label="${F.esc(t('mb.levAria'))}">${D.PROFILES.map((p) => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>${F.esc(t(`mb.p.${p.id}`))}</option>`).join('')}</select>${chev}</label>`;
+  return `<div class="sg-ctl">${hzSel}${pfSel}</div>`;
 }
 
 /* "Další kontrola za X min" (market open) or the next official run */
@@ -309,11 +315,11 @@ export function render(ctx) {
   }
   const now = ctx.now();
   const ph = curPh(), hz = curHz();
-  const items = PH.map((p) => ({ id: p, label: t(`sg.ph.${p}`), count: phaseList(data, 'ALL', p, now).length }));
+  /* 1.13.7: max 2 control rows above the first card – tabs with counts (the description is the tab's tooltip) + Délka / Profil */
+  const items = PH.map((p) => ({ id: p, label: t(`sg.ph.${p}`), count: phaseList(data, 'ALL', p, now).length, title: t(`sg.phT.${p}`) }));
   return head + `
     <div class="seg-wrap ph-tabs">${seg({ name: 'sph', label: t('sg.tabs'), items, active: ph })}</div>
-    <p class="hz-desc" id="hz-desc">${phDesc(ph, data, now)}</p>
-    ${hzChips(hz)}
+    ${sgControls(hz)}
     ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}
     <div id="sig-body">${sigBody(ctx)}</div>
     <div class="signals-top u-below">${nextLine(ctx.data, now)}${regimeLine(data.signals.regime)}</div>
@@ -371,6 +377,7 @@ function rebody(ctx) {
   if (b) { b.innerHTML = sigBody(ctx); b.classList.remove('is-enter'); void b.offsetWidth; b.classList.add('is-enter'); ctx.afterRender && ctx.afterRender(b, true); }
   const d = root.querySelector('#hz-desc'); if (d) d.innerHTML = phDesc(curPh(), ctx.data, ctx.now());
   root.querySelectorAll('[data-action="sig-hz"]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.id === curHz())));
+  const hs = root.querySelector('select[data-chg="sig-hz"]'); if (hs) hs.value = curHz();
 }
 
 export const actions = {

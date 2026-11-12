@@ -3333,3 +3333,28 @@ body::after {
   html.has-toast .view { padding-bottom: calc(var(--tabbar-h) + var(--sab) + 28px + var(--toast-pad, 0px)); }
   html.has-toast .trade-btns { bottom: calc(var(--tabbar-h) + var(--sab) + 8px + var(--toast-pad, 0px)); }
 }
+
+/* ---------- 1.13.7 ---------- */
+/* Signály: max 2 control rows – tabs with all counts + one row Délka ▾ · Profil ▾ */
+.ph-tabs .seg-btn .seg-count { display: inline-grid; }
+.ph-tabs + .sg-ctl { margin-top: 10px; }
+.sg-ctl { display: flex; gap: 8px; margin: 0 0 12px; min-width: 0; }
+.sg-sel { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 30px 0 12px; min-width: 0;
+  border-radius: 99px; border: 1px solid var(--line-2); background: var(--raise-2); color: var(--ink-3); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.sg-sel-hz { flex: 0 1 auto; }
+.sg-sel-pf { flex: 1 1 auto; max-width: 260px; }
+.sg-sel-l { flex: none; white-space: nowrap; }
+.sg-sel select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: 650;
+  padding: 0; margin: 0; min-width: 0; flex: 1 1 auto; cursor: pointer; outline: none; text-overflow: ellipsis; }
+.sg-sel select option { color: #111; background: #fff; }
+.sg-sel-i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--ink-3); }
+.sg-sel:focus-within { border-color: var(--gold-line); box-shadow: 0 0 0 3px var(--gold-soft); }
+.sg-sel-pf select { color: var(--gold-hi); }
+/* Nový obchod → Podrobnosti: the profile columns compare only (the switch above is the one control) */
+.mb-col.is-ro { cursor: default; }
+.mb-col.is-ro:active { transform: none; }
+.lx-cards:not([role]) .lx-row:not(.is-off) { cursor: default; }
+/* Vybrat: presets above the free money are off */
+.chip.is-off, .chip:disabled { opacity: .38; cursor: not-allowed; border-style: dashed; }
+/* the loss note in a money line ("vklad je omezený") stays muted */
+.cc-ml .down small, .mb-allw { font-weight: 500; }

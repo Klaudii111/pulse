@@ -562,8 +562,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       ${B.tkMoneyLine({ ...mm, lev: st.lev })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <details class="tk-det"${st.detOpen ? ' open' : ''}><summary data-tkdet>${t('tk.details')}${icon('chev-down', 'icon-xs')}</summary>
-      ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
-      ${B.levExamples({ ...mm, sel: st.lev, exOpen: st.exOpen })}
+      ${B.moneyBlock({ ...mm, depLine: true, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen, ro: true } })}
+      ${B.levExamples({ ...mm, sel: st.lev, exOpen: st.exOpen, readonly: true })}
       <p class="tk-fee"><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
       ${isLim() || mktOpen() ? `<p class="tk-small">${t('term.tkReserve', { a: money(st.amount, c) })}</p>` : ''}
       </details>
@@ -777,11 +777,16 @@ export function loadSheet(ctx, mode = 'dep') {
   const chips = (CONFIG.CALC.TOPUP || {})[c] || [10000, 50000, 100000, 500000];
   let m = mode, amt = chips[1];
   const free = () => Math.max(0, Math.floor(W.summary(ctx.data).free));
+  /* 1.13.7 Vybrat: only what is free – the presets above it are off, the default is the biggest preset that fits (or all free) */
+  const fits = (v) => m !== 'wd' || v <= free();
+  const fitAmt = () => { if (m !== 'wd' || amt <= free()) return; const ok = chips.filter((v) => v <= free()); amt = ok.length ? ok[ok.length - 1] : free(); };
+  if (m === 'wd') fitAmt();
   const body = () => `
     ${seg({ name: 'wmode', small: true, label: t('u.acc.k'), items: [{ id: 'dep', label: t('u.acc.load') }, { id: 'wd', label: t('u.acc.wd') }], active: m })}
     <p class="ld-s">${m === 'dep' ? t('ld.depS') : t('ld.wdS', { v: money(free(), c) })}</p>
-    <div class="chips tk-chips">${chips.map((v) => `<button type="button" class="chip" data-ld="${v}" aria-pressed="${v === amt}">${money(v, c)}</button>`).join('')}</div>
-    <label class="tk-in"><span>${t('ld.own', { c })}</span><input class="jin num" inputmode="decimal" data-ldin value="${amt}"></label>
+    <div class="chips tk-chips">${chips.map((v) => (fits(v) ? `<button type="button" class="chip" data-ld="${v}" aria-pressed="${v === amt}">${money(v, c)}</button>`
+    : `<button type="button" class="chip is-off" disabled aria-disabled="true" title="${F.esc(t('ld.wdS', { v: money(free(), c) }))}">${money(v, c)}</button>`)).join('')}</div>
+    <label class="tk-in"><span>${t('ld.own', { c })}</span><input class="jin num" inputmode="numeric" autocomplete="off" data-ldin value="${amt > 0 ? F.num(amt, 0) : ''}"></label>
     <button type="button" class="btn btn-primary btn-block" data-ldgo style="margin-top:14px">${t(m === 'dep' ? 'ld.go' : 'ld.goWd', { v: money(amt || 0, c) })}</button>
     <p class="jnote" style="margin-top:10px">${t('ld.note')}</p>`;
   openSheet({
@@ -795,7 +800,7 @@ export function loadSheet(ctx, mode = 'dep') {
       const draw = () => { root.innerHTML = body(); };
       root.addEventListener('click', (ev) => {
         const sg = ev.target.closest('[data-seg-name="wmode"]');
-        if (sg) { ev.preventDefault(); ev.stopPropagation(); m = sg.dataset.id; draw(); return; }
+        if (sg) { ev.preventDefault(); ev.stopPropagation(); m = sg.dataset.id; fitAmt(); draw(); return; }
         const ch = ev.target.closest('[data-ld]');
         if (ch) { amt = +ch.dataset.ld; draw(); return; }
         if (ev.target.closest('[data-ldgo]')) {
@@ -808,7 +813,8 @@ export function loadSheet(ctx, mode = 'dep') {
       });
       root.addEventListener('input', (ev) => {
         if (!ev.target.matches('[data-ldin]')) return;
-        const v = F.parseNum(ev.target.value); amt = v > 0 ? Math.round(v) : 0;
+        /* 1.13.7: grouped like the first-run amount and Dobít ("50 000") */
+        const v = groupInput(ev.target); amt = v > 0 ? Math.round(v) : 0;
         root.querySelector('[data-ldgo]').textContent = t(m === 'dep' ? 'ld.go' : 'ld.goWd', { v: money(amt || 0, c) });
         root.querySelectorAll('[data-ld]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.ld === amt)));
       });

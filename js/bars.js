@@ -125,7 +125,9 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
   /* 1.13.6: a few bars (the first minutes of a session) are NOT stretched into a few giant candles – a candle chart
      keeps at least 40 slots (16 on a small chart) and the bars sit at the right edge */
-  const slots = type === 'candle' ? Math.max(ks.length, w < 280 ? 16 : 40) : ks.length;
+  /* 1.13.7: the x-axis fits the data there is (a session that started mid-window is not squeezed into the right third) –
+     only a handful of bars keep a small minimum so they never turn into giant candles */
+  const slots = type === 'candle' ? Math.max(ks.length, w < 280 ? 8 : 12) : ks.length;
   const cw = (w - pad.l - pad.r) / slots;
   const X = (i) => pad.l + (slots - ks.length + i) * cw + cw / 2;
   const last = ks[ks.length - 1], first = ks[0];

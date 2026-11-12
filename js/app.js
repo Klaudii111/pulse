@@ -535,6 +535,17 @@ document.addEventListener('keydown', (ev) => {
   ev.preventDefault(); ev.stopPropagation(); el.click();
 });
 
+/* 1.13.7 compact selects (Signály: Délka ▾ / Profil ▾): a change runs the same action as the chip it replaces */
+document.addEventListener('change', (ev) => {
+  const el = ev.target.closest && ev.target.closest('select[data-chg]');
+  if (!el) return;
+  const name = el.dataset.chg;
+  el.dataset.id = el.value; el.dataset.prof = el.value;
+  if (GLOBAL[name]) { GLOBAL[name](el, ev); return; }
+  const v = VIEWS[route.name];
+  if (v.actions && v.actions[name]) v.actions[name](el, ev, ctx());
+});
+
 document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el) return;

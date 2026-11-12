@@ -281,9 +281,18 @@ export function stakeFor(s = null, opt = {}) {
   const px = opt.px > 0 ? opt.px : s?.entry;
   if (s && px > 0 && s.stop > 0 && px !== s.stop) {
     const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px);
-    if (want < cap) { const step = 10 ** Math.max(0, Math.floor(Math.log10(want)) - 3); a = Math.floor(want / step + 1e-9) * step; }
+    /* 1.13.7: a calm deposit – whole 100 Kč / 10 € / 10 $ (7 507 -> 7 500), never above the risk % */
+    if (want < cap) { const st = STAKE_STEP[ccy] || 10; a = Math.floor(want / st + 1e-9) * st; }
   }
   return a >= (DEP_MIN[ccy] || 0) ? a : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
+}
+/* 1.13.7 the rounding step of the default deposit (D.stakeFor) */
+export const STAKE_STEP = { CZK: 100, EUR: 10, USD: 10 };
+/* 1.13.7 the stake of this signal hit the cap (10 % of the wallet) -> its worst case is below the profile's risk % */
+export function stakeLimited(s, amount, opt = {}) {
+  const eq = sizingBase(opt.equity ?? null);
+  if (!(eq > 0) || !(amount > 0)) return false;
+  return Math.abs(amount - stakeCap(eq)) < 0.5;
 }
 
 /* 1.13.5 Kalkulačka: the same leverage as the profiles = the market cap of the instrument (slider max LEVERAGE_MAX) */
@@ -720,11 +729,15 @@ export function offerNums(s, data, { amount = null, lev = null, base = null, sl 
   return { amount: a, lev: L, ccy, base: px, maxLoss: o.atStop, potential: o.atTarget, potentialPct: o.atTarget != null && a > 0 ? (o.atTarget / a) * 100 : null };
 }
 /* result of a CLOSED signal for the example deposit (leverage 1:1): money + % (= zhodnocení of the deposit) */
+/* 1.13.7: the SAME deposit (stakeFor) and the leverage of the chosen profile as an open signal's card -> Ukončené follow the profile */
 export function closedNums(s) {
   const ccy = walletCcy();
-  const a = stakeFor(null);
+  const a = stakeFor(s && s.entry > 0 && s.stop > 0 ? s : null);
+  const lev = profileLev(s?.symbol);
   const pct = priceMove(s);
-  return { amount: a, ccy, pct, money: pct == null ? null : (a * pct) / 100 };
+  /* the trade ends at the stop at worst: the money is capped at the deposit (as outcome() does) */
+  const money = pct == null ? null : Math.max(-a, (a * lev * pct) / 100);
+  return { amount: a, ccy, lev, pct, money, ret: money == null || !(a > 0) ? null : (money / a) * 100 };
 }
 
 /* ---------- 1.10.0: headline numbers – ONLY real closed signals from history.json (+ open signals that ended) ---------- */

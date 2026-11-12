@@ -10,7 +10,7 @@ export function seg({ name, items, active, small = false, label = '' }) {
   const i = Math.max(0, items.findIndex((x) => x.id === active));
   return `<div class="seg ${small ? 'seg-sm' : ''}" role="tablist" aria-label="${F.esc(label)}" style="--n:${items.length};--i:${i}" data-seg="${name}">
     <span class="seg-ind" aria-hidden="true"></span>
-    ${items.map((x) => `<button class="seg-btn${x.locked ? ' is-locked' : ''}" role="tab" type="button" data-action="seg" data-seg-name="${name}" data-id="${x.id}" aria-selected="${x.id === active}">
+    ${items.map((x) => `<button class="seg-btn${x.locked ? ' is-locked' : ''}" role="tab" type="button" data-action="seg" data-seg-name="${name}" data-id="${x.id}" aria-selected="${x.id === active}"${x.title ? ` title="${F.esc(x.title)}"` : ''}>
       ${x.locked ? icon('lock', 'icon-xs') : x.hz ? hzIcon(x.hz) : ''}<span class="seg-l">${F.esc(x.label)}</span>${x.count != null && !x.locked ? `<span class="seg-count num">${x.count}</span>` : ''}
     </button>`).join('')}
   </div>`;
@@ -246,7 +246,7 @@ function reserve(el) {
   de.style.setProperty('--toast-pad', `${h}px`); de.classList.add('has-toast');
   if (atEnd) requestAnimationFrame(() => window.scrollBy({ top: h, behavior: 'smooth' }));
 }
-export function toast(msg, { action = null, timeout = 3000 } = {}) {
+export function toast(msg, { action = null, timeout = 3000, avoid = null } = {}) {
   const root = document.getElementById('toast-root');
   root.querySelectorAll('.toast').forEach((n) => n.remove());
   timeout = action ? 5000 : 3000;
@@ -270,6 +270,15 @@ export function toast(msg, { action = null, timeout = 3000 } = {}) {
   root.append(el);
   if (dock) reserve(el);
   else liftOver(root, el, sh || document.getElementById('view') || document.body);
+  /* 1.13.7: never over the text the toast is about (e.g. "Jak zadat" after Kopírovat) – it moves just above it, or under it */
+  if (avoid && avoid.isConnected) {
+    const a = avoid.getBoundingClientRect(), r = el.getBoundingClientRect();
+    if (r.height && a.height && r.bottom > a.top && r.top < a.bottom) {
+      root.classList.add('is-over');
+      if (a.top - r.height - 12 > 56) root.style.bottom = `${Math.round(window.innerHeight - a.top + 8)}px`;
+      else if (a.bottom + r.height + 12 < window.innerHeight) root.style.bottom = `${Math.round(window.innerHeight - a.bottom - r.height - 8)}px`;
+    }
+  }
   let timer = setTimeout(hide, timeout);
   function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over', 'is-top', 'is-dock'); unreserve(); } }, 260); }
   return hide;

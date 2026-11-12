@@ -345,7 +345,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         const c = el.querySelector('#cta'); if (c) { c.innerHTML = ctaHtml(ctx, s); c.classList.add('pop'); }
       }
       if (ev.target.closest('[data-copy-order]')) {
-        copyText(`${s.symbol} ${F.SIDE[s.action]}\n${lines.join('\n')}`).then((ok) => toast(ok ? t('det.howto.copied') : t('common.copyFailed')));
+        copyText(`${s.symbol} ${F.SIDE[s.action]}\n${lines.join('\n')}`).then((ok) => toast(ok ? t('det.howto.copied') : t('common.copyFailed'), { avoid: ev.target.closest('.howto') }));
       }
     });
   };

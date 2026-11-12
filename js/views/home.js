@@ -255,15 +255,20 @@ export function render(ctx) {
   const sigs = fresh.slice(0, 3);
   const more = all > sigs.length ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: all })}${icon('chev-right', 'icon-xs')}</a>` : '';
   /* 1.13.0: phone = one column (hero · how · signals · mine); desktop = left hero + how + mine, right the signals */
-  return head + `<div class="d-grid">
+  /* 1.13.7: with an open trade or a waiting buy, "Zainvestováno" sits right under Peněženka (before the signal cards) */
+  const smH = W.summary(ctx.data);
+  const hasTrades = smH.rows.length > 0 || (smH.w.orders || []).length > 0;
+  const mineSec = (cls) => `<section class="d-block ${cls}" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>`;
+  return head + `<div class="d-grid${hasTrades ? ' has-trades' : ''}">
   <div class="d-c1">${accountCard(ctx)}
+  ${hasTrades ? mineSec('d-mine-top') : ''}
   ${paths()}
   ${B.statsRow(ctx.data, now)}</div>
   <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
     ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
   </section>
-  <section class="d-block d-c3" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
+  ${hasTrades ? '' : mineSec('d-c3')}
   </div>
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

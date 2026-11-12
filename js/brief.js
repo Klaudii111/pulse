@@ -294,6 +294,32 @@ export function whyBlock(s) {
    Closed signals: Zisk (example deposit) · Zhodnocení · Uzavřeno. */
 export const qh = (k) => `<span class="qm" role="button" tabindex="0" data-action="term-help" data-k="${k}" aria-label="${F.esc(t('th.ask'))}">?</span>`;
 const sMoney = (v, c) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), c, 0);
+/* 1.13.7 ONE worst-case text (card line, detail, invest sheet, profile columns, robot): a calm rounded "≈ −1 000 Kč"
+   (2 significant digits); when the default deposit hit its cap (10 % of the wallet) and so the loss is clearly below the
+   profile's risk %, the EXACT amount + why ("−913 Kč", lim: true, p = the profile's %). capped = the whole deposit. */
+export const roundLoss = (v) => { const a = Math.abs(v); if (!(a > 0)) return 0; const st = Math.max(1, 10 ** (Math.floor(Math.log10(a)) - 1)); return Math.round(a / st) * st; };
+export function lossView(worst, amount, lev, ccy, { capped = false, deposit = null } = {}) {
+  if (worst == null || !Number.isFinite(+worst)) return null;
+  const v = Math.abs(worst);
+  const eq = D.sizingBase(null);
+  const p = D.BASE_PROF.pct * Math.max(1, +lev || 1);
+  const nominal = eq * p / 100;
+  const def = deposit ?? amount;
+  const lim = !capped && eq > 0 && def > 0 && Math.abs(def - amount) < 0.5 && D.stakeLimited(null, amount) && v < nominal * 0.97;
+  const exact = capped || lim;
+  /* within 3 % of the profile's risk (the deposit is floored to 100 Kč / 10 €) = the risk itself: "≈ −1 000 Kč", never "≈ −990 Kč" */
+  const r = exact ? Math.round(v) : roundLoss(nominal > 0 && Math.abs(v - nominal) <= nominal * 0.03 ? nominal : v);
+  return { v: -r, lim, capped, p, txt: `${exact ? '' : '≈ '}${sMoney(-r, ccy)}`, pTxt: F.num(p, p % 1 ? 1 : 0) };
+}
+/* "max ≈ −1 000 Kč" · "max −913 Kč (méně než 1 %, vklad je omezený)" · "max −7 500 Kč (celý vklad)" */
+export function lossLine(lv) {
+  if (!lv) return '';
+  /* "max ≈ −1 000 Kč" never breaks inside; the reason may wrap to the next line */
+  const head = `<span class="nw">${t('cc.max', { v: lv.txt })}</span>`;
+  if (lv.capped) return `${head} (${t('mb.all')})`;
+  if (lv.lim) return `${head} (${t('mb.limS', { p: lv.pTxt })})`;
+  return head;
+}
 export function sigTitle(s) {
   const w = whatIs(s.symbol, s.name);
   return `${F.esc(t('c.title', { n: w.name, d: t(`c.dir.${s.action === 'SELL' ? 'SELL' : 'BUY'}`) }))} <span class="sc-no num">#${D.sigNo(s)}</span>`;
@@ -410,21 +436,22 @@ export function moneyBlock(m) {
   const onId = tk ? (cols.find((c) => c.id === tk.prof && c.lev === tk.lev) || {}).id || null : levProfile().id;
   const sm = (v) => sMoney(v, m.ccy);
   const wf = ok ? winFrac(bt.win_rate) : null;
-  const worstTxt = (n) => (n.worst == null ? '–' : n.capped ? `${sm(n.worst)} <small class="mb-allw">${t('mb.all')}</small>` : sm(n.worst));
+  const lvOf = (n, a) => lossView(n.worst, a, n.lev, m.ccy, { capped: n.capped, deposit: m.ticket ? (m.deposit ?? null) : a });
+  const worstTxt = (n, a) => { const lv = lvOf(n, a); return !lv ? '–' : lv.capped ? `${lv.txt} <small class="mb-allw">${t('mb.all')}</small>` : lv.lim ? `${lv.txt} <small class="mb-allw">${t('mb.limS', { p: lv.pTxt })}</small>` : lv.txt; };
   const main = (key, a, lev, on, pid) => {
     const n = levNums({ ...arg, amount: a, lev });
-    const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
+    const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), lv: lvOf(n, a)?.v ?? 0, p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
     const dep = m.depLine ? `<p class="sc-dep">${t('c.dep', { a: F.money(a, m.ccy, 0) })}</p>` : '';
     if (!ok) {
       const pp = n.best != null && a > 0 ? (n.best / a) * 100 : null;
       return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
-        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
+        <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p>
         <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
     }
     return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
-      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p></div>`;
+      <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down" data-lv="${lvOf(n, a)?.v ?? ''}">${worstTxt(n, a)}</b></p></div>`;
   };
   const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
   /* 1.13.3: a trade without a signal is sized by the deposit cap, not by the risk % -> its columns show the REAL share of
@@ -433,11 +460,13 @@ export function moneyBlock(m) {
      wallet is one separate line under the main block ("Tento obchod: nejhůř −300 Kč = 0,3 % peněženky") */
   const eq = D.sizingBase(null);
   const pctTxt = (v) => { const r = Math.round(v * 10) / 10; return F.num(r, r < 1 ? 1 : 0); };
-  const cell = (c) => `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
+  /* 1.13.7: in the invest sheet the columns only COMPARE (read-only) – the profile switch above is the one control */
+  const cell = (c) => `${tk ? `<div class="mb-col is-ro${c.id === onId ? ' is-on' : ''}" data-ro-prof="${c.id}"${c.id === onId ? ' aria-current="true"' : ''}>`
+    : `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">`}
       <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl mb-pdep" data-dep="${Math.round(c.a)}">${t('mb.depCol', { a: `<span class="nw">${F.money(c.a, m.ccy, 0)}</span>` })}</span><span class="mb-pl">${levTxt(c.lev)}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
-      <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
-  const own = tk ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
+      <span class="mb-pw num${c.n.capped ? ' is-all' : ''}" data-lv="${lvOf(c.n, c.a)?.v ?? ''}">${c.n.worst != null ? lvOf(c.n, c.a).txt : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span>${tk ? '</div>' : '</button>'}`;
+  const own = tk && !tk.ro ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
       <span>${t('mb.own')}</span><b class="num mb-own-v">${onId ? '' : `1:${tk.lev}`}</b>${icon('chev-down', 'icon-xs')}</button>
     <div class="mb-own"${tk.open ? '' : ' hidden'}>${levChips(m.sym, tk.lev)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>` : '';
   /* 1.13.4: the worst share of the deposit for the SELECTED profile (one note per column, the chosen one shown;
@@ -449,7 +478,7 @@ export function moneyBlock(m) {
     const p = dPct(a, n.worst);
     if (p == null) return '';
     const w = eq > 0 ? Math.abs(n.worst) / eq * 100 : null;
-    return `<p class="mb-note" data-p="${key}" data-maxpct="${p}"${w != null ? ` data-realpct="${w.toFixed(2)}"` : ''}${on ? '' : ' hidden'}>${t(w != null ? 'mb.trade' : 'mb.trade0', { v: `<span class="nw">${sm(n.worst)}</span>`, p, w: w != null ? pctTxt(w) : '' })}</p>`;
+    return `<p class="mb-note" data-p="${key}" data-maxpct="${p}"${w != null ? ` data-realpct="${w.toFixed(2)}"` : ''}${on ? '' : ' hidden'}>${t(w != null ? 'mb.trade' : 'mb.trade0', { v: `<span class="nw">${lvOf(n, a)?.txt ?? sm(n.worst)}</span>`, p, w: w != null ? pctTxt(w) : '' })}</p>`;
   };
   let notes;
   if (tk) {
@@ -458,7 +487,7 @@ export function moneyBlock(m) {
   } else {
     notes = cols.map((c) => note(c.id, c.a, c.n, c.id === onId)).join('') + (m.s ? cols.map((c) => ddLine(c.id, m.sym, c.id === onId)).join('') : '');
   }
-  const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
+  const table = `<div class="mb-lev${tk ? ' is-ro' : ''}" style="--n:${cols.length}"${tk ? '' : ` role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}"`}>
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
       ${cols.map(cell).join('')}</div>${own}${notes}<p class="mb-same">${t('mb.same')}</p>`;
   return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${table}
@@ -513,8 +542,9 @@ export function tkMoneyLine(m) {
   const sm = (v) => sMoney(v, m.ccy);
   const nw = (v) => `<span class="nw">${v}</span>`;
   const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa')) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
-  const loss = x.worst != null ? t(x.capped ? 'cc.maxAll' : 'cc.max', { v: sm(x.worst) }) : '';
-  return `<p class="cc-ml tk-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-loss="${Math.round(x.worst ?? 0)}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down nw">${loss}</span>` : ''}</p>`;
+  const lv = lossView(x.worst, m.amount, m.lev, m.ccy, { capped: x.capped, deposit: m.deposit ?? null });
+  const loss = lossLine(lv);
+  return `<p class="cc-ml tk-ml num" data-a="${Math.round(m.amount)}" data-l="${m.lev}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"><b class="nw">${F.money(m.amount, m.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
 }
 export function tkProfSwitch(sym, prof, lev) {
   const cols = profCols(sym);
@@ -591,11 +621,11 @@ export function facts(s, ph, now = D.clock()) {
 /* closed: what the example deposit made */
 export function closedLines(s, now = D.clock()) {
   const r = D.closedNums(s);
-  const mt = D.moneyTone(r.money, r.ccy, r.pct);
+  const mt = D.moneyTone(r.money, r.ccy, r.ret);
   const at = D.closeDate(s);
   return `<div class="sc-res">
-    <div><p class="sc-rl">${t('c.profit')}</p><p class="sc-rv num ${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</p><p class="sc-rs">${t('c.profitS', { a: F.money(r.amount, r.ccy, 0) })}</p></div>
-    <div><p class="sc-rl">${t('c.ret')}${qh('ZHOD')}</p><p class="sc-rv num ${mt.tone}">${r.pct != null ? F.spct(r.pct, 1) : '–'}</p></div>
+    <div><p class="sc-rl">${t('c.profit')}</p><p class="sc-rv num ${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</p><p class="sc-rs">${t(r.lev > 1 ? 'c.profitSLev' : 'c.profitS', { a: F.money(r.amount, r.ccy, 0), l: r.lev })}</p></div>
+    <div><p class="sc-rl">${t('c.ret')}${qh('ZHOD')}</p><p class="sc-rv num ${mt.tone}">${r.ret != null ? F.spct(r.ret, 1) : '–'}</p></div>
     <div><p class="sc-rl">${t('c.closedAt')}</p><p class="sc-rv num">${at ? F.dm(at) : '–'}</p></div>
   </div>`;
 }
@@ -676,8 +706,9 @@ export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true
     const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev: c.lev, bt: ok ? bt : null });
     const nw = (v) => `<span class="nw">${v}</span>`;
     const gain = ok ? (x.avg != null ? t('cc.avg', { v: nw(`≈ ${sm(x.avg)}`) }) : t('cc.avgNa')) : t('cc.tp', { v: nw(x.best != null ? sm(x.best) : '–') });
-    const loss = x.worst != null ? t(x.capped ? 'cc.maxAll' : 'cc.max', { v: nw(sm(x.worst)) }) : '';
-    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down nw">${loss}</span>` : ''}</p>`;
+    const lv = lossView(x.worst, a, c.lev, n.ccy, { capped: x.capped });
+    const loss = lossLine(lv);
+    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}" data-lv="${lv ? lv.v : ''}"${c.id === pid ? '' : ' hidden'}><b class="nw">${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
   };
   /* the three profile chips only on the first card of a list (and in the detail / sheet) */
   const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · ${c.lev > 1 ? `1:${c.lev}` : t('mb.noLev')}</small></button>`).join('')}</div>` : '';
@@ -707,8 +738,9 @@ export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew
   let mid = '', foot = '';
   if (ph === 'closed') {
     const r = D.closedNums(s);
-    const mt = D.moneyTone(r.money, r.ccy, r.pct);
-    mid = `<p class="cc-ml num">${t('cc.closed', { a: F.money(r.amount, r.ccy, 0) })} <b class="${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</b>${r.pct != null ? ` <small class="${mt.tone}">(${F.spct(r.pct, 1)})</small>` : ''}</p>`;
+    const mt = D.moneyTone(r.money, r.ccy, r.ret);
+    /* 1.13.7: the deposit and leverage of the chosen profile (D.closedNums = the same stake as an open card) */
+    mid = `<p class="cc-ml num cc-closed" data-a="${r.amount}" data-l="${r.lev}" data-m="${r.money == null ? '' : Math.round(r.money)}">${t(r.lev > 1 ? 'cc.closedLev' : 'cc.closed', { a: F.money(r.amount, r.ccy, 0), l: r.lev })} <b class="${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</b>${r.ret != null ? ` <small class="${mt.tone}">(${F.spct(r.ret, 1)})</small>` : ''}</p>`;
   } else if (cs.code === 'mine' || (cs.code === 'done' && cs.my)) {
     const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
     foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
