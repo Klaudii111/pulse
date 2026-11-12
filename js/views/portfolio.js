@@ -952,7 +952,7 @@ export function dnesBlock(ctx) {
   const open = D.moneyTone(sm.open, c, sm.used > 0 ? sm.open / sm.used * 100 : null);
   const td = D.moneyTone(sm.todayOpen, c, null);
   const ords = (sm.w.orders || []).map((o) => ordRow(o, ctx.data, c)).join('');
-  const head = `<a class="pf-sum" href="#/portfolio" id="d-pf"><span class="pf-sum-l"><b>${t('po.sumK', { n: h.n })}</b><small class="num">${t('po.sumS', { a: F.money(sm.used, c, 0) })}</small></span>
+  const head = `<a class="pf-sum" href="#/portfolio" id="d-pf"><span class="pf-sum-l"><b>${t('po.sumK', { n: h.n })}</b><small class="num">${sm.reserved > 0 ? t('zi.split', { a: F.money(sm.used, c, 0), b: F.money(sm.reserved, c, 0) }) : t('po.sumS', { a: F.money(sm.used, c, 0) })}</small></span>
     <span class="pf-sum-v num"><b class="tone-${open.tone}">${open.zero ? `±${F.money(0, c, 0)}` : F.esc(open.text)}</b><small class="${sm.todayReady === false ? 'is-unk' : `tone-${td.tone}`}">${t('po.rowToday', { v: sm.todayReady === false ? UNK : sg(sm.todayOpen, c) })}</small></span>${icon('chev-right', 'icon-xs')}</a>`;
   const max = 4;
   const more = rows.length > max ? `<a class="d-more" href="#/portfolio">${t('po.allN', { n: rows.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
