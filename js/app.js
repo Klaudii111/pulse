@@ -204,13 +204,18 @@ function onLangChange() {
 }
 
 let curHash = null;
+const navStack = [];
 function onRoute(opt = {}) {
   const prev = route.name;
   const prevHash = curHash;
   route = parseRoute();
   curHash = window.__pulseHash ?? location.hash;
-  /* a replaced route (the desktop side list) keeps the original "from" */
-  if (!opt.replace && prevHash !== curHash) fromRoute = prevHash != null ? { name: prev, hash: prevHash || '#/dnes' } : null;
+  /* 1.15.0 "from" = the screen Back returns to: a stack that follows the history (push / back), so the label of the
+     trade page's "← …" and where Back really goes are always the same; a replaced route (desktop side list) keeps it */
+  if (opt.pop) navStack.pop();
+  else if (!opt.replace && prevHash !== curHash && prevHash != null) navStack.push({ name: prev, hash: prevHash || '#/dnes' });
+  if (navStack.length > 60) navStack.shift();
+  fromRoute = navStack[navStack.length - 1] || null;
   if (route.name !== prev) { VIEWS[route.name].enter?.(); clearToasts(); }
   closeAllSheets();
   M.withTransition(() => { renderNav(); rerender(); });
@@ -685,7 +690,7 @@ async function boot() {
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).
   window.__pulseGo = (href, opt = {}) => {
     window.__pulseHash = href;
-    try { if (location.hash !== href) history[opt.replace ? 'replaceState' : 'pushState'](null, '', href); } catch (e) { /* sandboxed: keep virtual route */ }
+    try { if (location.hash !== href) { history[opt.replace ? 'replaceState' : 'pushState'](null, '', href); window.__pulsePushed = true; } } catch (e) { window.__pulsePushed = false; /* sandboxed: keep virtual route */ }
     onRoute(opt);
   };
   document.addEventListener('click', (ev) => {
@@ -695,7 +700,7 @@ async function boot() {
     /* 1.15.0: picking another trade in the desktop side list replaces the detail (Back still returns to where I came from) */
     ev.preventDefault(); window.__pulseGo(href, { replace: !!a.closest('.pd-side') && route.name === 'obchod' });
   });
-  window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute(); });
+  window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute({ pop: true }); });
   Live.setExtraSymbols(W.watched);
   Live.initLive(() => data);
   Live.onStatus(() => renderChrome());

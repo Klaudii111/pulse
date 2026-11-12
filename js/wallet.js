@@ -176,11 +176,11 @@ export function editLevels(data, id, { sl = null, tp = null }) {
   const pos = w.positions.find((x) => x.id === id);
   if (!pos) return { ok: false, reason: 'gone' };
   const q = priceOf(pos.sym, data);
-  const px = q ? q.p : pos.entry;
-  const bad = levelsBad(pos.side, px, sl, tp);
+  if (!q || !(q.p > 0)) return { ok: false, reason: 'noPrice' }; // never checked against an old entry price
+  const bad = levelsBad(pos.side, q.p, sl, tp);
   if (bad) return { ok: false, reason: bad };
   const nsl = sl > 0 ? +sl : null, ntp = tp > 0 ? +tp : null;
-  if (nsl === pos.sl && ntp === pos.tp) return { ok: true, pos, same: true };
+  if (nsl === (pos.sl ?? null) && ntp === (pos.tp ?? null)) return { ok: true, pos, same: true };
   const at = Date.now();
   pos.log = Array.isArray(pos.log) ? pos.log : [];
   pos.log.push({ id: `${pos.id}:e${at}${store.devTag()}`, k: 'edit', at, sl: nsl, tp: ntp, psl: pos.sl ?? null, ptp: pos.tp ?? null });
@@ -639,7 +639,8 @@ export function merge(older, newer) {
   w.cash = join(n.cash, oCashOnly).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
   w.olog = join(n.olog, o.olog).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 200);
   w.copied = [...new Set([...(n.copied || []), ...(o.copied || [])])].slice(0, 400);
-  w.dayOpen = { ...(o.dayOpen || {}), ...(n.dayOpen || {}) };
+  /* 1.15.0: the older copy's start-of-day values only when they are from the same day (never yesterday's as today's) */
+  w.dayOpen = o.day === n.day ? { ...(o.dayOpen || {}), ...(n.dayOpen || {}) } : { ...(n.dayOpen || {}) };
   w.seq = Math.max(o.seq || 1, n.seq || 1);
   const add = oClosedOnly.reduce((a, c) => a + (+c.pnl || 0), 0) + oCashOnly.reduce((a, c) => a + (+c.amount || 0), 0);
   w.balance = Math.max(0, (+n.balance || 0) + add);

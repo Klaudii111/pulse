@@ -66,6 +66,7 @@ export default {
   'pd.st.noSig': 'Obchod podle signálu robota. Signál už v dnešních datech není – stop a cíl hlídáme dál, nemusíš nic dělat.',
   'pd.a.share': 'Sdílet',
   'pd.st.holds0': 'Robot tenhle obchod pořád drží na svém účtu. Nemusíš nic dělat – stop a cíl hlídáme.',
+  'term.err.noPrice': 'Teď neznáme cenu tohoto trhu – zkus to za chvíli.',
   'pd.st.own': 'Vlastní obchod – rozhoduješ ty. Stop a cíl hlídáme i se zavřenou aplikací.',
   'pd.st.holds': 'Robot tenhle obchod pořád drží a signál platí do {d} – nemusíš nic dělat.',
   'pd.st.open': 'Signál pořád platí (do {d}). Nemusíš nic dělat, stop a cíl hlídáme.',

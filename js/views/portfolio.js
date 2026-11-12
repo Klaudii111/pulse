@@ -198,6 +198,7 @@ async function loadChart(ctx, force = false) {
   const key = `${r}|${w.positions.length}|${w.closed.length}|${(w.cash || []).length}|${w.createdAt}`;
   if (!force && hist && hist.key === key && Date.now() - hist.at < 60000) { drawChart(ctx); return; }
   const h = await P.history(ctx.data, r);
+  if (P.curRange() !== r) return; // the user picked another period meanwhile
   hist = { key, at: Date.now(), data: h };
   drawChart(ctx);
 }
@@ -658,8 +659,9 @@ async function share(ctx, id) {
 export const actions = {
   'pd-back'(el, ev, ctx) {
     /* back = where I came from (history), else Portfolio */
-    if (ctx.from && window.history.length > 1) { window.history.back(); return; }
-    window.__pulseGo('#/portfolio');
+    const from = ctx.from && BACK[ctx.from.name] ? ctx.from : null;
+    if (from && window.__pulsePushed) { window.history.back(); return; }
+    window.__pulseGo(from ? from.hash : '#/portfolio');
   },
   'pd-levels'(el, ev, ctx) { levelsSheet(ctx, el.dataset.id); },
   'pd-more'(el, ev, ctx) { const g = P.find(ctx.data, el.dataset.id); if (g?.open) buyMore(ctx, g.row); },

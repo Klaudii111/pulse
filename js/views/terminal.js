@@ -393,13 +393,13 @@ function mineChips(sym, sm) {
 }
 function mineLevels(sym, data) {
   const sm = W.summary(data);
-  const p = sm.rows.find((x) => x.sym === sym);
   const lv = [];
-  if (p) {
+  /* every trade I hold on this market (two buys = two entry lines, each with its own stop / target) */
+  sm.rows.filter((x) => x.sym === sym).forEach((p) => {
     if (p.tp > 0) lv.push({ v: p.tp, label: t('pd.lv.myTp'), cls: 'up' });
     lv.push({ v: p.entry, label: t('pd.lv.mine'), cls: 'ent' });
     if (p.sl > 0) lv.push({ v: p.sl, label: t('pd.lv.mySl'), cls: 'down' });
-  }
+  });
   (sm.w.orders || []).filter((o) => o.sym === sym).slice(0, 1).forEach((o) => lv.push({ v: o.limit, label: t('pd.lv.limit'), cls: 'ent' }));
   return lv;
 }

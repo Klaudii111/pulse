@@ -151,8 +151,10 @@ export async function history(data, rangeId) {
   if (R.id === 'a') {
     /* Vše: one point per day – the stored snapshot of that day when there is one (real value seen in the app), else rebuilt */
     const eqd = w.eqd && typeof w.eqd === 'object' ? w.eqd : {};
-    for (let d = dayStart(from); d < dayStart(now); d += 86400000) {
-      const end = Math.max(from, Math.min(now, d + 86400000 - 1));
+    /* calendar days (a daylight-saving day has 23 / 25 h) */
+    for (let d = dayStart(from); d < dayStart(now); d = (() => { const x = new Date(d); x.setDate(x.getDate() + 1); return +x; })()) {
+      const nx = new Date(d); nx.setDate(nx.getDate() + 1);
+      const end = Math.max(from, Math.min(now, +nx - 1));
       const k = W.dayKey(d);
       pts.push({ t: end, v: eqd[k] && Number.isFinite(+eqd[k].eq) ? +eqd[k].eq : equityAt(end, w, trades, bars, miss), snap: !!eqd[k] });
     }

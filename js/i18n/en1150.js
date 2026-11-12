@@ -65,6 +65,7 @@ export default {
   'pd.st.noSig': 'A trade from a robot signal. The signal is no longer in today’s data – we keep watching the stop and target, nothing to do.',
   'pd.a.share': 'Share',
   'pd.st.holds0': 'The robot still holds this trade on its account. Nothing to do – we watch the stop and target.',
+  'term.err.noPrice': 'The price of this market is not known right now – try again in a moment.',
   'pd.st.own': 'Your own trade – you decide. We watch the stop and target even with the app closed.',
   'pd.st.holds': 'The robot still holds this trade and the signal is valid until {d} – nothing to do.',
   'pd.st.open': 'The signal is still valid (until {d}). Nothing to do, we watch the stop and target.',

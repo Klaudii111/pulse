@@ -15,17 +15,18 @@ const side = (s) => t(s === 'SELL' ? 'ev.sell' : 'ev.buy');
    by market + time; nothing found -> Portfolio (never the whole Obchodovat) */
 export function tradeHref(e) {
   const w = store.get('wallet', null) || {};
-  const all = (w.positions || []).concat(w.closed || [], w.orders || [], w.ordEnded || []);
+  /* a page exists for an open / closed trade and a waiting order; an ended order only through the trade it became */
+  const all = (w.positions || []).concat(w.closed || [], w.orders || []);
   const has = (id) => id && all.some((x) => x.id === id);
+  const viaFill = (id) => { const f = (w.ordEnded || []).find((o) => o.id === id && o.end === 'filled' && o.pos); return f && has(f.pos) ? f.pos : null; };
   let id = e.pid;
-  if (id && !has(id)) id = null;
-  if (id) { const f = (w.ordEnded || []).find((o) => o.id === id && o.end === 'filled' && o.pos); if (f && has(f.pos)) id = f.pos; }
+  if (id && !has(id)) id = viaFill(id);
   if (!id && e.sym) {
     const near = (a, b) => a && b && Math.abs(a - b) < 3 * 60000;
     const tt = Date.parse(e.t || 0) || e.t || e.at;
     const x = (w.positions || []).concat(w.closed || []).find((p) => p.sym === e.sym && (near(p.openedAt, tt) || near(p.closedAt, tt) || near(p.entryT, tt)))
       || (w.orders || []).concat(w.ordEnded || []).find((o) => o.sym === e.sym && (near(o.placedAt, tt) || near(o.endAt, tt)) && (e.lim == null || o.limit === e.lim));
-    if (x) id = x.end === 'filled' && x.pos && has(x.pos) ? x.pos : x.end && x.end !== 'filled' ? null : x.id;
+    if (x) id = x.end ? viaFill(x.id) : x.id;
   }
   return id ? `#/obchod/${encodeURIComponent(id)}` : '#/portfolio';
 }
