@@ -3,6 +3,7 @@
 //   3 CO UDĚLAL ROBOT (quiet line from paper.json), 4 JAK SE DAŘÍ (the shared status line).
 // Plus ONE state chip from the user's side: Můžeš koupit / Máš koupeno / Čeká tvůj limitní příkaz /
 // Robot drží – ty už nekupuj / Ukončeno. Everything else (levels, bar, risk, dates) sits behind "Podrobnosti".
+import { CONFIG } from '../config.js';
 import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
@@ -187,7 +188,9 @@ export function published(s) {
 export function myLine(cs) {
   if (cs.my) {
     const mt = D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct);
-    const pct = cs.my.pct != null && !mt.zero ? ` · ${F.spct(cs.my.pct, 1)}` : '';
+    const pct = cs.my.pct != null && !mt.zero ? ` · ${F.mpct(cs.my.pct, cs.my.money)}` : '';
+    /* 1.13.2: a trade I already closed shows the wallet's closed result – the same number as Historie */
+    if (cs.my.closed) return `<p class="bc-my is-closed tone-${mt.tone}"><b class="num">${F.esc(t('my.closed', { v: mt.text }))}${pct}</b></p>`;
     return `<p class="bc-my tone-${mt.tone}"><span>${t('st.youReal')}</span><b class="num">${F.esc(mt.text)}${pct}</b></p>`;
   }
   if (cs.ifBought && cs.code !== 'done') {
@@ -312,27 +315,23 @@ export function phaseChip(ph) {
    and a small comparison of three leverage profiles (Konzervativně 1:1 · Vyváženě 1:2 · Agresivněji 1:5, capped at the
    instrument's legal max). No health.json -> the 1.11.0 lines (loss + potential at the target). */
 /* 1.11.2: the 3rd profile uses the instrument's current cap (retail: shares 1:5, pro: 1:20); "own" = any broker chip */
-export const LEV_PROFILES = [{ id: 'cons', lev: 1 }, { id: 'bal', lev: 2 }, { id: 'aggr', lev: 'max' }];
-const ownLev = () => { const v = +store.get('levOwn', 10); return v >= 1 ? Math.round(v) : 10; };
-export const levProfile = () => {
-  const id = store.get('levProfile', 'cons');
-  if (id === 'own') return { id: 'own', lev: ownLev() };
-  return LEV_PROFILES.find((p) => p.id === id) || LEV_PROFILES[0];
-};
-const profLev = (p, mx) => (p.lev === 'max' ? mx : Math.min(p.lev, mx));
-/* 1.13.1: always the three profiles (crypto 1:1 · 1:2 · Agresivněji 1:2 = its cap) – the column of MY profile is the chosen one */
+/* 1.13.2 ONE profile = risk at the stop + leverage (D.PROFILES): Konzervativně 1 % bez páky · Vyváženě 2 % do 1:2 ·
+   Agresivněji 4 % až do stropu trhu (akcie 1:5, zlato 1:20, krypto 1:2). The leverage per instrument: D.profLevFor. */
+export const LEV_PROFILES = CONFIG.CALC.RISK_PROFILES; // = D.PROFILES (read from CONFIG: domain ↔ brief import each other)
+export const levProfile = () => D.prof();
 export function profCols(sym) {
-  const mx = M.maxLev(sym) || 1;
-  return LEV_PROFILES.map((p) => ({ ...p, lev: profLev(p, mx) }));
+  return D.PROFILES.map((p) => ({ ...p, lev: D.profLevFor(p, sym) }));
 }
-/* which column is "on" for the leverage sel: my profile's column when it has that leverage, else the first with it */
+/* which column is "on" for a leverage (the invest sheet): my profile's column when it has that leverage, else the first with it */
 export function onColId(cols, sel) {
   const lp = levProfile();
   const mine = cols.find((c) => c.id === lp.id && c.lev === sel);
   return (mine || cols.find((c) => c.lev === sel) || {}).id || null;
 }
 /* the leverage of the user's profile for this instrument (capped at the cap that applies now) */
-export const selLev = (sym) => profLev(levProfile(), M.maxLev(sym) || 1);
+export const selLev = (sym) => D.profLevFor(D.prof(), sym);
+/* "riziko 2 % · páka 1:2" – the one-line meaning of a profile for one instrument */
+export const profMeta = (c) => `${t('mb.risk', { v: F.num(c.pct, 0) })} · ${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}`;
 /* "1 ze 2" / "3 z 5" / "6 z 10": the simplest fraction within 3 points of the test's win rate */
 export function winFrac(w) {
   if (!(w > 0 && w < 1)) return null;
@@ -385,58 +384,55 @@ export function levChips(sym, sel) {
     : `<button type="button" class="lev-chip is-off" aria-disabled="true" data-action="lev-why" data-sym="${F.esc(sym)}" data-v="${v}">1:${v}</button>`)).join('')}</div>
     <p class="lev-why" hidden></p>`;
 }
-/* 1.12.0: the worst period of the whole account in the test 2023–26 (all three horizons): 1:2 -26 %, 1:5 -58 % – one muted line each */
-export function ddNote(cols = null) {
-  const ids = cols ? cols.map((c) => c.id) : ['bal', 'aggr'];
-  return ['bal', 'aggr'].filter((id) => ids.includes(id)).map((id) => `<p class="mb-dd"><b>${t(`mb.p.${id}`)}:</b> ${t(`dd.${id}`)}</p>`).join('');
+/* 1.12.0 the worst period of the whole account in the test 2023–26 – 1.13.2: one muted line for the chosen profile,
+   only on robot signals in shares (the test was made on shares: Vyváženě −26 %, Agresivněji 1:5 −58 %) */
+export function ddLine(id, sym) {
+  if (!['bal', 'aggr'].includes(id) || M.levKind(sym) !== 'stock') return '';
+  return `<p class="mb-dd"><b>${t(`mb.p.${id}`)}:</b> ${t(`dd.${id}`)}</p>`;
 }
-/* m = { s, data, sym, side, amount, ccy, base, sl, tp, sel, open } – open: the chip list shown (invest sheet) */
+/* m = { s, data, sym, side, ccy, base, sl, tp, amountFor(col) | amount, depLine, ticket }
+   1.13.2: card / detail = one main block per PROFILE (the chosen one shown) + the 3-profile comparison;
+   ticket = { amount, lev, prof, open }: one main block for exactly what the sheet will buy, the columns compare the profiles */
 export function moneyBlock(m) {
   const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
-  /* 1.13.1: amountFor(lev) = the deposit sized for that leverage (detail, untouched sheet); else one fixed deposit */
-  const amt = (lev) => (m.amountFor ? m.amountFor(lev) : m.amount);
   const arg = { side: m.side, entry: m.base, sl: m.sl, tp: m.tp, bt: ok ? bt : null };
   const mx = M.maxLev(m.sym) || 1;
-  const cols = profCols(m.sym).map((c) => ({ ...c, n: levNums({ ...arg, amount: amt(c.lev), lev: c.lev }) }));
-  const onId = onColId(cols, m.sel);
-  /* every enabled chip has its block ready, so a tap anywhere on the page only switches what is shown */
-  const levs = M.levSteps(mx);
-  if (!levs.includes(m.sel)) levs.push(m.sel);
+  const cols = profCols(m.sym).map((c) => { const a = m.amountFor ? m.amountFor(c) : m.amount; return { ...c, a, n: levNums({ ...arg, amount: a, lev: c.lev }) }; });
+  const tk = m.ticket || null;
+  const onId = tk ? (cols.find((c) => c.id === tk.prof && c.lev === tk.lev) || {}).id || null : levProfile().id;
   const sm = (v) => sMoney(v, m.ccy);
   const wf = ok ? winFrac(bt.win_rate) : null;
   const worstTxt = (n) => (n.worst == null ? '–' : n.capped ? `${sm(n.worst)} <small class="mb-allw">${t('mb.all')}</small>` : sm(n.worst));
-  const main = (lev) => {
-    const a = amt(lev);
+  const main = (key, a, lev, on, pid) => {
     const n = levNums({ ...arg, amount: a, lev });
-    const on = lev === m.sel;
     const nums = F.esc(JSON.stringify({ a, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
     const dep = m.depLine ? `<p class="sc-dep">${t('c.dep', { a: F.money(a, m.ccy, 0) })}</p>` : '';
-    /* 1.13.0: no per-tile leverage warning – one risk line under the button, the details in Příklady pák */
+    const dd = m.s && pid ? ddLine(pid, m.sym) : '';
     if (!ok) {
       const pp = n.best != null && a > 0 ? (n.best / a) * 100 : null;
-      return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">${dep}
+      return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
         <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
-        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
+        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p>${dd}</div>`;
     }
-    return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">${dep}
+    return `<div class="mb-main${on ? ' is-on' : ''}" data-p="${key}" data-l="${lev}" data-nums="${nums}">${dep}
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
       <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
-      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p></div>`;
+      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p>${dd}</div>`;
   };
+  const mains = tk ? main('cur', tk.amount, tk.lev, true, onId) : cols.map((c) => main(c.id, c.a, c.lev, c.id === onId, c.id)).join('');
   const cell = (c) => `<button type="button" class="mb-col${c.id === onId ? ' is-on' : ''}" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
-      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
+      <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${t('mb.risk', { v: F.num(c.pct, 0) })}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
       <span class="mb-pv num">${ok ? (c.n.avg != null ? `≈ ${sm(c.n.avg)}` : '–') : (c.n.best != null ? sm(c.n.best) : '–')}</span>
       <span class="mb-pw num${c.n.capped ? ' is-all' : ''}">${c.n.worst != null ? sm(c.n.worst) : '–'}${c.n.capped ? `<small>${t('mb.all')}</small>` : ''}</span></button>`;
-  const ownOn = !onId;
-  const own = `<div class="mb-ownw${m.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${ownOn ? ' is-on' : ''}" data-action="lev-own-open" aria-expanded="${!!m.open}">
-      <span>${t('mb.own')}</span><b class="num mb-own-v">${ownOn ? `1:${m.sel}` : ''}</b>${icon('chev-down', 'icon-xs')}</button>
-    <div class="mb-own"${m.open ? '' : ' hidden'}>${levChips(m.sym, m.sel)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>`;
+  const own = tk ? `<div class="mb-ownw${tk.open ? ' is-open' : ''}"><button type="button" class="mb-own-b${onId ? '' : ' is-on'}" data-action="lev-own-open" aria-expanded="${!!tk.open}">
+      <span>${t('mb.own')}</span><b class="num mb-own-v">${onId ? '' : `1:${tk.lev}`}</b>${icon('chev-down', 'icon-xs')}</button>
+    <div class="mb-own"${tk.open ? '' : ' hidden'}>${levChips(m.sym, tk.lev)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>` : '';
   const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>${m.s && m.dd !== false ? ddNote(cols) : ''}`;
-  return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${levs.map(main).join('')}${table}
+      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote2')}</p>`;
+  return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${mains}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
 }
 /* 1.11.2 "Příklady pák" (invest sheet): this signal / instrument and this deposit at 1:1 … 1:30 – the same numbers (levNums) */
@@ -452,7 +448,7 @@ export function levExamples(m) {
     const off = lev > mx;
     const tag = off ? `<small class="lx-off">${t(lev <= pro && !M.isPro() ? 'lx.onlyPro' : 'lx.never')}</small>` : '';
     const w = 100 / lev;
-    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}"` : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}"`;
+    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}"` : m.readonly ? '' : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}"`;
     return `<tr class="${off ? 'is-off' : ''}${lev === m.sel ? ' is-on' : ''}" ${act} tabindex="0">
       <th scope="row" class="num">1:${lev}${tag}</th>
       <td class="num">${F.money(n.notional, m.ccy, 0)}</td>
@@ -468,7 +464,7 @@ export function levExamples(m) {
     const n = levNums({ ...arg, lev });
     const off = lev > mx, on = lev === m.sel;
     const w = 100 / lev;
-    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}" aria-disabled="true"` : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}" role="radio" aria-checked="${on}"`;
+    const act = off ? `data-action="lev-why" data-sym="${F.esc(m.sym)}" data-v="${lev}" aria-disabled="true"` : m.readonly ? `aria-current="${on}"` : `data-action="lev-own" data-sym="${F.esc(m.sym)}" data-lev="${lev}" role="radio" aria-checked="${on}"`;
     const worst = n.worst != null ? `${sn(n.worst)}${n.capped ? ` <small class="lx-allc">(${t('mb.all')})</small>` : ''}` : '–';
     return `<button type="button" class="lx-row${off ? ' is-off' : ''}${on ? ' is-on' : ''}" ${act}>
       <span class="lx-r1"><b class="num">1:${lev}</b> · ${t('lx.r.n', { v: `<span class="num">${F.money(n.notional, m.ccy, 0)}</span>` })}${off ? `<small class="lx-offc">${t(lev <= pro && !M.isPro() ? 'lx.onlyPro' : 'lx.never')}</small>` : ''}</span>
@@ -477,14 +473,14 @@ export function levExamples(m) {
   return `<details class="lx"${m.exOpen ? ' open' : ''}><summary data-lx>${t('lx.title')}${icon('chev-down', 'icon-xs')}</summary>
     <p class="lx-sub">${t('lx.sub', { a: F.money(m.amount, m.ccy, 0) })}</p>
     <div class="lx-wrap"><table class="lx-tab"><thead><tr><th scope="col">${t('lx.c.lev')}</th><th scope="col">${t('lx.c.n')}</th><th scope="col">${t('lx.c.avg')}</th><th scope="col">${t('lx.c.tp')}</th><th scope="col">${t('lx.c.sl')}</th><th scope="col">${t(m.side === 'SELL' ? 'lx.c.wipeSell' : 'lx.c.wipe')}</th></tr></thead>
-    <tbody>${tr}</tbody></table></div><div class="lx-cards" role="radiogroup" aria-label="${F.esc(t('lx.title'))}">${cards}</div><p class="lev-why" hidden></p><p class="lx-note">${t(ok ? 'lx.note' : 'lx.noteOld')}</p></details>`;
+    <tbody>${tr}</tbody></table></div><div class="lx-cards"${m.readonly ? '' : ' role="radiogroup"'} aria-label="${F.esc(t('lx.title'))}">${cards}</div><p class="lev-why" hidden></p><p class="lx-note">${t(ok ? 'lx.note' : 'lx.noteOld')}</p></details>`;
 }
-/* card / detail: the block for the example deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
+/* card / detail: the block for the deposit of a signal (D.offerNums = same deposit and base price as the sheet) */
 export function moneyFor(s, data, now = D.clock()) {
   const n = D.offerNums(s, data, { now });
-  /* 1.13.1: every profile column has its own deposit (D.stakeFor at that leverage) – the "Když vložíš" line rides in each */
-  const amountFor = (lev) => D.stakeFor(s, { lev, px: n.base });
-  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, amountFor, depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: selLev(s.symbol) }) };
+  /* 1.13.2: every profile column has its own deposit (D.stakeFor with that profile's risk and leverage) */
+  const amountFor = (c) => D.stakeFor(s, { prof: c.id, lev: c.lev, px: n.base });
+  return { n, html: moneyBlock({ s, data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amountFor, depLine: true, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target }) };
 }
 /* the motivating but true line, once per strategy: the whole robot account in the test */
 export function testLine(s, data) {
@@ -493,37 +489,28 @@ export function testLine(s, data) {
   if (!g) return '';
   return `<p class="mb-test">${icon('spark', 'icon-xs')}<span>${t('mb.test', { y0: g.y0, y1: g.y1, a: F.money(g.start, c, 0), b: F.money(g.end, c, 0) })}</span>${qh('TESTACC')}</p>`;
 }
-/* tap on a profile column / a broker chip: remember it on this device and show it in every money block on the page */
-export function setLevProfile(id, own = null) {
-  if (id === 'own') { if (!(own >= 1)) return; store.set('levOwn', Math.round(own)); } else if (!LEV_PROFILES.some((p) => p.id === id)) return;
-  store.set('levProfile', id);
+/* tap on a profile (card chip, detail column, Nastavení, onboarding): ONE choice for every money number in the app */
+export function setLevProfile(id) {
+  if (!LEV_PROFILES.some((p) => p.id === id)) return;
+  D.setProf(id);
   syncLev();
+  document.dispatchEvent(new CustomEvent('pulse:prof', { detail: id }));
 }
-/* a broker chip: when it equals a profile column of the instrument, that profile is remembered instead */
+/* a broker chip outside the invest sheet: only a chip equal to a profile column changes anything */
 export function setLevOwn(v, sym) {
-  const c = sym ? profCols(sym).find((x) => x.lev === v) : null;
-  if (c) setLevProfile(c.id); else setLevProfile('own', v);
+  const cols = sym ? profCols(sym) : [];
+  const c = cols.find((x) => x.lev === v && x.id === levProfile().id) || cols.find((x) => x.lev === v);
+  if (c) setLevProfile(c.id);
 }
 export function syncLev() {
-  /* 1.13.0 compact cards: one money line per profile, the chosen one is shown */
-  document.querySelectorAll('.cc-money').forEach((box) => {
-    const lev = selLev(box.dataset.sym);
-    const has = [...box.querySelectorAll('[data-l]')].some((x) => +x.dataset.l === lev);
-    box.querySelectorAll('[data-l]').forEach((x) => { x.hidden = has ? +x.dataset.l !== lev : x !== box.querySelector('[data-l]'); });
-    const ids = [...(box.closest('.cc')?.querySelectorAll('.cc-chip') || [])].map((x) => ({ id: x.dataset.prof, lev: +x.dataset.lev }));
-    const onId = onColId(ids, lev);
-    box.closest('.cc')?.querySelectorAll('.cc-chip').forEach((x) => { x.setAttribute('aria-checked', String(x.dataset.prof === onId)); });
-  });
+  const pid = levProfile().id;
+  /* compact cards: one money line per profile, the chosen one is shown */
+  document.querySelectorAll('.cc-money [data-p]').forEach((x) => { x.hidden = x.dataset.p !== pid; });
+  document.querySelectorAll('.cc-chip').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.prof === pid)));
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
-    const lev = selLev(mb.dataset.sym);
-    mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', +x.dataset.l === lev));
-    const onId = onColId([...mb.querySelectorAll('.mb-col')].map((x) => ({ id: x.dataset.prof, lev: +x.dataset.lev })), lev);
-    const any = !!onId;
-    mb.querySelectorAll('.mb-col').forEach((x) => { const on = x.dataset.prof === onId; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
-    mb.querySelectorAll('.mb-own .lev-chip[data-lev]').forEach((x) => x.setAttribute('aria-checked', String(+x.dataset.lev === lev)));
-    const ob = mb.querySelector('.mb-own-b');
-    if (ob) { ob.classList.toggle('is-on', !any); const v = ob.querySelector('.mb-own-v'); if (v) v.textContent = any ? '' : `1:${lev}`; }
+    mb.querySelectorAll('.mb-main').forEach((x) => x.classList.toggle('is-on', x.dataset.p === pid));
+    mb.querySelectorAll('.mb-col').forEach((x) => { const on = x.dataset.prof === pid; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
   });
 }
 /* "Vlastní páka ▾" opens / closes the chip list of its block */
@@ -629,24 +616,21 @@ export function ccMoneyLines(s, data, now = D.clock(), { chips: withChips = true
   const n = D.offerNums(s, data, { now });
   const bt = H.strat(data, s.horizon)?.backtest || null;
   const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
-  const sel = selLev(s.symbol);
+  const pid = levProfile().id;
   const cols = profCols(s.symbol);
-  const levs = [...new Set(cols.map((c) => c.lev))];
-  if (!levs.includes(sel)) levs.push(sel);
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
   const sm = (v) => sMoney(v, n.ccy);
-  /* 1.13.1: each line = D.stakeFor at that leverage from the same base price – the same deposit as the detail, the sheet and the robot */
-  const line = (lev) => {
-    const a = D.stakeFor(s, { lev, px: n.base });
-    const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev, bt: ok ? bt : null });
+  /* 1.13.2: each line = D.stakeFor with that profile's risk and leverage from the same base price – the same deposit as the detail, the sheet and the robot */
+  const line = (c) => {
+    const a = D.stakeFor(s, { prof: c.id, lev: c.lev, px: n.base });
+    const x = levNums({ side, entry: n.base, amount: a, sl: s.stop, tp: s.target, lev: c.lev, bt: ok ? bt : null });
     const gain = ok ? (x.avg != null ? t('cc.avg', { v: `≈ ${sm(x.avg)}` }) : t('cc.avgNa')) : t('cc.tp', { v: x.best != null ? sm(x.best) : '–' });
     const loss = x.worst != null ? t(x.capped ? 'cc.maxAll' : 'cc.max', { v: sm(x.worst) }) : '';
-    return `<p class="cc-ml num" data-l="${lev}" data-a="${a}" data-loss="${Math.round(x.worst ?? 0)}"${lev === sel ? '' : ' hidden'}><b>${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+    return `<p class="cc-ml num" data-p="${c.id}" data-l="${c.lev}" data-a="${a}" data-avg="${x.avg == null ? '' : Math.round(x.avg)}" data-loss="${Math.round(x.worst ?? 0)}"${c.id === pid ? '' : ' hidden'}><b>${F.money(a, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
   };
-  const onId = onColId(cols, sel);
-  /* 1.13.1: the three profile chips only on the first card of a list (and in the detail / sheet) */
-  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === onId}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">1:${c.lev}</small></button>`).join('')}</div>` : '';
-  return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${levs.map(line).join('')}</div>`, chips, n };
+  /* the three profile chips only on the first card of a list (and in the detail / sheet) */
+  const chips = withChips ? `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.id === pid}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">${F.num(c.pct, 0)} % · 1:${c.lev}</small></button>`).join('')}</div>` : '';
+  return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${cols.map(line).join('')}</div>`, chips, n };
 }
 function enShort(s, en, now) {
   if (en.code === 'now') return t('cp.now', { c: F.time(new Date(nyCloseAfterMs(+now))) });

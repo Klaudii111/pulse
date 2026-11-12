@@ -55,7 +55,7 @@ function platRow(p, ccy) {
       <span class="tp-m num">${t('term.posMeta', { a: F.money(p.margin, ccy, 0), e: F.price(p.entry), p: F.price(p.px) })}</span>
       <span class="tp-m tp-open">${F.esc(B.myOpenText(p, ccy))}</span>
       <span class="st-line tone-${st.tone}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b></span></span>
-    <span class="tp-v num ${tone(p.pnl)}">${sm(p.pnl, ccy)}<small>${F.spct(p.pnlPct, 2)}</small></span>`;
+    <span class="tp-v num ${tone(p.pnl)}">${sm(p.pnl, ccy)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>`;
   return `<div class="tp-row is-static tone-${tone(p.pnl)}">${attrs ? `<button class="tp-main" ${attrs}>${inner}</button>` : `<a class="tp-main" href="#/terminal">${inner}</a>`}</div>`;
 }
 

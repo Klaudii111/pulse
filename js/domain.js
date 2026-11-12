@@ -209,7 +209,7 @@ export function calcState() {
     /* 1.13.0: the capital IS the wallet (Peněženka) once it exists – Kalkulačka, cards and the robot read one number */
     account: walletEquity() || (Number.isFinite(s.account) && s.account > 0 ? s.account : c.DEFAULT_ACCOUNT[ccy]),
     leverage: Number.isFinite(s.leverage) ? s.leverage : 2,
-    profile: c.RISK_PROFILES.some((p) => p.id === s.profile) ? s.profile : c.RISK_PROFILES[0].id,
+    profile: profId(),
     signalId: s.signalId || null,
   };
 }
@@ -218,11 +218,28 @@ export const saveCalc = (patch) => { const c = calcState(); store.set('calc', { 
 function walletBalance() { const w = store.get('wallet', null); return w && w.v === 1 && w.balance > 0 ? Math.round(w.balance) : 0; }
 /* 1.13.1: Peněženka = volné + ve hře + otevřený zisk/ztráta (W.summary equity), the same number everywhere */
 export function walletEquity() { if (!walletBalance()) return 0; try { const e = equityNow(); return e > 0 ? e : walletBalance(); } catch { return walletBalance(); } }
-/* 1.13.0 "Můj profil": risk Opatrně 1 % / Odvážně 3 % (CONFIG.CALC.RISK_PROFILES) */
-export function riskProf() {
-  const cs = calcState();
-  return CONFIG.CALC.RISK_PROFILES.find((p) => p.id === cs.profile) || CONFIG.CALC.RISK_PROFILES[0];
+/* 1.13.2 ONE profile (CONFIG.CALC.RISK_PROFILES): Konzervativně 1 % bez páky · Vyváženě 2 % do 1:2 · Agresivněji 4 % do stropu trhu.
+   Stored as 'levProfile' (the key the leverage profile used since 1.11.1). Older devices: the leverage profile wins;
+   without one, the old risk "Odvážně 3 %" becomes Agresivněji, anything else Konzervativně. */
+export const PROFILES = CONFIG.CALC.RISK_PROFILES;
+const PROF_IDS = PROFILES.map((p) => p.id);
+export function profId() {
+  const id = store.get('levProfile', null);
+  if (PROF_IDS.includes(id)) return id;
+  const old = (store.get('calc', null) || {}).profile;
+  const own = +store.get('levOwn', 0);
+  const v = id === 'own' ? (own > 2 ? 'aggr' : 'bal') : old === 'aggressive' ? 'aggr' : PROF_IDS[0];
+  try { store.set('levProfile', v); } catch { /* storage off */ }
+  return v;
 }
+export const prof = (id = null) => PROFILES.find((p) => p.id === (id || profId())) || PROFILES[0];
+export const setProf = (id) => { if (PROF_IDS.includes(id)) store.set('levProfile', id); };
+/* the leverage of a profile for one instrument: 1 · up to 2 · the instrument's legal cap (shares 1:5, gold 1:20, crypto 1:2) */
+export function profLevFor(p, sym) {
+  const mx = (sym && M.maxLev(sym)) || 1;
+  return p.lev === 'max' ? mx : Math.max(1, Math.min(p.lev, mx));
+}
+export function riskProf() { return prof(); }
 /* 4 870 -> 4 800, 12 345 -> 12 000, 523 -> 500: a calm round number (never above v) */
 export function niceRound(v) {
   if (!(v > 0)) return 0;
@@ -230,14 +247,13 @@ export function niceRound(v) {
   return Math.max(step, Math.floor(v / step + 1e-9) * step);
 }
 /* 1.13.0 THE default deposit (signal cards, detail, invest sheet, the robot-for-me):
-   lose at most risk % of the wallet at the stop, and put at most 10 % (Opatrně) / 20 % (Odvážně) of the wallet into one trade. */
-export const STAKE_CAP = { conservative: 0.1, aggressive: 0.2 };
+   lose at most risk % of the wallet at the stop, and put at most cap (10 / 20 / 25 %) of the wallet into one trade. */
 /* 1.13.1: ONE sizing for every screen. lev = the user's leverage profile for the instrument (setLevOf, app.js),
    px = the price the trade really starts at (live ask / bid, or the limit) - so the loss at the stop is exactly risk %
    of the wallet (Peněženka = equity) unless the 10 / 20 % cap is smaller. */
 let levOf = () => 1;
 export const setLevOf = (fn) => { levOf = fn; };
-export const profileLev = (sym) => { const v = +levOf(sym); return v >= 1 ? v : 1; };
+export const profileLev = (sym) => profLevFor(prof(), sym);
 /* the wallet figure the sizing starts from: equity floored to 100 Kč / 10 € $ (stable while prices tick) */
 export function sizingBase(equity = null) {
   const ccy = walletCcy();
@@ -246,15 +262,16 @@ export function sizingBase(equity = null) {
   return Math.max(0, Math.floor(eq / step) * step);
 }
 /* the cap per trade ("Výchozí vklad až …" in Nastavení) */
-export function stakeCap(equity = null) { return niceRound(sizingBase(equity) * (STAKE_CAP[riskProf().id] ?? 0.1)); }
+export function stakeCap(equity = null, id = null) { return niceRound(sizingBase(equity) * (prof(id).cap ?? 0.1)); }
+/* opt.prof = another profile than mine (the comparison columns); its leverage unless opt.lev says otherwise */
 export function stakeFor(s = null, opt = {}) {
   if (typeof opt === 'number' || opt == null) opt = { equity: opt }; // old call shape stakeFor(s, equity)
   const ccy = walletCcy();
   const eq = sizingBase(opt.equity ?? null);
-  const p = riskProf();
-  const cap = stakeCap(eq);
+  const p = prof(opt.prof || null);
+  const cap = stakeCap(eq, p.id);
   let a = cap;
-  const lev = opt.lev ?? (s?.symbol ? profileLev(s.symbol) : 1);
+  const lev = opt.lev ?? (s?.symbol ? (opt.prof ? profLevFor(p, s.symbol) : profileLev(s.symbol)) : 1);
   const px = opt.px > 0 ? opt.px : s?.entry;
   if (s && px > 0 && s.stop > 0 && px !== s.stop) {
     const want = (eq * p.pct / 100) / (Math.abs(px - s.stop) / px) / Math.max(1, lev);
@@ -347,9 +364,8 @@ export function leverageText(data, sig) {
 
 /* ---------- Risk according to the user's profile ---------- */
 export function profilePct() {
-  const cs = calcState();
-  const p = CONFIG.CALC.RISK_PROFILES.find((x) => x.id === cs.profile);
-  return p ? { pct: p.pct, label: t(`profile.${p.id}`) } : null;
+  const p = prof();
+  return { pct: p.pct, label: t(`mb.p.${p.id}`) };
 }
 export function riskFor(s) {
   const p = profilePct();
@@ -377,11 +393,19 @@ export function entryState(s, now = clock()) {
   return { code: 'ok', label: t('entry.ok'), note: s.entry_valid_until ? t('entry.note.ok', { time: F.dmTime(s.entry_valid_until) }) : t('entry.note.okNear') };
 }
 
+/* 1.13.2 ONE "nejvýš za" price (Vstup line, Jak zadat): while the entry is still fine (buy now) up to 0,3 of the
+   stop distance past the entry (CONFIG.ENTRY.VALID_R), otherwise the signal's entry itself */
+export function maxEntry(s, data = null, now = clock(), cs = null) {
+  const c = cs || cardState(s, data, now);
+  if (c.code !== 'buy') return s.entry;
+  const risk = Math.abs((s.entry || 0) - (s.stop || 0));
+  return risk > 0 ? s.entry + (s.action === 'SELL' ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk : s.entry;
+}
 /* Order text for "Jak zadat" */
-export function orderLines(s) {
+export function orderLines(s, data = null, now = clock()) {
   const until = s.entry_valid_until || `${s.exit_date}T22:00:00`;
   return [
-    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, s.entry), time: F.dmTime(until) }),
+    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, maxEntry(s, data, now)), time: F.dmTime(until) }),
     t('order.stop', { price: spx(s, s.stop) }),
     t('order.target', { price: spx(s, s.target) }),
   ];
@@ -495,12 +519,19 @@ export function moneyTone(v, ccy, pct = null) {
  *   ifBought: what the user's calculator stake would show now – only for signals the user does not hold (grey) */
 function walletFor(s) {
   const w = store.get('wallet', null);
-  return { w, pos: (w?.positions || []).filter((p) => p.sigId === s.id), ord: (w?.orders || []).find((o) => o.sigId === s.id) || null };
+  return { w, pos: (w?.positions || []).filter((p) => p.sigId === s.id), ord: (w?.orders || []).find((o) => o.sigId === s.id) || null,
+    done: (w?.closed || []).filter((c) => c.sigId === s.id) };
 }
 export function isDoneSig(s, now = clock()) {
   return (s.status && s.status !== 'open') || !!s.intraday_hit || isTimeExit(s, now);
 }
-function myRealResult(s, data, pos, j) {
+function myRealResult(s, data, pos, j, done = []) {
+  /* 1.13.2: a trade I already closed = the wallet's own closed result (fees and spread included, the same as Historie) */
+  if (!pos.length && done.length) {
+    const ccy = store.get('wallet', null)?.ccy || calcState().ccy;
+    const pnl = done.reduce((a, c) => a + (+c.pnl || 0), 0), margin = done.reduce((a, c) => a + (+c.margin || 0), 0);
+    return { money: pnl, ccy, pct: margin > 0 ? (pnl / margin) * 100 : null, src: 'wallet', closed: true };
+  }
   if (pos.length) {
     const ccy = store.get('wallet', null)?.ccy || calcState().ccy;
     let pnl = 0, margin = 0;
@@ -515,12 +546,12 @@ function myRealResult(s, data, pos, j) {
   return null;
 }
 export function cardState(s, data = null, now = clock()) {
-  const { pos, ord } = walletFor(s);
+  const { pos, ord, done } = walletFor(s);
   const j = journal()[s.id];
   const sell = s.action === 'SELL';
   const e = spx(s, s.entry);
   const mineIn = pos.length > 0 || j?.state === 'in';
-  const my = (mineIn || j?.state === 'closed') ? myRealResult(s, data, pos, j) : null;
+  const my = (mineIn || j?.state === 'closed' || done.length) ? myRealResult(s, data, pos, j, done) : null;
   const um = userMoney(s);
   const ifBought = !my && um.now != null ? um : null;
   const base = { mine: !!my, my, ifBought, move: priceMove(s), pos, ord };
@@ -561,8 +592,7 @@ export function entryLine(s, data = null, now = clock(), cs = null, short = fals
   const sell = s.action === 'SELL';
   const e = spx(s, s.entry);
   if (c.code === 'buy') {
-    const risk = Math.abs((s.entry || 0) - (s.stop || 0));
-    const lim = risk > 0 ? s.entry + (sell ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk : s.entry;
+    const lim = maxEntry(s, data, now, c);
     return { code: 'now', text: t(sell ? k('nowSell') : k('now'), { c: F.time(new Date(nyCloseAfter(+now))), v: spx(s, lim) }) };
   }
   if (c.code === 'soon') {

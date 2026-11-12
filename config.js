@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.13.1',
+  APP_VERSION: '1.13.2',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -114,9 +114,13 @@ export const CONFIG = {
   /* Calculator */
   CALC: {
     DEFAULT_ACCOUNT: { CZK: 100000, EUR: 4000, USD: 4500 },
+    /* 1.13.2 ONE profile = risk at the stop + leverage + the largest deposit per trade (share of the wallet).
+       Konzervativně 1 % bez páky · Vyváženě 2 % páka až 1:2 · Agresivněji 4 % páka až do zákonného stropu trhu
+       (akcie 1:5, zlato 1:20, krypto 1:2). Labels: i18n "mb.p.<id>". */
     RISK_PROFILES: [
-      { id: 'conservative', pct: 1 }, // label: i18n "profile.conservative"
-      { id: 'aggressive', pct: 3 },
+      { id: 'cons', pct: 1, lev: 1, cap: 0.1 },
+      { id: 'bal', pct: 2, lev: 2, cap: 0.2 },
+      { id: 'aggr', pct: 4, lev: 'max', cap: 0.25 },
     ],
     LEVERAGE_MIN: 1,
     /* fallback max leverage when an instrument has no max_leverage (instruments.json) */
@@ -124,7 +128,7 @@ export const CONFIG = {
     /* EU retail caps (ESMA) by instrument class, used when instruments.json does not say */
     LEVERAGE_CAPS: { fx_major: 30, fx: 20, index: 20, gold: 20, commodity: 10, stock: 5, etf: 5, crypto: 2 },
     /* fictional money the user can load on the demo account (account currency CZK; EUR / USD get /25 and /22) */
-    TOPUP: { CZK: [10000, 50000, 100000, 500000], EUR: [500, 2000, 4000, 20000], USD: [500, 2000, 4500, 20000] },
+    TOPUP: { CZK: [10000, 50000, 100000, 500000], EUR: [100, 500, 1000, 5000], USD: [100, 500, 1000, 5000] },
     /* Indicative FX used only to convert account currency to the instrument's
        USD/EUR price for a share count. Update as needed. Units per 1 USD. */
     FX_PER_USD: { USD: 1, EUR: 0.864, CZK: 21.0, GBP: 0.76, JPY: 155, CHF: 0.82, AUD: 1.48 },

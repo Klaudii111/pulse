@@ -44,7 +44,7 @@ export function render(ctx) {
 
       <section class="field">
         <label class="field-l" for="acc">${t('calc.account')}</label>
-        <div class="money-input"><input id="acc" class="num" readonly aria-readonly="true" value="${F.num(cs.account, 0)} ${F.esc(cs.ccy === 'CZK' ? 'Kč' : cs.ccy)}" aria-describedby="acc-ccy"></div>
+        <div class="money-input"><input id="acc" class="num" readonly aria-readonly="true" value="${F.num(cs.account, 0)} ${F.esc({ CZK: 'Kč', EUR: '€', USD: '$' }[cs.ccy] || cs.ccy)}" aria-describedby="acc-ccy"></div>
         <p class="field-s" id="acc-ccy">${t('calc.accWallet')} <a class="link" href="#/nastaveni">${t('calc.accChange')}</a></p>
       </section>
 
@@ -52,7 +52,7 @@ export function render(ctx) {
         <p class="field-l">${t('calc.profile')}</p>
         <div class="profiles" role="radiogroup" aria-label="${t('calc.profile')}">
           ${C.RISK_PROFILES.map((p) => `<button type="button" class="profile" role="radio" aria-checked="${p.id === cs.profile}" data-action="profile" data-id="${p.id}">
-            <span class="profile-t">${t(`profile.${p.id}`)}<span class="radio-dot"></span></span>
+            <span class="profile-t">${t(`mb.p.${p.id}`)}<span class="radio-dot"></span></span>
             <span class="profile-v num" style="display:block">${F.pct(p.pct, 0)}</span>
             <span class="profile-s">${t('calc.perTrade')}</span>
           </button>`).join('')}
@@ -137,8 +137,17 @@ export const actions = {
     refresh(ctx);
     return true;
   },
+  /* 1.13.2: the same ONE profile as everywhere (risk + leverage); the leverage slider follows it */
   profile(el, ev, ctx) {
-    D.saveCalc({ profile: el.dataset.id });
+    D.setProf(el.dataset.id);
+    const s = current(ctx);
+    if (s) {
+      const v = Math.min(D.profLevFor(D.prof(), s.symbol), D.leverageCap(ctx.data, s));
+      D.saveCalc({ leverage: v });
+      const lv = document.getElementById('lev'); if (lv) { lv.value = v; lv.setAttribute('aria-valuetext', `${v}×`); }
+      const lt = document.getElementById('lev-val'); if (lt) lt.textContent = `${v}×`;
+      const C = CONFIG.CALC; const fl = document.getElementById('lev-fill'); if (fl) fl.style.width = `${((v - C.LEVERAGE_MIN) / (C.LEVERAGE_MAX - C.LEVERAGE_MIN)) * 100}%`;
+    }
     document.querySelectorAll('.profile').forEach((p) => p.setAttribute('aria-checked', String(p === el)));
     haptic();
     refresh(ctx);

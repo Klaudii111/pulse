@@ -30,6 +30,13 @@ export function signed(v, dec = 2, minDec = dec) {
 const pctSep = () => t('fmt.pctSep');
 export const pct = (v, dec = 1) => num(v, dec) + pctSep() + '%';
 export const spct = (v, dec = 1) => signed(v, dec) + pctSep() + '%';
+/* 1.13.2 ONE rule for the % of my money: 1 decimal; when the money is not 0 but the % rounds to 0, show ±0,1 % (never "0,00 %") */
+export function mpct(v, money = null) {
+  if (v == null || !Number.isFinite(v)) return '–';
+  let x = Math.round(v * 10) / 10;
+  if (x === 0 && money != null && Math.abs(money) >= 0.5) x = money < 0 ? -0.1 : 0.1;
+  return spct(x, 1);
+}
 export const sr = (v, dec = 2) => signed(v, dec) + '\u00a0R';
 
 /* dec (1.9.0): the instrument's own decimals (currencies 4–5, indices 2) when known */

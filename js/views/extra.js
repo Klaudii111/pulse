@@ -83,7 +83,7 @@ function simState(ctx) {
     start: s.start && s.start >= first ? s.start : first,
     capital: s.capital > 0 ? s.capital : cs.account,
     leverage: s.leverage || 2,
-    profile: s.profile || 'conservative',
+    profile: D.PROFILES.some((p) => p.id === s.profile) ? s.profile : 'cons',
     ccy: cs.ccy,
   };
 }

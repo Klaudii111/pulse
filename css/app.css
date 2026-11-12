@@ -3141,3 +3141,54 @@ body::after {
 .cf-res { font-size: 18px; margin: 4px 0 6px; }
 .cf-res b { font-size: 22px; }
 .cf-res .up { color: var(--up); } .cf-res .down { color: var(--down); }
+
+/* ---------- 1.13.2 ---------- */
+/* one profile (risk + leverage): Nastavení list, Kalkulačka three columns */
+.mp .mp-seg { grid-auto-flow: row; }
+.mp .mp-opt { padding: 12px 14px; }
+.profiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mb-pl { white-space: normal; }
+/* toast over a tall sheet: under its head, taps go through */
+.toast-root.is-over { z-index: 130; }
+.toast-root.is-over .toast:not(:has(.btn)) { pointer-events: none; }
+/* Obchodovat: the wallet as one compact line */
+.wl-line { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--raise-2); border: 1px solid var(--line-2); }
+.wl-line-l { flex: 1; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; color: var(--ink); text-decoration: none; font-size: 13.5px; }
+.wl-line-l .icon { color: var(--gold); align-self: center; }
+.wl-line-k { color: var(--ink-3); font-weight: 600; }
+.wl-line .big-acc-v { font-size: 16px; font-weight: 700; }
+.wl-line .big-acc-row { color: var(--ink-3); }
+.wl-line .btn { flex: none; }
+.term-side > .wl-line { margin-top: 16px; }
+@media (min-width: 900px) { .term-side > .wl-line { margin-top: 0; } }
+/* detail: everything beyond the decision in ONE collapsed "Pro pokročilé" */
+.d-adv { margin: 18px 0 6px; border: 1px solid var(--line-2); border-radius: 16px; padding: 0 14px; background: var(--raise-2); }
+.d-adv > summary { display: flex; align-items: center; gap: 10px; min-height: 56px; cursor: pointer; list-style: none; }
+.d-adv > summary::-webkit-details-marker { display: none; }
+.d-adv > summary > span { flex: 1; display: grid; gap: 2px; }
+.d-adv > summary b { font-size: 15px; color: var(--ink); }
+.d-adv > summary small { font-size: 12px; color: var(--ink-3); line-height: 1.35; }
+.d-adv > summary .icon { color: var(--ink-3); transition: transform .2s; }
+.d-adv[open] > summary .icon { transform: rotate(180deg); }
+.d-adv[open] { padding-bottom: 14px; }
+.d-adv .bc-quiet { margin-top: 14px; }
+.pchart-headrow .sheet-label { margin: 0; }
+.bc-my.is-closed b { font-weight: 650; }
+/* Signály: my own open signals below the list (not in the count) */
+.sg-mine { margin-top: 22px; }
+/* Robot: its account is separate and bigger */
+.pa-bigger { display: flex; gap: 6px; align-items: flex-start; margin-top: 8px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.pa-bigger .icon { color: var(--gold); flex: none; margin-top: 1px; }
+/* first run: the profile as three big cards */
+.onb-profs { margin-top: 14px; display: grid; gap: 10px; }
+.onb-pc { display: grid; gap: 6px; padding: 16px; border-radius: 18px; text-align: left; color: inherit; background: var(--raise); border: 1px solid var(--line-2); transition: border-color .15s, background .15s, transform .15s var(--ease); }
+.onb-pc:active { transform: scale(.985); }
+.onb-pc-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.onb-pc-h b { font-size: 18px; font-weight: 650; }
+.onb-pc-h small { font-size: 13px; color: var(--ink-2); }
+.onb-pc-ex { font-size: 13.5px; color: var(--ink-2); line-height: 1.4; }
+.onb-pc[aria-checked='true'] { border-color: var(--gold); background: radial-gradient(120% 120% at 0% 0%, rgba(217,183,121,.14), transparent 60%), var(--raise); box-shadow: 0 0 0 1px var(--gold-line); }
+.onb-pc[aria-checked='true'] .onb-pc-h b { color: var(--gold-hi); }
+/* the profile chip carries risk + leverage: name on the first line, "2 % · 1:2" under it */
+.cc-chip { display: grid; justify-items: center; gap: 1px; padding: 5px 2px; white-space: nowrap; }
+.cc-chip small { display: block; }

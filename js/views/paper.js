@@ -63,6 +63,7 @@ export function paperHero(ctx) {
     <span class="pa-top"><span class="pa-k">${icon('shield', 'icon-sm')}${t('pa.acc')}</span>${modeBadge(p)}</span>
     <span class="pa-vrow"><span class="pa-v num">${usd(eq(p), 0)}</span>${inMine(eq(p), ctx.data)}</span>
     <span class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${pnl >= 0 ? '+' : ''}${usd(pnl, 0)}</b> ${t('pa.heroS', { start: usd(+a.start_equity || 100000, 0) })}</span>
+    <span class="pa-bigger">${icon('info', 'icon-xs')}${t('pa.bigger')}</span>
     <span class="pa-foot"><span>${t('pa.posN', { n: pos.length })}</span><span>${t('pa.ordN', { n: (p.orders || []).filter((o) => !isLeg(o, pos)).length })}</span><span class="pa-more">${t('pa.more')}${icon('chev-right', 'icon-xs')}</span></span>
   </a>`;
 }
@@ -129,6 +130,7 @@ export function render(ctx) {
     <div class="pa-top"><span class="pa-k">${t('pa.acc')}</span>${modeBadge(p)}</div>
     <div class="hero-top"><p class="pa-v num">${dual(eq(p), ctx.data)}</p>${spark}</div>
     <p class="pa-broker">${t('pa.broker')}</p>
+    <p class="pa-bigger">${icon('info', 'icon-xs')}${t('pa.bigger')}</p>
     <p class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${kc(pnl, ctx.data, true)}</b> ${t('pa.heroS', { start: kc(start, ctx.data) })}</p>
     <div class="pa-stats">
       <div><p class="tile-l">${t('pa.cash')}</p><p class="num">${kc(+a.cash, ctx.data)}</p></div>

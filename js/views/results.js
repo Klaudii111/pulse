@@ -169,11 +169,14 @@ export function render(ctx) {
   const now = ctx.now();
   const series = rangeSeries(perf, range, ctx.data);
   const h = heroVals(series);
+  /* 1.13.2: no empty "0 uzavřených" card on top – before the first closed signal it goes under the chart;
+     "Robot se učí" only once on the Robot page (its top line) */
+  const hsN = D.headStats(ctx.data, now).n;
   return head + `<p class="headline">${nClosed ? t('res.headline', { n: nClosed, v: F.spct(h.bot, 1) }) : t('res.headline0b')}</p>
-  ${B.statsBig(ctx.data, now)}
+  ${hsN ? B.statsBig(ctx.data, now) : ''}
   <p class="res-counts num">${counts}</p>
   ${paperLink(ctx)}
-  ${linkLine(ctx.data, now, 'hs-row le-res')}
+  ${ctx.inRobot ? '' : linkLine(ctx.data, now, 'hs-row le-res')}
   <div class="results-layout">
     <section class="chart-card" aria-label="${t('res.chart')}">
       <div class="chart-top">
@@ -194,6 +197,7 @@ export function render(ctx) {
       <p class="honest">${icon('info', 'icon-xs')} ${t('res.honest')}</p>
     </div>
   </div>
+  ${hsN ? '' : B.statsBig(ctx.data, now)}
   ${openNow.length ? `<h2 class="section-title">${t('res.openNow')}<small>${counts}</small></h2><p class="section-sub">${t('res.openNowS')}</p>
   <div class="srow-list">${openNow.map((x, i) => signalRow(x, now, i)).join('')}</div>` : ''}
   <h2 class="section-title">${t('fr.title')}</h2>

@@ -47,6 +47,7 @@ export const verifyUrl = (sym) => `https://www.tradingview.com/chart/?symbol=${e
 let chartRef = null;
 let liveOff = null;
 let barsRef = null;
+let profOff = null;
 
 /* TradingView symbol for the live candlestick chart (free official widget). */
 const TV = { US500: 'FOREXCOM:SPXUSD', US100: 'FOREXCOM:NSXUSD', US30: 'FOREXCOM:DJI', DE40: 'XETR:DAX', UK100: 'FOREXCOM:UKXGBP',
@@ -149,7 +150,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const est = D.entryState(s, now);
   const risk = D.riskFor(s);
   const lev = D.leverageInfo(ctx.data, s);
-  const lines = D.orderLines(s);
+  const lines = D.orderLines(s, ctx.data, now);
   const prox = D.proximity(s);
   const hitKey = { target: 'sig.hit.target', stop: 'sig.hit.stop', time_exit: 'det.timeExit' };
 
@@ -186,42 +187,34 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
       ${cs.my ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
-      <div class="bc-quiet">
-      ${bot || B.robotPosOf(s, ctx.data) ? `<details class="d-robotd"><summary>${icon('shield', 'icon-xs')}<span>${t('det.robotD')}</span>${icon('chev-down', 'icon-xs')}</summary>
-      ${bot ? `<p class="bc-bot b-bot">${F.esc(bot)}</p>` : ''}
-      ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}</details>` : ''}
-      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
-      </div>
+      ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
     </div>`;
-  /* 1.13.0 "Kolik můžeš vydělat a ztratit": the full profile table (the CHOSEN profile highlighted – the same numbers as the card),
-     Příklady pák, the legal cap of this market, the robot's test line */
-  const moneySec = D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => {
-    const { n, html } = B.moneyFor(s, ctx.data, now);
-    const ex = B.levExamples({ s, data: ctx.data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: B.selLev(s.symbol) });
+  const robotD = `<div class="bc-quiet">
+      ${bot || B.robotPosOf(s, ctx.data) ? `<h3 class="sheet-label">${t('det.robotD')}</h3>
+      ${bot ? `<p class="bc-bot b-bot">${F.esc(bot)}</p>` : ''}
+      ${B.robotPosOf(s, ctx.data) ? `<p class="bc-lv d-open">${F.esc(B.robotOpenText(B.robotPosOf(s, ctx.data), ctx.data, s.stop))}</p>` : ''}` : ''}
+      <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
+      </div>`;
+  /* 1.13.2 "Kolik můžeš vydělat a ztratit": MY profile's money + the 3-profile comparison (the same numbers as the card)
+     and the robot's test line. Příklady pák and the legal cap of this market live in "Pro pokročilé". */
+  const moneyOpen = D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code);
+  const lxHtml = () => {
+    const n = D.offerNums(s, ctx.data, { now: ctx.now() });
+    return B.levExamples({ s, data: ctx.data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: B.selLev(s.symbol), readonly: true });
+  };
+  const moneySec = moneyOpen ? (() => {
+    const { html } = B.moneyFor(s, ctx.data, now);
     return `<section class="d-sec" aria-labelledby="d-money"><h3 class="sheet-label" id="d-money">${t('det.moneyH')}</h3>
-      <div class="sc-money">${html}</div>${ex}
-      <p class="mb-cap">${icon('shield', 'icon-xs')}<span>${F.esc(B.levWhy(s.symbol, M.maxLev(s.symbol)))}</span></p>${B.testLine(s, ctx.data)}</section>`;
+      <div class="sc-money">${html}</div>${B.testLine(s, ctx.data)}</section>`;
   })() : '';
-  const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
-  const legend = mk.size ? `<p class="pc-legend">${mk.has('robot') ? `<span class="lg-robot">▲ ${t('mark.robot')}</span>` : ''}${mk.has('me') ? `<span class="lg-me">▲ ${t('mark.me')}</span>` : ''}${mk.has('exit') ? `<span class="lg-exit">▼ ${t('mark.exit')}</span>` : ''}</p>` : '';
-  /* 1.11.1: the market chart in candles (/api/bars) is the default; the signal's own line stays as a choice */
-  const hasPath = s.price_path?.length > 1;
+  /* 1.13.2: ONE chart – the market chart (/api/bars, its own period + candles / line switch) with entry / stop / target */
   const chartHtml = s.symbol ? `<div class="pchart">
-        <div class="pchart-headrow"><div class="range-chips pchart-modes" role="group" aria-label="${t('det.chartMode')}">
-          <button type="button" class="range-chip" data-pmode="bars" aria-pressed="true">${t('bars.mode')}</button>
-          ${hasPath && hasToday(s) ? `<button type="button" class="range-chip" data-pmode="today" aria-pressed="false">${t('det.chart1D')}</button>` : ''}
-          ${hasPath && hasDays(s) ? `<button type="button" class="range-chip" data-pmode="5d" aria-pressed="false">${t('det.chart5D')}</button>` : ''}
-          ${hasPath ? `<button type="button" class="range-chip" data-pmode="all" aria-pressed="false">${t('det.chartAll')}</button>` : ''}
-          <button type="button" class="range-chip" data-pmode="tv" aria-pressed="false">${t('det.chartTV')}</button></div>
-          <span class="live-stamp" data-stamp></span></div>
-        ${legend}
-        <div class="pchart-box" id="pchart" hidden></div>
-        <div class="tv-box" id="tvbox" hidden></div>
+        <div class="pchart-headrow"><h3 class="sheet-label">${t('bars.mode')}</h3><span class="live-stamp" data-stamp></span></div>
         <div class="d-bars" id="dbars">${Bars.controls('db')}</div>
         <a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : '';
-  status = brief + moneySec + `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + chartHtml + status;
-  const j = D.journal()[s.id];
+  const statusHtml = `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + status;
+  const live = isOpen && state === 'open';
   const html = `
     <div class="sheet-head">
       <div class="sheet-id">${monogram(s.symbol, s.name)}<div><div class="sig-tl"><span class="d-name b-what">${F.esc(B.whatIs(s.symbol, s.name).name)}</span><span class="ticker" data-vt="ticker">${F.esc(s.symbol)}</span></div>
@@ -233,23 +226,27 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       </div>
     </div>
     <div class="sheet-body">
-      ${status}
+      ${brief}
+      ${moneySec}
+      ${chartHtml}
+      ${live ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
+      <details class="d-adv" id="d-adv"><summary><span><b>${t('det.adv')}</b><small>${t('det.advS')}</small></span>${icon('chev-down', 'icon-sm')}</summary>
+      ${moneyOpen ? `<div id="d-lx">${lxHtml()}</div><p class="mb-cap">${icon('shield', 'icon-xs')}<span>${F.esc(B.levWhy(s.symbol, M.maxLev(s.symbol)))}</span></p>` : ''}
+      ${statusHtml}
       ${prox ? `<p class="prox-line ${prox.side === 'stop' ? 'down' : 'up'}">${icon('alert', 'icon-xs')}${t('det.prox', { v: F.pct(prox.dist, 1), side: t(`det.prox.${prox.side}`) })}</p>` : ''}
       <div data-vt="ladder">${ladder(s, { large: true, exitPrice: isOpen ? null : D.exitPrice(s) })}</div>
-      ${isOpen && state === 'open' ? `<section class="howto" aria-label="${t('det.howto.aria')}">
+      ${live ? `<section class="howto" aria-label="${t('det.howto.aria')}">
         <div class="howto-head"><h3 class="howto-t">${t('det.howto')}</h3><button class="btn btn-secondary btn-small" type="button" data-copy-order>${icon('copy', 'icon-sm')}${t('common.copy')}</button></div>
         <ol class="howto-l num">${lines.map((l) => `<li>${F.esc(l)}</li>`).join('')}</ol>
         ${est && (est.code === 'late' || est.code === 'expired') ? `<p class="howto-warn">${t('det.howto.warn')}</p>` : ''}
       </section>` : ''}
-      ${isOpen && state === 'open' ? `<div class="exit-ring">
+      ${live ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
         <div class="timeline-row"><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div></div>
       </div>` : `<div class="timeline"><div class="timeline-row"><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div></div></div>`}
-      ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
 
       ${instrumentText(s.symbol) ? `<h3 class="sheet-label">${t('det.what')}</h3><p class="why">${F.esc(instrumentText(s.symbol))}</p>` : ''}
       <h3 class="sheet-label" id="det-why">${t(whyTop ? 'det.why2' : 'det.why')}</h3>
-      ${B.miniChart(s).replace(/ data-action="open-signal"[^>]*?role="button" tabindex="0"/, "")}
       ${whyTop ? '' : ex?.summary ? `<p class="why">${F.esc(F.human(L(ex.summary)))}</p>` : (ex && (ex.cs || ex.en) ? `<p class="why">${F.esc(F.human(L(ex)))}</p>` : '')}
       ${ex?.strategies?.length ? `<p class="why-l">${t('det.strategies')}</p><div class="chips" style="margin-top:8px">${ex.strategies.map((x) => `<span class="chip chip-gold">${F.esc(L(x))}</span>`).join('')}</div>` : ''}
       <ul class="reasons">${(s.reasons || []).map((r) => `<li>${icon('check')}${F.esc(F.human(L(r)))}</li>`).join('')}</ul>
@@ -260,17 +257,15 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
 
       <details class="gloss"><summary>${t('det.gloss')}</summary><ul>${glossaryFor(s, [L(ex?.summary || ''), ...(s.reasons || []).map((r) => L(r)), L(ex?.expect || ''), L(ex?.invalidation || ''), typeof ex === 'object' && !ex?.summary ? L(ex) : ''])
         .map((g) => `<li>${F.esc(g)}</li>`).join('')}</ul></details>
-
-      <h3 class="sheet-label">${t('det.journal')}</h3>
-      <div class="journal-box" id="jbox">${journalForm(s, j)}</div>
+      ${robotD}
 
       <div class="sheet-actions btn-stack">
         <button class="btn btn-secondary btn-block" type="button" data-share>${icon('share', 'icon-sm')}${t('share.btn')}</button>
-        ${isOpen && state === 'open' ? `<a class="btn btn-secondary btn-block" href="#/kalkulacka?s=${encodeURIComponent(s.id)}" data-close-nav>${t('det.calcBtn')}</a>` : ''}
-        ${isOpen && state === 'open' ? brokerButton() : ''}
-        ${isOpen && state === 'open' ? `<div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5" data-close-nav>${t('mt5.help')}</a></div>` : ''}
+        ${live ? `<a class="btn btn-secondary btn-block" href="#/kalkulacka?s=${encodeURIComponent(s.id)}" data-close-nav>${t('det.calcBtn')}</a>` : ''}
+        ${live ? brokerButton() : ''}
+        ${live ? `<div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5" data-close-nav>${t('mt5.help')}</a></div>` : ''}
       </div>
-      ${isOpen && state === 'open' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
+      </details>
     </div>`;
 
   const mount = (el) => {
@@ -284,6 +279,12 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
     let myBars = null;
     const mountBars = () => { const dbx = el.querySelector('#dbars'); if (dbx && !myBars) { myBars = Bars.mount(dbx, 'db', s.symbol, { levels: lv, path: () => s.price_path || [] }); barsRef = myBars; } };
     setTimeout(mountBars, 30);
+    const adv = el.querySelector('#d-adv');
+    if (focus === 'why' && adv) adv.open = true;
+    /* a profile tap in this detail: Příklady pák follow the new profile's deposit */
+    const onProf = () => { const lx = el.querySelector('#d-lx'); if (lx && el.isConnected) lx.innerHTML = lxHtml(); };
+    document.addEventListener('pulse:prof', onProf);
+    profOff = () => document.removeEventListener('pulse:prof', onProf);
     if (focus === 'why') setTimeout(() => { const c = el.querySelector('#det-why'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     if (focus === 'chart') setTimeout(() => { const c = el.querySelector('.pchart'); if (c) c.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, 420);
     let tvOn = false;
@@ -342,14 +343,13 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         let tot = 0; ids.forEach((id) => { const r = W.close(ctx.data, id); if (r) tot += r.pnl; });
         toast(t('st.stopNowDone', { m: (tot > 0.5 ? '+' : '') + F.money(tot, W.get().ccy, 0) }), { timeout: 6000 });
         const c = el.querySelector('#cta'); if (c) { c.innerHTML = ctaHtml(ctx, s); c.classList.add('pop'); }
-        const jb = el.querySelector('#jbox'); if (jb) jb.innerHTML = journalForm(s, D.journal()[s.id]);
       }
       if (ev.target.closest('[data-copy-order]')) {
         copyText(`${s.symbol} ${F.SIDE[s.action]}\n${lines.join('\n')}`).then((ok) => toast(ok ? t('det.howto.copied') : t('common.copyFailed')));
       }
     });
   };
-  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { liveOff && liveOff(); liveOff = null; barsRef && barsRef.destroy(); barsRef = null; chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
+  const opts = { html, label: t('det.aria', { sym: s.symbol }), onMount: mount, onClose() { profOff && profOff(); profOff = null; liveOff && liveOff(); liveOff = null; barsRef && barsRef.destroy(); barsRef = null; chartRef && chartRef.destroy(); chartRef = null; ctx.rerender({ soft: true }); } };
 
   // Shared-element morph: card ticker + ladder -> sheet (View Transitions API)
   const srcTicker = sourceEl?.querySelector?.('.ticker');

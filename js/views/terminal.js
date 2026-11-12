@@ -20,7 +20,6 @@ import { icon, monogram, openSheet, closeTopSheet, toast, seg, segMove, haptic }
 import { priceChart } from '../charts.js';
 import * as Bars from '../bars.js';
 import { mountTV, tvSymbol } from './detail.js';
-import { autoSwitch } from './home.js';
 
 let chartRef = null, liveOff = null, tvOn = false, autoTicketFor = null, stampTimer = null;
 let tab = 'pos', cmode = 'bars';
@@ -74,13 +73,12 @@ export function walletCard(ctx) {
 }
 
 /* 1.10.0 "where is my money": one big unmistakable line on top of Obchodovat */
+/* 1.13.2 Obchodovat: the wallet as ONE compact line (the chart comes first); the full card lives in Peněženka */
 export function bigAcc(sm) {
   const c = sm.w.ccy;
-  return `<section class="big-acc" id="big-acc" aria-label="${F.esc(t('acc.big'))}">
-    <p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('acc.big')}</p>
-    <p class="big-acc-v num">${money(sm.equity, c, 0)}</p>
-    <div class="big-acc-row num"><span>${t('acc.free')} <b>${money(Math.max(0, sm.free), c, 0)}</b></span><span>${t('acc.inPlay')} <b>${money(sm.used + sm.reserved, c, 0)}</b></span></div>
-    <div class="big-acc-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('u.acc.load')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('u.acc.wd')}</button></div>
+  return `<section class="wl-line" id="big-acc" aria-label="${F.esc(t('acc.big'))}">
+    <a class="wl-line-l" href="#/penezenka">${icon('wallet', 'icon-xs')}<span class="wl-line-k">${t('acc.big')}</span><b class="num big-acc-v">${money(sm.equity, c, 0)}</b><span class="num big-acc-row">· ${t('acc.free')} ${money(Math.max(0, sm.free), c, 0)}</span></a>
+    <button type="button" class="btn btn-secondary btn-small" data-action="w-load">${t('wl.topupShort')}</button>
   </section>`;
 }
 
@@ -94,7 +92,7 @@ function accBar(sm) {
     <div><p class="acc-l">${t('term.free')}${qm('MARZE')}</p><p class="acc-v num">${money(sm.free, c)}</p></div>
   </div>
   <div class="acc-act">
-    <span class="acc-tot num">${t('u.acc.putIn', { a: money(sm.putIn, c), r: `<b class="${tone(sm.total)}">${smoney(sm.total, c)} (${F.spct(sm.totalPct, 1)})</b>` })}</span></div>
+    <span class="acc-tot num">${t('u.acc.putIn', { a: money(sm.putIn, c), r: `<b class="${tone(sm.total)}">${smoney(sm.total, c)} (${F.mpct(sm.totalPct, sm.total)})</b>` })}</span></div>
   ${lvl}${sm.reserved > 0 ? `<p class="acc-res">${icon('clock', 'icon-xs')}${t('term.reservedLine', { v: money(sm.reserved, c), n: sm.w.orders.length })}</p>` : ''}`;
 }
 
@@ -110,7 +108,7 @@ export function tradeRow(p, c, extra = '') {
       <span class="tr-id"><b class="tr-n">${F.esc(w.name)}</b>
         <span class="tr-meta num">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</span>
         <span class="tr-st tone-${st.tone}">${F.esc(st.text)}${toT != null && st.near !== 'target' ? ` · ${t('d.toTarget', { v: F.pct(toT, 1) })}` : ''}</span></span>
-      <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, Math.abs(p.pnlPct) < 0.1 ? 2 : 1)}</small></span>
+      <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>
       ${extra}
     </button>
     <button type="button" class="btn btn-secondary btn-small tr-x" data-action="pos-close" data-id="${p.id}">${t('tr.close')}</button>
@@ -137,8 +135,7 @@ export function posStatus(p) {
   }
   /* 1.13.1: "na nule" only when the money rounds to 0 (the same rounding as Historie) */
   if (Math.abs(p.pnl) < 0.5) return { tone: 'flat', text: t('st.flat') };
-  const d = Math.abs(p.pnlPct) < 0.1 ? 2 : 1;
-  return p.pnl > 0 ? { tone: 'up', text: t('st.win', { v: F.spct(p.pnlPct, d) }) } : { tone: 'down', text: t('st.lose', { v: F.spct(p.pnlPct, d) }) };
+  return p.pnl > 0 ? { tone: 'up', text: t('st.win', { v: F.mpct(p.pnlPct, p.pnl) }) } : { tone: 'down', text: t('st.lose', { v: F.mpct(p.pnlPct, p.pnl) }) };
 }
 
 /* How far the price still has to go to the limit, in plain words */
@@ -218,7 +215,7 @@ export function histList(sm) {
     <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(p.sym)}</span><span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span><span class="hz-tag lev-tag">${t('term.levTag', { v: p.lev || 1 })}</span></span>
     <span class="tp-m num">${t('term.histMeta', { e: pxOf(p.sym, p.entry), x: pxOf(p.sym, p.exit), d: F.dmTime(p.closedAt) })}</span><span class="tp-m tp-open">${F.esc(B.myOpenText(p, c))}</span>${p.order ? `<span class="tp-m">${t('term.ord.fromLimit')}</span>` : ''}
     <span class="tp-m">${t(`term.why.${p.why}`, { sl: pxOf(p.sym, p.sl), x: pxOf(p.sym, p.exit) })}${p.fee > 0.5 ? ` · ${t('term.convFee', { v: money(p.fee, c) })}` : ''}</span></span>
-    <span class="tp-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, 2)}</small></span></span></div>`)).join('')}</div>`;
+    <span class="tp-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span></span></div>`)).join('')}</div>`;
 }
 
 const histCount = (sm) => sm.w.closed.length + (sm.w.ordEnded || []).filter((o) => o.end !== 'filled').length + (sm.w.cash || []).length;
@@ -315,10 +312,6 @@ export function render(ctx) {
   const w = whatOf(sym, ctx.data);
   const sigs = openSigs(ctx.data);
   return head + `
-  ${bigAcc(sm)}
-  <p class="fict-line">${icon('shield', 'icon-xs')}${t('term.fict')}</p>
-  <details class="acc-more"><summary>${t('acc.more')}${icon('chev-down', 'icon-xs')}</summary><div id="t-acc">${accBar(sm)}</div></details>
-  ${autoSwitch()}
   <div class="seg-wrap term-view">${seg({ name: 'tview', label: t('watch.view'), items: [{ id: 'one', label: t('watch.one') }, { id: 'watch', label: t('watch.title'), count: watchList().length }], active: termView() })}</div>
   ${termView() === 'watch' ? watchView(ctx) : ''}
   <div class="term-grid" ${termView() === 'watch' ? 'hidden' : ''}>
@@ -348,6 +341,8 @@ export function render(ctx) {
       <p class="trade-hint">${t('term.hint2', { lev: M.maxLev(sym) })}</p>
     </section>
     <section class="term-side">
+      ${bigAcc(sm)}
+      <details class="acc-more"><summary>${t('acc.more')}${icon('chev-down', 'icon-xs')}</summary><div id="t-acc">${accBar(sm)}</div></details>
       <div class="seg-wrap">${seg({ name: 'ttab', small: true, label: t('term.tabs'), items: [{ id: 'pos', label: t('term.tab.pos'), count: sm.rows.length }, { id: 'ord', label: t('term.tab.ord'), count: sm.w.orders.length }, { id: 'hist', label: t('term.tab.hist'), count: histCount(sm) }], active: tab })}</div>
       <div id="t-tab">${tabBody(sm, ctx.data)}</div>
       ${sigs.length ? `<h2 class="section-title">${t('term.sigs')}</h2><div class="chips term-chips">${sigs.slice(0, 12).map((x) => `<button type="button" class="chip ${x.symbol === sym ? 'chip-gold' : ''}" data-action="t-sym" data-sym="${F.esc(x.symbol)}">${F.esc(x.symbol)}</button>`).join('')}</div>` : ''}
@@ -503,7 +498,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
   /* 1.13.1: closed market without a signal -> the default is "Koupit při otevření" (a market order at the next open);
      a limit price only under Pokročilé */
-  const st = { side, amount: 0, auto: true, lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
+  const st = { side, amount: 0, auto: true, prof: D.profId(), lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
     type: useSig ? ((opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt') : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false };
   /* 1.13.0 BLOCKER fix: the live price is already at / better than the signal's entry -> the default is a plain
      "Koupit hned za X" (market open) or "koupí se při otevření, nejvýš za X" (closed). Never an error on the default path. */
@@ -519,7 +514,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const basePx = () => (isLim() && st.limit > 0 ? st.limit : fillPx());
   /* 1.13.1 ONE sizing: D.stakeFor with the leverage of this ticket and its start price – the same number as the card */
   const sizeSig = () => (useSig ? sig : { symbol: sym, action: side, entry: basePx(), stop: st.sl });
-  const stakeAt = (lev) => D.stakeFor(sizeSig(), { lev, px: basePx() });
+  /* 1.13.2: the profile of this ticket (risk + leverage) – starts at mine, a tap on a column changes it only here */
+  const stakeAt = (lev) => D.stakeFor(sizeSig(), { prof: st.prof, lev, px: basePx() });
   const resize = () => { if (!st.auto) return; st.amount = stakeAt(st.lev); if (sm.free >= minAmt && st.amount > sm.free) st.amount = Math.floor(sm.free); };
   resize();
   const stake = st.amount;
@@ -556,7 +552,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, amountFor: st.auto ? (lev) => (lev === st.lev ? st.amount : stakeAt(lev)) : null, depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen, dd: false })}
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, amountFor: (col) => D.stakeFor(sizeSig(), { prof: col.id, lev: col.lev, px: basePx() }), depLine: true, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, ticket: { amount: st.amount, lev: st.lev, prof: st.prof, open: st.ownOpen } })}
       ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
@@ -623,7 +619,12 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (a) { st.risk = null; st.auto = false; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
         if (r) { st.risk = +r.dataset.risk; st.auto = false; applyRisk(); haptic(); upd(); }
         /* a one-off leverage for THIS ticket: never reaches the global profile handler */
-        if (lv) { ev.stopPropagation(); st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd(); }
+        if (lv) {
+          ev.stopPropagation();
+          /* a profile column = that profile's risk and leverage (deposit re-sized); a broker chip = only the leverage */
+          if (lv.dataset.prof) { st.prof = lv.dataset.prof; st.auto = true; st.risk = null; }
+          st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd();
+        }
         /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */
         if (ev.target.closest('[data-action="lev-own-open"]')) st.ownOpen = !st.ownOpen;
         const lx = ev.target.closest('[data-lx]'); if (lx) st.exOpen = !lx.parentElement.open;
@@ -856,7 +857,7 @@ export function closeConfirm(ctx, id) {
     small: true, label: t('cf.title', { n: nm }),
     html: `<div class="sheet-head"><div><p class="sheet-title">${t('cf.title', { n: F.esc(nm) })}</p><p class="sheet-sub">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-      <div class="sheet-body"><p class="cf-res">${t('cf.now')} <b class="num ${tn}">${smoney(p.pnl, c)}</b> <small class="num ${tn}">(${F.spct(p.pnlPct, Math.abs(p.pnlPct) < 0.1 ? 2 : 1)})</small></p>
+      <div class="sheet-body"><p class="cf-res">${t('cf.now')} <b class="num ${tn}">${smoney(p.pnl, c)}</b> <small class="num ${tn}">(${F.mpct(p.pnlPct, p.pnl)})</small></p>
       <p class="ex-s">${t('cf.s', { a: money(Math.max(0, p.margin + p.pnl), c) })}</p>
       <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-yes>${t('cf.yes', { v: smoney(p.pnl, c) })}</button><button type="button" class="btn btn-ghost" data-no>${t('cf.no')}</button></div></div>`,
     onMount(sh) {

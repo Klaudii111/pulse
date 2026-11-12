@@ -200,9 +200,24 @@ window.addEventListener('popstate', () => {
 });
 
 /* ---------- Toast ---------- */
-export function toast(msg, { action = null, timeout = 3800 } = {}) {
+/* 1.13.2: every toast stays 3 s (5 s with a button) and never covers an open sheet's buttons:
+   it sits above the sheet when there is room, otherwise just under the sheet's head (taps go through it) */
+export function toast(msg, { action = null, timeout = 3000 } = {}) {
   const root = document.getElementById('toast-root');
   root.querySelectorAll('.toast').forEach((n) => n.remove());
+  timeout = action ? 5000 : 3000;
+  root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over');
+  const sh = [...document.querySelectorAll('.sheet.is-open')].pop();
+  if (sh) {
+    const r = sh.getBoundingClientRect();
+    if (r.top >= 72) root.style.bottom = `${Math.round(window.innerHeight - r.top + 8)}px`;
+    else {
+      const hd = sh.querySelector('.sheet-head');
+      root.style.top = `${Math.round((hd ? hd.getBoundingClientRect().bottom : r.top + 56) + 6)}px`;
+      root.style.bottom = 'auto';
+      root.classList.add('is-over');
+    }
+  }
   const el = document.createElement('div');
   el.className = 'toast';
   el.setAttribute('role', 'status');
@@ -210,7 +225,7 @@ export function toast(msg, { action = null, timeout = 3800 } = {}) {
   if (action) el.querySelector('button').addEventListener('click', () => { action.fn(); hide(); });
   root.append(el);
   let timer = setTimeout(hide, timeout);
-  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => el.remove(), 260); }
+  function hide() { clearTimeout(timer); el.classList.add('is-out'); setTimeout(() => { el.remove(); if (!root.querySelector('.toast')) { root.style.top = ''; root.style.bottom = ''; root.classList.remove('is-over'); } }, 260); }
   return hide;
 }
 

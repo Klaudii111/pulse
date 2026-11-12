@@ -129,23 +129,20 @@ export function renderSettings(ctx) {
   </div></div>`;
 }
 
-/* 1.13.0 "Můj profil" – the three settings every money number in the app starts from:
-   kapitál (= Peněženka), riziko (Opatrně 1 % / Odvážně 3 %), páka-profil (Konzervativně / Vyváženě / Agresivněji) */
+/* 1.13.0 "Můj profil" – what every money number in the app starts from: kapitál (= Peněženka) and
+   1.13.2 ONE profile (risk + leverage): Konzervativně 1 % bez páky · Vyváženě 2 % do 1:2 · Agresivněji 4 % do stropu trhu */
 function myProfile() {
   const w = store.get('wallet', null);
   const c = w?.ccy || D.calcState().ccy;
-  const rp = D.riskProf();
-  const lp = B.levProfile();
-  /* 1.13.1: the cap per trade = the largest deposit any card / sheet / robot uses (D.stakeCap); the loss at the stop is at most risk % */
+  const rp = D.prof();
+  /* the cap per trade = the largest deposit any card / sheet / robot uses (D.stakeCap); the loss at the stop is at most risk % */
   const stake = D.stakeCap();
   const radio = (items, act, key, cur) => `<div class="mp-seg" role="radiogroup">${items.map((x) => `<button type="button" class="mp-opt" role="radio" aria-checked="${x.id === cur}" data-action="${act}" ${key}="${x.id}"><b>${x.t}</b><small>${x.s}</small></button>`).join('')}</div>`;
   return `<section class="mp card" aria-labelledby="mp-h"><h2 class="mp-h" id="mp-h">${t('mp.title')}</h2>
     <div class="mp-row"><div><p class="mp-l">${t('mp.cap')}</p><p class="mp-v num" data-mp-cap>${F.money(w ? W.equityNow() : D.calcState().account, c, 0)}</p><p class="mp-s">${t('mp.capS')}</p></div>
-      <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topup')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
-    <p class="mp-l">${t('mp.risk')}</p>
-    ${radio(CONFIG.CALC.RISK_PROFILES.map((p) => ({ id: p.id, t: `${t(`profile.${p.id}`)} · ${F.num(p.pct, 0)} %`, s: t(`mp.risk.${p.id}`) })), 'risk-prof', 'data-id', rp.id)}
-    <p class="mp-l">${t('mp.lev')}</p>
-    ${radio(B.LEV_PROFILES.map((p) => ({ id: p.id, t: t(`mb.p.${p.id}`), s: t(`mp.lev.${p.id}`) })), 'lev-prof', 'data-prof', lp.id)}
+      <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topupShort')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
+    <p class="mp-l">${t('mp.prof')}</p>
+    ${radio(D.PROFILES.map((p) => ({ id: p.id, t: `${t(`mb.p.${p.id}`)} · ${t(`pf.short.${p.id}`)}`, s: t(`pf.long.${p.id}`) })), 'lev-prof', 'data-prof', rp.id)}
     <p class="mp-sum" data-mp-stake="${stake}">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(rp.pct, 0) })}</span></p>
   </section>`;
 }

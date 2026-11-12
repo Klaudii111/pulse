@@ -9,7 +9,7 @@ import * as store from '../store.js';
 import { orderRow, histList, tradeRow, closeConfirm } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
-import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck } from './signals.js';
+import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable } from './signals.js';
 import { paperHero } from './paper.js';
 import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
@@ -110,7 +110,7 @@ export function accountCard(ctx) {
   return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
     <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
       <p class="d-hero-v num">${F.money(sm.equity, c, 0)}</p>
-      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.spct(v, Math.abs(v) < 0.1 ? 2 : 1); })() })}</p>
+      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.mpct(v, sm.today); })() })}</p>
       <p class="d-hero-s num">${t(Math.abs(sm.open) >= 0.5 ? 'dh.split3' : 'dh.split', { f: F.money(Math.max(0, sm.cash), c, 0), u: F.money(sm.used + sm.reserved, c, 0), o: (sm.open > 0 ? '+' : '') + F.money(sm.open, c, 0) })}</p></a>
     <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
@@ -118,9 +118,8 @@ export function accountCard(ctx) {
 
 /* 1.13.0 "Jak chceš obchodovat": one card, three chips – Sám · Signály · Robot za mě (switch + one status line) */
 export function profText() {
-  const lp = B.levProfile();
-  const rp = D.riskProf();
-  return `${lp.id === 'own' ? t('mb.own') : t(`mb.p.${lp.id}`)} · ${t(`profile.${rp.id}`)} (${F.num(rp.pct, 0)} %)`;
+  const p = D.prof();
+  return `${t(`mb.p.${p.id}`)} · ${t(`pf.short.${p.id}`)}`;
 }
 function paths() {
   const on = !!store.get('autoCopy', null)?.on;
@@ -147,9 +146,8 @@ export function autoSwitch() {
    1.11.0: strategies switched off by the robot's watchdog are not offered; best first (H.sortByQuality). */
 export function newSignals(data, now, withDismissed = false) {
   const nn = new Set(withDismissed ? [] : D.dismissed());
-  const list = D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon) && !(CONFIG.HIDDEN_HORIZONS || []).includes(x.horizon) && !nn.has(x.id) && H.offerable(x, data))
-    .filter((x) => D.sigPhase(x, now) === 'open' && ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
-  return H.sortByQuality(list, data, now);
+  /* 1.13.2: the same list as Signály → Můžeš koupit (one function, so the counts can never disagree) */
+  return H.sortByQuality(buyable(data, now).filter((x) => !nn.has(x.id)), data, now);
 }
 
 /* real prices only: the signal's price path (bot 5-min points + live ticks) and the ticks seen in this session,

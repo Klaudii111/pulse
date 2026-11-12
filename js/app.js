@@ -95,7 +95,7 @@ const RB_TABS = ['vysledky', 'ucet', 'uceni'];
 const rbTab = () => { const x = store.get('rbTab', 'vysledky'); return RB_TABS.includes(x) ? x : 'vysledky'; };
 function robotView(c) {
   const tab = rbTab();
-  const inner = tab === 'ucet' ? Paper.render(c) : tab === 'uceni' ? Learn.render(c) : Results.render(c);
+  const inner = tab === 'ucet' ? Paper.render(c) : tab === 'uceni' ? Learn.render(c) : Results.render({ ...c, inRobot: true });
   return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('rb.title')}</h1><p class="page-sub">${t('rb.sub')}</p></div></header>
   <div class="rb-top">${Home.robotLine1(c)}${linkLine(c.data, c.now(), 'd-robot d-learn')}</div>
   <div class="seg-wrap rb-tabs">${seg({ name: 'rbtab', label: t('rb.title'), items: RB_TABS.map((id) => ({ id, label: t(`rb.tab.${id}`) })), active: tab })}</div>
@@ -444,13 +444,19 @@ const GLOBAL = {
   /* 1.13.1: one confirm step that shows the result in money */
   'pos-close'(el) { Term.closeConfirm(ctx(), el.dataset.id); },
   /* Můj profil (Nastavení) + the 3 profile chips on a compact signal card */
-  'risk-prof'(el) { D.saveCalc({ profile: el.dataset.id }); toast(t('mp.riskDone', { p: t(`profile.${el.dataset.id}`) })); rerender({ soft: true }); },
+  /* 1.13.2: risk and leverage are ONE profile (older links / buttons with data-id land here too) */
+  'risk-prof'(el) { B.setLevProfile(el.dataset.id); rerender({ soft: true }); },
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
   /* "?" next to a trading word: one sentence + an example */
   'term-help'(el) { termHelp(el.dataset.k); },
   /* 1.11.1: leverage profile column on a money block (card, detail; the invest sheet also sets its own leverage) */
   /* 1.13.0: inside the invest sheet a leverage tap is a one-off for that ticket – the global profile stays */
-  'lev-prof'(el) { if (!el.isConnected || el.closest('#tk')) return; B.setLevProfile(el.dataset.prof); if (el.closest('.mp')) rerender({ soft: true }); },
+  'lev-prof'(el) {
+    if (!el.isConnected || el.closest('#tk')) return;
+    B.setLevProfile(el.dataset.prof);
+    if (el.closest('.mp')) toast(t('mp.profDone', { p: t(`mb.p.${el.dataset.prof}`), s: t(`pf.short.${el.dataset.prof}`) }));
+    if (!sheetOpen()) rerender({ soft: true });
+  },
   /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */
   'lev-own'(el) { if (!el.isConnected || el.closest('#tk')) return; B.setLevOwn(+el.dataset.lev, el.dataset.sym || null); },
   'lev-own-open'(el) { B.toggleOwn(el); },
@@ -487,7 +493,7 @@ const GLOBAL = {
   },
   'dismiss-pcta'() { P.dismissPushCta(); document.querySelectorAll('.pcta').forEach((n) => n.remove()); },
   /* re-open the first-run guide (Více) */
-  onboarding() { Onb.open(() => rerender({ soft: true })); },
+  onboarding() { Onb.open(() => rerender({ soft: true }), () => data); },
   /* "Sledovat" star on signal cards (Moje) */
   follow(el) {
     const on = D.toggleFollow(el.dataset.id);
@@ -645,7 +651,7 @@ async function boot() {
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
   W.setAutoLev((sym) => B.selLev(sym));
-  Onb.maybeShow((fresh) => { rerender({ soft: true }); if (fresh === 'done') setTimeout(() => Tour.start({ auto: true }), 600); });
+  Onb.maybeShow((fresh) => { rerender({ soft: true }); if (fresh === 'done') setTimeout(() => Tour.start({ auto: true }), 600); }, () => data);
   Tour.init({ go: (h) => window.__pulseGo(h), route: () => route.name });
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).

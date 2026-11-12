@@ -69,7 +69,7 @@ export function renderWallet(ctx) {
   <section class="card acc-rows">
     <div class="acc-r"><span>${t('wl.deps')}</span><b class="num">${F.money(deps, c, 0)}</b></div>
     <div class="acc-r"><span>${t('wl.wds')}</span><b class="num">${F.money(wds, c, 0)}</b></div>
-    <div class="acc-r"><span>${t('wl.result')}</span><b class="num ${tot.tone}">${F.esc(tot.text)}${tot.zero ? '' : ` (${F.spct(s.totalPct, 1)})`}</b></div>
+    <div class="acc-r"><span>${t('wl.result')}</span><b class="num ${tot.tone}">${F.esc(tot.text)}${tot.zero ? '' : ` (${F.mpct(s.totalPct, s.total)})`}</b></div>
   </section>
   <a class="hs-row wl-hist-link" href="#/historie">${icon('history', 'icon-xs')}<span>${t('wl.toHist')}</span>${icon('chev-right', 'icon-xs')}</a>
   <section class="d-block"><h2 class="d-h">${t('wl.hist')}</h2>
@@ -121,7 +121,7 @@ function closedRow(p, c) {
   const h = hzOf(p);
   return `<div class="hi-row">${p.sigId ? `<button type="button" class="hi-main" data-action="open-signal" data-id="${F.esc(p.sigId)}">` : '<div class="hi-main">'}
     <span class="hi-bar ${tone(p.pnl)}"></span><span class="hi-m"><b>${F.esc(nameOf(p))}</b><small>${F.esc(h === 'own' ? t('hi.own') : t(`c.typeS.${h}`))} · ${F.dm(p.closedAt)}${p.lev > 1 ? ` · 1:${p.lev}` : ''} · ${F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`))}</small></span>
-    <span class="hi-v num ${tone(p.pnl)}">${sm(p.pnl, c)}<small>${F.spct(p.pnlPct, 1)}</small></span>${p.sigId ? '</button>' : '</div>'}</div>`;
+    <span class="hi-v num ${tone(p.pnl)}">${sm(p.pnl, c)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>${p.sigId ? '</button>' : '</div>'}</div>`;
 }
 function mine(ctx) {
   const s = W.summary(ctx.data);

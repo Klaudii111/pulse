@@ -238,10 +238,19 @@ function openIn(data, hz) {
   const hzs = VISIBLE_HZ().filter((h) => D.horizonAllowed(data, h) && (hz === 'ALL' || h === hz));
   return hzs.flatMap((h) => (data.signals.tracks[h] || []).map((x) => ({ ...x, horizon: x.horizon || h })));
 }
+/* 1.13.2 "Můžeš koupit" = ONE list for Dnes (count + cards), the Signály tab (badge + cards) and the robot's question:
+   offered (the watchdog did not switch its strategy off), entry still possible, not mine yet */
+export const BUYABLE = ['buy', 'soon', 'wait'];
+export function buyable(data, now, hz = 'ALL') {
+  return openIn(data, hz).filter((x) => D.sigPhase(x, now) === 'open' && H.offerable(x, data) && BUYABLE.includes(D.cardState(x, data, now).code));
+}
+/* signals I already put money into (a trade or a waiting buy) while they are still open – listed under "Už v nich jsi" */
+function mineOpen(data, now, hz) {
+  return openIn(data, hz).filter((x) => D.sigPhase(x, now) === 'open' && ['mine', 'order'].includes(D.cardState(x, data, now).code));
+}
 function phaseList(data, hz, ph, now) {
   if (ph === 'closed') return D.closedSignals(data, now).filter((x) => hz === 'ALL' || x.horizon === hz);
-  /* 1.11.0: Otevřené = what the app offers -> a strategy switched off by the watchdog is not offered (my own trades stay) */
-  if (ph === 'open') return openIn(data, hz).filter((x) => D.sigPhase(x, now) === 'open' && (H.offerable(x, data) || ['mine', 'order'].includes(D.cardState(x, data, now).code)));
+  if (ph === 'open') return buyable(data, now, hz);
   return openIn(data, hz).filter((x) => D.sigPhase(x, now) === ph);
 }
 
@@ -251,20 +260,18 @@ function sigBody(ctx) {
   const hz = curHz(), ph = curPh();
   if (hz !== 'ALL' && hidden(hz)) return `<section class="calm u-empty">${calmArt()}<div><h3 class="calm-t">${t('u.den.t')}</h3><p class="calm-s">${t('u.den.s')}</p></div></section>`;
   if (hz !== 'ALL' && !D.horizonAllowed(data, hz)) return lockedPanel(data, hz);
-  const list = phaseList(data, hz, ph, now);
-  /* 1.11.0: my own trades first, then the best signals (strength from reward:risk -> fresher -> strategy ok before sleduj) */
-  if (ph === 'open') {
-    const rank = { mine: 0, order: 1 };
-    const r = new Map(list.map((x) => [x.id, rank[D.cardState(x, data, now).code] ?? 2]));
-    const pos = new Map(H.sortByQuality(list.slice(), data, now).map((x, i) => [x.id, i]));
-    list.sort((a, b) => (r.get(a.id) - r.get(b.id)) || (pos.get(a.id) - pos.get(b.id)));
-  } else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  let list = phaseList(data, hz, ph, now);
+  /* the best signals first (H.sortByQuality); my own open trades are a separate group under the list (not in the count) */
+  if (ph === 'open') list = H.sortByQuality(list.slice(), data, now);
+  else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const mine = ph === 'open' ? mineOpen(data, now, hz) : [];
+  const mineHtml = mine.length ? `<h2 class="hz-group sg-mine">${t('sg.mineH')}<small class="num">${mine.length}</small></h2><div class="sc-list">${mine.map((x, i) => B.compact(x, { data, now, i, chips: false })).join('')}</div>` : '';
   const off = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
   if (!list.length) {
-    if (ph === 'open') return off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`;
+    if (ph === 'open') return (off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`) + mineHtml;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i, arr) => B.compact(x, { data, now, i, chips: i === B.firstMoneyIdx(arr, data, now) })).join('')}</div>`;
+  return `${off}<div class="sc-list" data-list="${ph}">${list.slice(0, 60).map((x, i, arr) => B.compact(x, { data, now, i, chips: i === B.firstMoneyIdx(arr, data, now) })).join('')}</div>${mineHtml}`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {
@@ -272,7 +279,7 @@ function phDesc(ph, data = null, now = D.clock()) {
   if (ph === 'open' && data?.signals) {
     /* honest count: the robot sends only what passes its rules – some days 2, some days 10, some days none */
     const day = (x) => new Date(x).toDateString();
-    const list = phaseList(data, 'ALL', 'open', now).filter((x) => ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
+    const list = phaseList(data, 'ALL', 'open', now);
     const today = list.filter((x) => x.created_at && day(x.created_at) === day(now)).length;
     /* 1.13.0: the same words as Dnes ("Můžeš koupit · N") – never "žádná" next to a list of signals */
     if (!list.length) return t('sg.rules');
