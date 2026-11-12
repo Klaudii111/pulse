@@ -4,7 +4,7 @@ import * as D from '../domain.js';
 import * as store from '../store.js';
 import * as P from '../pwa.js';
 import { LESSONS } from '../lessons.js';
-import { icon, seg, segMove, toast, openSheet, closeTopSheet } from '../ui.js';
+import { icon, seg, segMove, toast, openSheet, closeTopSheet, langSwitch } from '../ui.js';
 import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
 import * as Live from '../live.js';
 import * as Mkt from '../market.js';
@@ -55,6 +55,7 @@ export function pushCta() {
 
 export function renderMore(ctx) {
   return `<header class="page-head"><div><h1 class="page-title">${t('more.title')}</h1><p class="page-sub">${t('more.sub')}</p></div></header>
+  <div class="more-lang"><span>${t('lang.k')}</span>${langSwitch()}</div>
   ${pushCta()}
   ${Sync.card({ compact: true })}
   ${MORE_ITEMS.map((g) => `<h2 class="group-l">${t(g.group)}</h2><nav class="tile-grid" aria-label="${t(g.group)}">${g.items.map((it, i) => `<${it.action ? `button type="button" data-action="${it.id}"` : `a href="#/${it.id}"`} class="gtile" style="--i:${i}">
@@ -107,7 +108,7 @@ export function renderSettings(ctx) {
   <div class="info-layout"><div>
     ${'' /* 1.13.6: the info-only "Živé ceny" card removed (nothing to set there) */}
     <h2 class="section-title">${t('set.lang')}</h2>
-    <div class="card">${seg({ name: 'lang', small: true, label: t('set.lang'), items: LOCALES.map((l) => ({ id: l.id, label: l.label })), active: lang() })}</div>
+    <div class="card more-lang"><span>${t('lang.k')}</span>${langSwitch()}</div>
     <h2 class="section-title">${t('set.notif')}</h2>
     <div class="card"><div class="card-row"><div><p class="card-t">${t('set.local')}</p><p class="card-s">${t('set.localS')}</p></div>
       <button class="switch" role="switch" type="button" aria-checked="${P.localNotifyEnabled()}" data-action="local-notify" aria-label="${t('set.local')}"></button></div></div>

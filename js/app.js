@@ -3,7 +3,7 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, il, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts } from './ui.js';
+import { icon, il, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg, clearToasts, langSwitch } from './ui.js';
 import { linkLine } from './views/learn.js';
 import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
@@ -18,7 +18,7 @@ import * as Term from './views/terminal.js';
 import * as Paper from './views/paper.js';
 import * as Pages from './views/pages.js';
 import * as W from './wallet.js';
-import { t, lang } from './i18n/index.js';
+import { t, lang, setLang } from './i18n/index.js';
 import * as M from './motion.js';
 import * as Live from './live.js';
 import * as Feed from './feed.js';
@@ -36,6 +36,7 @@ import * as Comm from './community.js';
 import * as H from './health.js';
 import * as Sync from './sync.js';
 import * as Sty from './styles.js';
+import * as Den from './den.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -61,10 +62,12 @@ const TABS = [
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
 /* 1.15.0: Portfolio is the tab (old #/zainvestovano and #/moje stay as aliases); a trade detail belongs to it */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', den: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
 
 const VIEWS = {
-  dnes: { title: 'nav.dnes', render: Home.render, mount: Pf.dnesMount, actions: Home.actions },
+  dnes: { title: 'nav.dnes', render: Home.render, mount: (el, c) => { Pf.dnesMount(el, c); Den.mount(el); }, actions: { ...Home.actions, ...Den.actions } },
+  /* 1.15.1 the experimental daily robot (PULSE DEN) – its own page, never mixed with the tested signals */
+  den: { title: 'den.h', render: Den.render, mount: Den.mountPage, actions: Den.actions },
   /* 1.15.0 Portfolio (#/portfolio = #/moje = #/zainvestovano) + the trade detail #/obchod/<id> */
   portfolio: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
   zainvestovano: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
@@ -572,6 +575,11 @@ document.addEventListener('change', (ev) => {
 });
 
 document.addEventListener('click', (ev) => {
+  const lb = ev.target.closest && ev.target.closest('[data-lang-set]');
+  if (lb && !lb.closest('#gate') && !lb.closest('.onb')) {
+    if (lb.dataset.langSet !== lang()) { setLang(lb.dataset.langSet); onLangChange(); }
+    return;
+  }
   const el = ev.target.closest('[data-action]');
   if (!el) return;
   const name = el.dataset.action;
@@ -626,7 +634,8 @@ async function gate() {
   const g = document.getElementById('gate');
   g.hidden = false;
   g.className = 'gate';
-  g.innerHTML = `<div class="gate-inner">
+  const html = () => `<div class="gate-inner">
+    <div class="gate-lang">${langSwitch()}</div>
     <img class="gate-mark" src="./icons/icon-192.png" alt="" width="72" height="72">
     <h1>${F.esc(CONFIG.APP_NAME)}</h1>
     <p>${t('gate.s')}</p>
@@ -638,15 +647,13 @@ async function gate() {
     </form>
     <p class="gate-foot">${t('gate.foot')} ${F.esc(t('disclaimer'))}</p>
   </div>`;
+  g.innerHTML = html();
   document.getElementById('app').setAttribute('aria-hidden', 'true');
   setTimeout(() => g.querySelector('input').focus(), 100);
+  let off = () => {};
   await new Promise((resolve) => {
-    const form = g.querySelector('form');
-    // Sandboxed previews block form submission, so handle the button and Enter directly.
-    g.querySelector('#gate-go').addEventListener('click', () => form.dispatchEvent(new Event('submit', { cancelable: true })));
-    g.querySelector('input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); form.dispatchEvent(new Event('submit', { cancelable: true })); } });
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
+    // Sandboxed previews block form submission, so handle the button and Enter directly (delegated: the gate re-renders on CS | EN).
+    const submit = async () => {
       const v = g.querySelector('input').value.trim().toUpperCase();
       const err = g.querySelector('#gate-err');
       if (!v) { err.textContent = t('gate.empty'); return; }
@@ -656,12 +663,22 @@ async function gate() {
         g.classList.add('is-out');
         setTimeout(() => { g.hidden = true; g.innerHTML = ''; }, 300);
         document.getElementById('app').removeAttribute('aria-hidden');
+        off();
         resolve();
       } else {
         err.textContent = t('gate.wrong');
         g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
       }
-    });
+    };
+    const onClick = (ev) => {
+      const lb = ev.target.closest('[data-lang-set]');
+      if (lb) { const v = g.querySelector('input')?.value || ''; setLang(lb.dataset.langSet); g.innerHTML = html(); g.querySelector('input').value = v; onLangChange(); return; }
+      if (ev.target.closest('#gate-go')) submit();
+    };
+    const onSubmit = (ev) => { ev.preventDefault(); submit(); };
+    const onKey = (e) => { if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); submit(); } };
+    g.addEventListener('click', onClick); g.addEventListener('submit', onSubmit); g.addEventListener('keydown', onKey);
+    off = () => { g.removeEventListener('click', onClick); g.removeEventListener('submit', onSubmit); g.removeEventListener('keydown', onKey); };
   });
 }
 
@@ -689,10 +706,12 @@ async function boot() {
   P.initSW();
   try { if (sessionStorage.getItem('pulse.updated')) { sessionStorage.removeItem('pulse.updated'); setTimeout(() => toast(t('update.done')), 900); } } catch { /* ignore */ }
   await gate();
-  Sync.init(() => { if (!sheetOpen()) rerender({ soft: true }); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
+  /* 1.15.1: the language is synced like the other settings – a change from another device re-renders in place */
+  Sync.init(() => { const l = store.get('lang', null); if (l && l !== lang()) { setLang(l); onLangChange(); return; } if (!sheetOpen()) rerender({ soft: true }); }); /* 1.14.0 Můj účet na všech zařízeních + #/pair/<id> */
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
   W.setAutoLev((sym) => B.selLev(sym));
+  Onb.onLang(() => onLangChange());
   Onb.maybeShow((fresh) => { rerender({ soft: true }); if (fresh === 'done') setTimeout(() => Tour.start({ auto: true }), 600); }, () => data);
   Tour.init({ go: (h) => window.__pulseGo(h), route: () => route.name });
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });

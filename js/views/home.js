@@ -9,7 +9,7 @@ import * as store from '../store.js';
 import { orderRow, histList, tradeRow, closeConfirm, pxC } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
-import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ, scanLine } from './signals.js';
+import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck, buyable, VISIBLE_HZ, scanLine, nextUsOpen } from './signals.js';
 import { paperHero } from './paper.js';
 import { card as mojeCard } from './moje.js';
 import { pushCta } from './more.js';
@@ -18,7 +18,8 @@ import * as H from '../health.js';
 import { offLine, linkLine } from './learn.js';
 import { myStats } from './penezenka.js';
 import * as P from '../portfolio.js';
-import { dnesBlock } from './portfolio.js';
+import { dnesBlock, whenText } from './portfolio.js';
+import * as Den from '../den.js';
 
 /* 1.9.0: live market strip with the main markets (instruments.json keys, plain names); tap = trade it on the platform.
    Before the server knows the keys, the old ETF proxies are shown (labelled honestly). */
@@ -241,7 +242,104 @@ export function robotLine1(ctx) {
 export const actions = {
   'h-close'(el, ev, ctx) { closeConfirm(ctx, el.dataset.id); },
   'h-term'(el) { store.set('termSym', el.dataset.sym); window.__pulseGo('#/terminal'); },
+  'ts-go'(el) { window.__pulseGo(el.dataset.href); },
 };
+
+/* ---------- 1.15.1 Dnes = three questions, in this order (owner 12. 11.: "přijdeš do appky a aby bylo jasné, jaké
+   signály kdy byly vyslány na dnes"): (a) Kolik mám · (b) Dnešní signály · (c) Jak se daří tomu, co mám.
+   Everything else (how I trade, the robot's record, the status of the scans) sits below. ---------- */
+const dayOf = (ms) => new Date(ms).toDateString();
+/* every signal valid for today: buyable now / at the open / with a limit, or mine / my waiting buy while its entry is open;
+   + "Dnes dříve" = sent today but no longer buyable (the day's timeline stays visible) */
+export function todaySignals(data, now) {
+  const vis = VISIBLE_HZ();
+  const today = dayOf(+now);
+  const main = [], earlier = [];
+  D.allOpen(data).filter((s) => vis.includes(s.horizon) && D.horizonAllowed(data, s.horizon)).forEach((s) => {
+    const cs = D.cardState(s, data, now);
+    const buy = ['buy', 'soon', 'wait'].includes(cs.code) && D.sigPhase(s, now) === 'open' && H.offerable(s, data);
+    const held = (cs.code === 'mine' || cs.code === 'order') && D.entryOpen(s, now);
+    if (buy || held) main.push({ s, cs, buy });
+    else if (s.created_at && dayOf(Date.parse(s.created_at)) === today) earlier.push({ s, cs, buy: false });
+  });
+  const q = H.sortByQuality(main.filter((x) => x.buy).map((x) => x.s), data, now).map((s) => main.find((x) => x.s === s));
+  const rank = { order: 1, mine: 2 };
+  const rest = main.filter((x) => !x.buy).sort((a, b) => (rank[a.cs.code] || 3) - (rank[b.cs.code] || 3));
+  earlier.sort((a, b) => Date.parse(b.s.created_at) - Date.parse(a.s.created_at));
+  return { main: q.concat(rest), earlier };
+}
+/* "dnes 16:05" / "včera 22:46" – when the robot sent the signal */
+export function sentText(s, now) {
+  return s?.created_at ? whenText(Date.parse(s.created_at), +now) : '';
+}
+function tsState(x, now) {
+  const { s, cs } = x;
+  const sell = s.action === 'SELL';
+  if (cs.code === 'mine') {
+    const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
+    const p = (cs.pos || [])[0];
+    return { tone: mt ? mt.tone : 'flat', text: mt ? t('ts.st.mine', { v: mt.zero ? `±${F.money(0, cs.my.ccy, 0)}` : mt.text }) : t('ts.st.mine0'),
+      btn: p ? { href: `#/obchod/${p.id}`, label: t('ts.b.mine') } : { sig: true, label: t('ts.b.detail') } };
+  }
+  if (cs.code === 'order') return { tone: 'gold', text: t(sell ? 'ts.st.orderSell' : 'ts.st.order', { v: D.spx(s, cs.ord.limit) }), btn: { href: `#/obchod/${cs.ord.id}`, label: t('ts.b.order') } };
+  if (x.buy) {
+    const btn = { invest: true, mode: cs.cta === 'limit' ? 'limit' : 'now', label: t(sell ? 'ts.b.sell' : 'ts.b.buy') };
+    if (cs.code === 'buy') return { tone: 'up', text: t(sell ? 'ts.st.buySell' : 'ts.st.buy'), btn };
+    if (cs.code === 'soon') { const o = nextUsOpen(now); return { tone: 'up', text: t(sell ? 'ts.st.soonSell' : 'ts.st.soon', { d: o ? D.whenLabel(o, now) : '' }), btn }; }
+    return { tone: 'gold', text: t(sell ? 'ts.st.waitSell' : 'ts.st.wait', { v: D.spx(s, D.maxEntry(s)) }), btn };
+  }
+  return { tone: 'flat', text: t('ts.st.ended'), btn: { sig: true, label: t('ts.b.detail') } };
+}
+function tsCard(x, now, i) {
+  const { s } = x;
+  const w = B.whatIs(s.symbol, s.name);
+  const sell = s.action === 'SELL';
+  const end = D.entryWindowEnd(s);
+  const st = tsState(x, now);
+  const b = st.btn;
+  const btn = b.invest ? `<button type="button" class="btn btn-primary btn-block ts-btn" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${b.mode}">${icon('spark', 'icon-sm')}<span>${F.esc(b.label)}</span></button>`
+    : b.href ? `<button type="button" class="btn btn-primary btn-block ts-btn" data-action="ts-go" data-href="${F.esc(b.href)}"><span>${F.esc(b.label)}</span>${icon('chev-right', 'icon-sm')}</button>`
+    : `<button type="button" class="btn btn-secondary btn-block ts-btn" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${F.esc(b.label)}</span>${icon('chev-right', 'icon-sm')}</button>`;
+  return `<article class="ts-card is-${F.esc(x.cs.code)}" style="--i:${Math.min(i, 6)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}">
+    <button type="button" class="ts-top" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(t('ts.open', { n: w.name }))}">
+      ${monogram(s.symbol, w.name)}<span class="ts-id"><b class="ts-name">${F.esc(w.name)}</b><span class="ts-do ${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(`c.side.${sell ? 'SELL' : 'BUY'}`)}</span></span>${icon('chev-right', 'icon-xs ts-chev')}</button>
+    <p class="ts-when num">${icon('clock', 'icon-xs')}<span><span class="ts-sent">${F.esc(t('ts.sent', { d: sentText(s, now) }))}</span>${end ? `<span class="ts-until">${F.esc(t('ts.until', { d: D.whenLabel(new Date(end), now) }))}</span>` : ''}</span></p>
+    <p class="ts-st tone-${st.tone}"><i aria-hidden="true"></i><span>${F.esc(st.text)}</span></p>
+    ${btn}
+  </article>`;
+}
+function tsEarlier(list) {
+  if (!list.length) return '';
+  return `<div class="ts-early"><p class="ts-early-h">${t('ts.earlier')}</p>${list.map((x) => {
+    const w = B.whatIs(x.s.symbol, x.s.name);
+    const mine = x.cs.code === 'mine' || (x.cs.code === 'done' && x.cs.my);
+    return `<button type="button" class="ts-erow" data-action="open-signal" data-id="${F.esc(x.s.id)}"><span class="ts-et num">${F.esc(F.time(new Date(Date.parse(x.s.created_at))))}</span><span class="ts-en">${F.esc(w.name)}</span><span class="ts-es">${F.esc(t(mine ? 'ts.e.mine' : 'ts.e.ended'))}</span>${icon('chev-right', 'icon-xs')}</button>`;
+  }).join('')}</div>`;
+}
+export function todayBlock(ctx) {
+  const now = ctx.now();
+  const { main, earlier } = todaySignals(ctx.data, now);
+  const when = nextCheck(ctx.data, now);
+  const body = main.length ? `<div class="ts-list">${main.map((x, i) => tsCard(x, now, i)).join('')}</div>`
+    : `<p class="ts-empty">${il('08_cekani', 56, { lazy: false })}<span>${F.esc(t(earlier.length ? 'ts.none2' : 'ts.none', { when }))}</span></p>`;
+  return `<section class="d-block d2-sig" id="d-today" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('ts.h')}${main.length ? `<span class="num"> · ${main.length}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
+    ${body}${tsEarlier(earlier)}${main.length ? `<p class="ts-next">${icon('clock', 'icon-xs')}<span>${F.esc(t('ts.next', { when }))}</span></p>` : ''}${offLine(ctx.data)}</section>`;
+}
+
+/* (a) Kolik mám: the account value + today's result; one tap -> Portfolio */
+function heroKolik(ctx) {
+  const sm = W.summary(ctx.data);
+  const c = sm.w.ccy;
+  const p = W.parts(sm);
+  const hd = P.head(sm);
+  const td = D.moneyTone(sm.today, c, hd.todayPct);
+  return `<a class="d-hero d2-hero" id="acc-card" href="#/portfolio">
+    <span class="d-hero-l"><span class="d-k">${t('ts.kolik')}${icon('chev-right', 'icon-xs')}</span>
+      <span class="d-hero-v num" data-eq="${p.eq}">${F.money(p.eq, c, 0)}</span>
+      <span class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.mpct(hd.todayPct, sm.today) })}</span>
+      <span class="d-hero-s num" data-free="${p.free}" data-inplay="${p.inPlay}">${t('ts.split', { f: F.money(p.free, c, 0), u: F.money(p.inPlay, c, 0) })}</span></span>
+  </a>`;
+}
 
 export function render(ctx) {
   const now = ctx.now();
@@ -252,27 +350,13 @@ export function render(ctx) {
     if (ctx.state.error) return head + errorBlock();
     return head + `${skBlock(120, 22)}<div style="height:12px"></div>${skBlock(220)}`;
   }
-  const fresh = newSignals(ctx.data, now);
-  const all = newSignals(ctx.data, now, true).length; // the same count as Signály → Otevřené ("Můžeš koupit N")
-  const sigs = fresh.slice(0, 3);
-  const more = all > sigs.length ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: all })}${icon('chev-right', 'icon-xs')}</a>` : '';
-  /* 1.13.0: phone = one column (hero · how · signals · mine); desktop = left hero + how + mine, right the signals */
-  /* 1.13.7: with an open trade or a waiting buy, "Zainvestováno" sits right under Peněženka (before the signal cards) */
-  const smH = W.summary(ctx.data);
-  const hasTrades = smH.rows.length > 0 || (smH.w.orders || []).length > 0;
-  /* 1.15.0: Portfolio summary (opens Portfolio) + the trade rows (each opens its detail) */
-  const mineSec = (cls) => `<section class="d-block ${cls}" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/portfolio">${t('nav.portfolio')}${icon('chev-right', 'icon-xs')}</a></h2>${dnesBlock(ctx)}</section>`;
-  return head + `<div class="d-grid${hasTrades ? ' has-trades' : ''}">
-  <div class="d-c1">${accountCard(ctx)}
-  ${hasTrades ? mineSec('d-mine-top') : ''}
-  ${paths()}
-  ${B.statsRow(ctx.data, now)}</div>
-  <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
-    ${scanLine(ctx.data, now)}
-    ${offLine(ctx.data)}
-    ${sigs.length ? `${B.firstMoneyIdx(sigs, ctx.data, now) >= 0 ? B.profSwitch() : ''}<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty has-il">${il('08_cekani', 56, { lazy: false })}<span>${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</span></p>`}
-  </section>
-  ${hasTrades ? '' : mineSec('d-c3')}
+  /* (c) Jak se daří tomu, co mám: the Portfolio summary + the trade rows (each opens its trade page) */
+  const mine = `<section class="d-block d-mine-top d2-mine" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/portfolio">${t('ts.mineH')}${icon('chev-right', 'icon-xs')}</a></h2>${dnesBlock(ctx)}</section>`;
+  return head + `<div class="d2-grid">
+  ${heroKolik(ctx)}
+  <div class="d2-sigcol">${todayBlock(ctx)}${Den.cardHtml(now)}</div>
+  ${mine}
+  <div class="d2-more">${paths()}${B.statsRow(ctx.data, now)}</div>
   </div>
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

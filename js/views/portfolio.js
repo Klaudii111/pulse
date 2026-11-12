@@ -14,7 +14,9 @@ import * as Live from '../live.js';
 import * as Bars from '../bars.js';
 import * as store from '../store.js';
 import { t, L, lang } from '../i18n/index.js';
-import { icon, il, monogram, sparkline, openSheet, closeTopSheet, toast, copyText, skBlock, haptic } from '../ui.js';
+import { icon, il, monogram, sparkline, openSheet, closeTopSheet, toast, copyText, skBlock, haptic, seg } from '../ui.js';
+import * as A from '../alloc.js';
+import { buyable as buyableList, VISIBLE_HZ } from './signals.js';
 import { pxOf, pxC, closeConfirm, mktStamp, openWhen, limitDistance, validText, buyMore, actions as TermActions } from './terminal.js';
 import { myStats } from './penezenka.js';
 import { ziRobot } from './home.js';
@@ -110,27 +112,167 @@ function ordRow(o, data, c) {
   </a>`;
 }
 
-export function render(ctx) {
-  const head = `<header class="page-head"><div><h1 class="page-title">${t('nav.portfolio')}</h1><p class="page-sub">${t('po.sub')}</p></div>
-    <a class="btn btn-secondary btn-small zi-hist" href="#/historie">${icon('history', 'icon-sm')}<span>${t('hi.title')}</span></a></header>`;
-  if (!ctx.data?.signals) return head + skBlock(260);
-  const sm = W.summary(ctx.data);
+/* ---------- 1.15.1 Portfolio in two parts (owner 12. 11.):
+   part one "Signály a obchody" – switch Moje obchody | Všechny signály robota + tabs Otevřené / Čekající / Historie;
+   part two "Rozložení portfolia" – the donut of what I have put in, by kind of market, + Volné peníze.
+   Phone: hero (account chart) · donut · part one. Desktop: part one left, hero + donut right. ---------- */
+const PF_MODES = ['mine', 'sig'];
+const PF_TABS = ['open', 'wait', 'hist'];
+const pfMode = () => { const m = store.get('pfMode', 'mine'); return PF_MODES.includes(m) ? m : 'mine'; };
+const pfTab = () => { const x = store.get('pfTab', 'open'); return PF_TABS.includes(x) ? x : 'open'; };
+let pfKind = null;           // the donut's selected kind (filters part one; per session, not stored)
+let shownIds = '';           // the open trades on screen (a close / fill meanwhile -> re-render once)
+const inKind = (sym) => !pfKind || A.kindOf(sym) === pfKind;
+
+/* a closed trade (History tab) – opens the read-only trade page */
+function closedRow(p, c) {
+  const w = B.whatIs(p.sym, p.name);
+  return `<a class="pf-row is-closed pf-t-${tone(p.pnl)}" href="#/obchod/${F.esc(p.id)}" data-cid="${F.esc(p.id)}">
+    ${monogram(p.sym, w.name)}
+    <span class="pf-id"><span class="pf-n"><b>${F.esc(w.name)}</b>${w.name !== p.sym ? `<span class="ticker">${F.esc(p.sym)}</span>` : ''}</span>
+      <span class="pf-meta num">${F.esc(t('p2.closedMeta', { d: whenText(p.closedAt), a: F.money(p.margin, c, 0) }))}</span></span>
+    <span class="pf-v num"><b class="${tone(p.pnl)}">${sg(p.pnl, c)}</b><span class="pf-res ${tone(p.pnl)}">${F.mpct(p.pnlPct, p.pnl)}</span></span>
+  </a>`;
+}
+
+/* every signal the robot sent (tested horizons only – the experimental daily robot never appears here) */
+function robotSignals(data, now) {
+  const vis = VISIBLE_HZ();
+  const closed = D.closedSignals(data, now);
+  const done = new Set(closed.map((x) => x.id));
+  const open = D.allOpen(data).filter((s) => vis.includes(s.horizon) && !done.has(s.id));
+  const buyable = new Set(buyableList(data, now).map((x) => x.id));
+  return {
+    open: open.filter((s) => D.sigPhase(s, now) !== 'closed'),
+    wait: open.filter((s) => buyable.has(s.id)),
+    hist: closed,
+  };
+}
+function sigHeld(s, sm) { return sm.rows.find((p) => p.sigId === s.id) || null; }
+function sigTook(s, sm) {
+  if (sigHeld(s, sm)) return 'in';
+  if ((sm.w.orders || []).some((o) => o.sigId === s.id)) return 'ord';
+  if ((sm.w.closed || []).some((p) => p.sigId === s.id)) return 'was';
+  return '';
+}
+function sigRow(s, sm, now) {
+  const w = B.whatIs(s.symbol, s.name);
+  const held = sigHeld(s, sm);
+  const took = sigTook(s, sm);
+  const st = D.liveStatus(s, now);
+  const mv = st.move;
+  const tn = mv == null ? 'flat' : mv > 0.005 ? 'up' : mv < -0.005 ? 'down' : 'flat';
+  const sent = s.created_at ? F.time(new Date(Date.parse(s.created_at))) : '';
+  const tag = took === 'in' ? `<span class="p2-tag is-in">${t('p2.has')}</span>` : took === 'ord' ? `<span class="p2-tag is-ord">${t('p2.hasOrd')}</span>` : took === 'was' ? `<span class="p2-tag is-was">${t('p2.had')}</span>` : `<span class="p2-tag">${t('p2.hasNot')}</span>`;
+  const how = st.done ? t('p2.ended', { v: F.spct(mv ?? 0, 1) }) : mv == null ? t('p2.wait') : t('p2.now', { v: F.spct(mv, 2) });
+  const sp = sparks.get(s.symbol);
+  const inner = `${monogram(s.symbol, w.name)}
+    <span class="pf-id"><span class="pf-n"><b>${F.esc(w.name)}</b><span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span></span>
+      <span class="pf-meta num">${F.esc(sent ? t('p2.sent', { t: sent, hz: t(`c.typeS.${s.horizon}`) }) : t(`c.typeS.${s.horizon}`))}</span><span class="pf-when">${tag}</span></span>
+    <span class="pf-v num">${st.done ? '' : `<span class="pf-spark mi-spark ${tn}" data-f="spark" data-sym="${F.esc(s.symbol)}" aria-hidden="true">${sp ? sparkline(sp, { w: 56, h: 18 }) : ''}</span>`}<b class="${tn}" data-s="mv">${F.esc(how)}</b>${held ? `<small class="${tone(held.pnl)}">${F.esc(t('p2.mine', { v: sg(held.pnl, sm.w.ccy) }))}</small>` : ''}</span>`;
+  return held
+    ? `<a class="pf-row p2-sig tone-${tn}" href="#/obchod/${F.esc(held.id)}" data-sid="${F.esc(s.id)}">${inner}</a>`
+    : `<button type="button" class="pf-row p2-sig tone-${tn}" data-action="open-signal" data-id="${F.esc(s.id)}" data-sid="${F.esc(s.id)}">${inner}</button>`;
+}
+/* grouped by the day it was sent ("Dnes · čtvrtek 12. 11."), newest first */
+function byDay(list, render, now) {
+  const at = (s) => Date.parse(s.created_at || s.closed_at || s.hit_at || s.exit_date || 0) || 0;
+  const key = (s) => { const d = new Date(at(s)); d.setHours(0, 0, 0, 0); return +d; };
+  const sorted = list.slice().sort((a, b) => at(b) - at(a));
+  const out = []; let last = null;
+  sorted.forEach((s) => {
+    const k = key(s);
+    if (k !== last) {
+      const d = Math.round((k - (() => { const x = new Date(+now); x.setHours(0, 0, 0, 0); return +x; })()) / 86400000);
+      const lab = d === 0 ? t('fmt.today') : d === -1 ? t('po.yesterday') : '';
+      out.push(`<p class="p2-day">${F.esc([lab, `${F.weekday(new Date(k))} ${F.dm(new Date(k))}`].filter(Boolean).join(' · '))}</p>`);
+      last = k;
+    }
+    out.push(render(s));
+  });
+  return out.join('');
+}
+
+function partOne(ctx, sm) {
   const c = sm.w.ccy;
   const now = ctx.now();
+  const mode = pfMode(), tab = pfTab();
   const rows = sm.rows.slice().sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
   const ords = sm.w.orders || [];
-  const hs = myStats(sm.w);
-  const fol = D.followed().map((id) => D.findSignal(ctx.data, id)).filter(Boolean);
-  const empty = !rows.length && !ords.length;
-  const lists = `
-  ${ziRobot(sm)}
-  <section class="d-block" id="pf-open"><h2 class="d-h">${t('zi.open')}<span class="num"> · ${rows.length}</span></h2>
-    ${rows.length ? `<div class="pf-list">${rows.map((p) => row(p, sm)).join('')}</div>`
-    : `<div class="pf-empty${ords.length ? '' : ' has-il'}">${ords.length ? '' : il('04_portfolio', 72)}<p>${t(ords.length ? 'po.open0ord' : 'po.open0')}</p>${ords.length ? '' : `<div class="pf-empty-b"><a class="btn btn-primary btn-small" href="#/signaly">${icon('signals', 'icon-sm')}${t('nav.signaly')}</a><a class="btn btn-secondary btn-small" href="#/terminal">${icon('chart', 'icon-sm')}${t('nav.terminal')}</a></div>`}</div>`}</section>
-  ${ords.length ? `<section class="d-block" id="pf-ord"><h2 class="d-h">${t('po.orders')}<span class="num"> · ${ords.length}</span></h2><div class="pf-list">${ords.map((o) => ordRow(o, ctx.data, c)).join('')}</div></section>` : ''}
-  <a class="hs-row zi-hrow" href="#/historie">${icon('history', 'icon-xs')}<span>${hs.n ? t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) }) : t('zi.histLine0')}</span>${icon('chev-right', 'icon-xs')}</a>
-  ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.compact(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;
-  return head + `<div class="pf-grid${empty ? ' is-empty' : ''}"><div class="pf-c1">${heroHtml(sm)}</div><div class="pf-c2">${lists}</div></div>
+  const closed = (sm.w.closed || []).slice().sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
+  const rs = robotSignals(ctx.data, now);
+  const cnt = mode === 'mine'
+    ? { open: rows.filter((p) => inKind(p.sym)).length, wait: ords.filter((o) => inKind(o.sym)).length, hist: closed.filter((p) => inKind(p.sym)).length }
+    : { open: rs.open.filter((s) => inKind(s.symbol)).length, wait: rs.wait.filter((s) => inKind(s.symbol)).length, hist: rs.hist.filter((s) => inKind(s.symbol)).length };
+  const modeSeg = seg({ name: 'pfmode', label: t('p2.p1'), items: PF_MODES.map((id) => ({ id, label: t(`p2.m.${id}`) })), active: mode });
+  const tabSeg = seg({ name: 'pftab', small: true, label: t('p2.tabs'), items: PF_TABS.map((id) => ({ id, label: t(`p2.t.${mode}.${id}`), count: cnt[id] })), active: tab });
+  const filt = pfKind ? `<p class="p2-filter"><span>${t('p2.filter', { k: t(`al.k.${pfKind}`) })}</span><button type="button" class="link" data-action="al-kind" data-k="">${t('p2.filterOff')}</button></p>` : '';
+  let body = '';
+  if (mode === 'mine') {
+    if (tab === 'open') {
+      const l = rows.filter((p) => inKind(p.sym));
+      body = `<div id="pf-open">${l.length ? `<div class="pf-list">${l.map((p) => row(p, sm)).join('')}</div>`
+        : `<div class="pf-empty${rows.length ? '' : ' has-il'}">${rows.length ? '' : il('04_portfolio', 72)}<p>${t(rows.length ? 'p2.none.kind' : ords.length ? 'po.open0ord' : 'po.open0')}</p>${rows.length ? '' : `<div class="pf-empty-b"><a class="btn btn-primary btn-small" href="#/dnes">${icon('signals', 'icon-sm')}${t('p2.toToday')}</a></div>`}</div>`}</div>`;
+    } else if (tab === 'wait') {
+      const l = ords.filter((o) => inKind(o.sym));
+      body = `<div id="pf-ord">${l.length ? `<div class="pf-list">${l.map((o) => ordRow(o, ctx.data, c)).join('')}</div>` : `<p class="d-empty">${t('p2.none.wait')}</p>`}</div>`;
+    } else {
+      const l = closed.filter((p) => inKind(p.sym));
+      const hs = myStats(sm.w);
+      body = `<div id="pf-hist">${hs.n ? `<p class="p2-sum num">${t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) })}</p>` : ''}
+        ${l.length ? `<div class="pf-list">${l.map((p) => closedRow(p, c)).join('')}</div>` : `<p class="d-empty">${t('p2.none.hist')}</p>`}
+        <a class="hs-row" href="#/historie">${icon('history', 'icon-xs')}<span>${t('p2.histMore')}</span>${icon('chev-right', 'icon-xs')}</a></div>`;
+    }
+  } else {
+    const l = rs[tab].filter((s) => inKind(s.symbol));
+    body = `<div id="pf-sigs">${l.length ? `<div class="pf-list">${byDay(l, (s) => sigRow(s, sm, now), now)}</div>` : `<p class="d-empty">${t(`p2.none.sig.${tab}`)}</p>`}</div>`;
+  }
+  return `<section class="pf-p1" id="pf-p1" aria-labelledby="pf-p1-h"><h2 class="d-h" id="pf-p1-h">${t('p2.p1')}</h2>
+    <div class="seg-wrap p2-mode">${modeSeg}</div><div class="seg-wrap p2-tabs">${tabSeg}</div>${filt}
+    <div class="p2-body">${body}</div></section>`;
+}
+
+/* ---------- part two: the donut ---------- */
+function donutSvg(al) {
+  const R = 80, C = 2 * Math.PI * R, GAP = al.kinds.length + (al.free > 0 ? 1 : 0) > 1 ? 2.5 : 0;
+  const parts = al.kinds.map((k) => ({ id: k.id, v: k.amount })).concat(al.free > 0 ? [{ id: 'free', v: al.free }] : []);
+  const tot = parts.reduce((a, x) => a + x.v, 0) || 1;
+  let off = 0;
+  const segs = parts.map((x, i) => {
+    const len = Math.max(0, (x.v / tot) * C - GAP);
+    const s = `<circle class="al-seg al-c-${x.id}${pfKind && pfKind !== x.id ? ' is-dim' : ''}" r="${R}" cx="100" cy="100" style="--len:${len.toFixed(2)};--i:${i}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" data-action="al-kind" data-k="${x.id}"><title>${F.esc(t(`al.k.${x.id}`))}</title></circle>`;
+    off += (x.v / tot) * C;
+    return s;
+  }).join('');
+  return `<svg class="al-svg" viewBox="0 0 200 200" width="200" height="200" aria-hidden="true"><g transform="rotate(-90 100 100)"><circle class="al-track" r="${R}" cx="100" cy="100"/>${segs}</g></svg>`;
+}
+function allocHtml(sm) {
+  const c = sm.w.ccy;
+  const al = A.allocation(sm);
+  const pc = (v) => (v > 0 && v < 1 ? '<1 %' : F.pct(v, 0));
+  if (!(al.inPlay > 0)) {
+    return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
+      <div class="al-empty">${il('04_portfolio', 72)}<p>${t('al.empty', { v: F.money(al.free, c, 0) })}</p><a class="btn btn-primary btn-small" href="#/dnes">${icon('signals', 'icon-sm')}${t('p2.toToday')}</a></div></section>`;
+  }
+  const sel = pfKind ? al.kinds.find((k) => k.id === pfKind) : null;
+  const legend = al.kinds.map((k) => `<button type="button" class="al-row${pfKind === k.id ? ' is-sel' : ''}" data-action="al-kind" data-k="${k.id}" aria-pressed="${pfKind === k.id}">
+      <i class="al-dot al-c-${k.id}" aria-hidden="true"></i><span class="al-n">${t(`al.k.${k.id}`)}</span><b class="num" data-al-amt="${k.id}">${F.money(k.amount, c, 0)}</b><span class="al-p num">${pc(k.pct)}</span></button>`).join('')
+    + (al.free > 0 ? `<a class="al-row is-free" href="#/penezenka"><i class="al-dot al-c-free" aria-hidden="true"></i><span class="al-n">${t('al.k.free')}</span><b class="num" data-al-free>${F.money(al.free, c, 0)}</b><span class="al-p num">${pc(al.freePct)}</span></a>` : '');
+  const second = sel ? `<div class="al-sub" id="al-sub"><p class="al-sub-h">${t('al.subH', { k: t(`al.k.${sel.id}`), v: F.money(sel.amount, c, 0) })}</p>
+      ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share)}</span></p>`).join('')}</div>` : '';
+  return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
+    <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.inPlay, c, 0) }))}">${donutSvg(al)}
+      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.inPlay, c, 0).length > 10 ? ' is-long' : ''}" data-al-inplay="${al.inPlay}">${F.money(al.inPlay, c, 0)}</b></div></div>
+      <div class="al-legend">${legend}</div></div>
+    ${second}<p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
+}
+
+export function render(ctx) {
+  const head = `<header class="page-head"><div><h1 class="page-title">${t('nav.portfolio')}</h1><p class="page-sub">${t('p2.sub')}</p></div></header>`;
+  if (!ctx.data?.signals) return head + skBlock(260);
+  const sm = W.summary(ctx.data);
+  shownIds = sm.rows.map((p) => p.id).sort().join(',');
+  return head + `<div class="pf-grid p2-grid"><div class="pf-c1 p2-right">${heroHtml(sm)}${allocHtml(sm)}</div><div class="pf-c2 p2-left">${ziRobot(sm)}${partOne(ctx, sm)}</div></div>
   <p class="disclaimer">${icon('info')}${F.esc(t('term.disc'))}</p>`;
 }
 
@@ -243,10 +385,27 @@ function patchHero(root, sm) {
   const b = set('total', t('po.total', { v: tt.zero ? `±${F.money(0, c, 0)}` : F.esc(tt.text), p: F.mpct(h.totalPct, h.total) })); if (b) b.className = `tone-${tt.tone}`;
   set('inplay', F.money(h.inPlay, c, 0)); set('free', F.money(h.free, c, 0)); set('n', String(h.n));
 }
+/* 1.15.1: the robot's signal rows (Všechny signály robota): the price move follows the live price */
+function patchSigs(root, ctx) {
+  const now = ctx.now();
+  root.querySelectorAll('.p2-sig[data-sid]').forEach((el) => {
+    const s = D.findSignal(ctx.data, el.dataset.sid);
+    const b = el.querySelector('[data-s="mv"]');
+    if (!s || !b) return;
+    const st = D.liveStatus(s, now);
+    const mv = st.move;
+    const tn = mv == null ? 'flat' : mv > 0.005 ? 'up' : mv < -0.005 ? 'down' : 'flat';
+    const v = st.done ? t('p2.ended', { v: F.spct(mv ?? 0, 1) }) : mv == null ? t('p2.wait') : t('p2.now', { v: F.spct(mv, 2) });
+    if (b.textContent !== v) { b.textContent = v; b.className = tn; }
+  });
+}
 function loadSparks(root, sm) {
-  [...new Set(sm.rows.map((p) => p.sym))].forEach((sym) => P.spark(sym).then((v) => {
+  const syms = new Set(sm.rows.map((p) => p.sym));
+  root.querySelectorAll('[data-f="spark"][data-sym]').forEach((x) => syms.add(x.dataset.sym));
+  [...syms].forEach((sym) => P.spark(sym).then((v) => {
     if (!v) return;
     sparks.set(sym, v);
+    root.querySelectorAll(`[data-f="spark"][data-sym="${CSS.escape(sym)}"]`).forEach((s) => { s.innerHTML = sparkline(v, { w: 56, h: 18 }); });
     root.querySelectorAll('.pf-row[data-pid]').forEach((el) => {
       const p = sm.rows.find((x) => x.id === el.dataset.pid);
       if (!p || p.sym !== sym) return;
@@ -267,10 +426,8 @@ export function mount(el, ctx) {
     if (!el.isConnected) return;
     const sm = W.summary(ctx.data);
     /* a trade closed / filled meanwhile -> the lists change: re-render once */
-    const ids = sm.rows.map((p) => p.id).join(',');
-    const shown = [...el.querySelectorAll('#pf-open .pf-row[data-pid]')].map((x) => x.dataset.pid);
-    if (ids.split(',').filter(Boolean).sort().join(',') !== shown.slice().sort().join(',')) { ctx.rerender({ soft: true }); return; }
-    patchHero(el, sm); patchRows(el, sm); drawChart(ctx);
+    if (sm.rows.map((p) => p.id).sort().join(',') !== shownIds) { ctx.rerender({ soft: true }); return; }
+    patchHero(el, sm); patchRows(el, sm); patchSigs(el, ctx); drawChart(ctx);
   };
   document.addEventListener('pulse:live', onLive);
   off.push(() => document.removeEventListener('pulse:live', onLive));
@@ -667,7 +824,27 @@ export const actions = {
   'pd-more'(el, ev, ctx) { const g = P.find(ctx.data, el.dataset.id); if (g?.open) buyMore(ctx, g.row); },
   'pd-term'(el) { store.set('termSym', el.dataset.sym); store.set('termView', 'one'); window.__pulseGo(`#/terminal?k=${encodeURIComponent(el.dataset.sym)}`); },
   'pd-share'(el, ev, ctx) { share(ctx, el.dataset.id); },
-  'pf-jump'() { const n = document.getElementById('pf-open'); if (n) n.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); },
+  'pf-jump'(el, ev, ctx) {
+    /* "Otevřené obchody" tile: show my open trades (switch / tab / filter reset when needed), then scroll to them */
+    const go = () => { const n = document.getElementById('pf-open'); if (n) n.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); };
+    if (pfMode() !== 'mine' || pfTab() !== 'open' || pfKind) { store.set('pfMode', 'mine'); store.set('pfTab', 'open'); pfKind = null; ctx.rerender({ soft: true }); setTimeout(go, 60); } else go();
+  },
+  /* the donut: a slice / legend row = that kind (second level + filter of part one); the same again or "Zrušit" = all */
+  'al-kind'(el, ev, ctx) {
+    const k = el.dataset.k || null;
+    if (k === 'free') { window.__pulseGo('#/penezenka'); return; }
+    pfKind = !k || pfKind === k ? null : k;
+    haptic();
+    ctx.rerender({ soft: true });
+  },
+  seg(el, ev, ctx) {
+    const n = el.dataset.segName;
+    if (n !== 'pfmode' && n !== 'pftab') return false;
+    haptic();
+    store.set(n === 'pfmode' ? 'pfMode' : 'pfTab', el.dataset.id);
+    ctx.rerender({ soft: true });
+    return true;
+  },
   /* the order page reuses the platform's Upravit cenu / Zrušit sheets */
   't-oedit'(el, ev, ctx) { TermActions['t-oedit'](el, ev, ctx); },
   't-ocancel'(el, ev, ctx) { TermActions['t-ocancel'](el, ev, ctx); },

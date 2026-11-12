@@ -206,13 +206,17 @@ export function loadReasons() {
     .then((j) => { rs = j && typeof j === 'object' && j.signals && typeof j.signals === 'object' ? j : false; rsAt = Date.now(); rsLoading = null; return rs; });
   return rsLoading;
 }
+/* 1.15.1: company reasons (results / earnings E_*, profits F_*) only for shares – a fund, an index or a currency has no
+   earnings ("Žádné výsledky v příštích 5 dnech" on XLE was misleading) */
+const symOfId = (id) => { const p = String(id || '').split('-'); return p.length >= 3 ? p[p.length - 2] : ''; };
+function fits(id) { const sym = symOfId(id); const c = sym ? M.cls(sym) : 'stock'; return (x) => c === 'stock' || !/^(E|F)_/.test(String(x?.klic || '')); }
 /* the fulfilled reasons of one signal: [{ name, why }] (cs / en), or null */
 export function reasonsFor(id, lang = 'cs') {
   if (!rs || !id) return null;
   const sig = rs.signals[id] || Object.entries(rs.signals).find(([k]) => twin(k) === twin(id))?.[1];
   if (!sig || !Array.isArray(sig.duvody)) return null;
   const en = lang === 'en';
-  const ok = sig.duvody.filter((x) => x && x.splneno === true).map((x) => ({ name: (en ? x.nazev_en : x.nazev_cs) || x.nazev_cs || x.klic || '', why: (en ? x.vysvetleni_en : x.vysvetleni_cs) || '' })).filter((x) => x.name);
+  const ok = sig.duvody.filter(fits(id)).filter((x) => x && x.splneno === true).map((x) => ({ name: (en ? x.nazev_en : x.nazev_cs) || x.nazev_cs || x.klic || '', why: (en ? x.vysvetleni_en : x.vysvetleni_cs) || '' })).filter((x) => x.name);
   return ok.length ? ok : null;
 }
 
@@ -224,8 +228,9 @@ export function reasonsSplit(id, lang = 'cs') {
   if (!sig || !Array.isArray(sig.duvody)) return null;
   const en = lang === 'en';
   const one = (x) => ({ name: (en ? x.nazev_en : x.nazev_cs) || x.nazev_cs || x.klic || '', why: (en ? x.vysvetleni_en : x.vysvetleni_cs) || '' });
-  const ok = sig.duvody.filter((x) => x && x.splneno === true).map(one).filter((x) => x.name);
-  const no = sig.duvody.filter((x) => x && x.splneno === false).map(one).filter((x) => x.name);
+  const f = fits(id);
+  const ok = sig.duvody.filter(f).filter((x) => x && x.splneno === true).map(one).filter((x) => x.name);
+  const no = sig.duvody.filter(f).filter((x) => x && x.splneno === false).map(one).filter((x) => x.name);
   return ok.length ? { ok, no } : null;
 }
 

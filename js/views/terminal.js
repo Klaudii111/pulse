@@ -530,6 +530,8 @@ export function unmount() { liveOff && liveOff(); liveOff = null; chartRef && ch
 
 /* ---------- Order ticket ---------- */
 /* 1.9.1: the investment sheet opened right from a signal card (Dnes, Signály, detail, push "Zainvestovat") */
+/* 1.15.1: an OWN demo trade with a prefilled direction / stop (the daily robot's "Koupit v demo") – never linked to a signal */
+export function ownTicket(ctx, side, sym, opt = {}) { ticket(ctx, side === 'SELL' ? 'SELL' : 'BUY', sym, null, opt); }
 export function investSheet(ctx, sig, mode = null) {
   if (!sig) return;
   ticket(ctx, sig.action === 'SELL' ? 'SELL' : 'BUY', sig.symbol, sig, { mode });
@@ -564,6 +566,9 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     type: useSig ? (sigLim || !open ? 'lim' : 'mkt') : 'mkt', limit: useSig ? sigMx : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false, detOpen: false };
   /* 1.13.0 BLOCKER fix: the live price is already at / better than the signal's entry -> the default is a plain
      "Koupit hned za X" (market open) or "koupí se při otevření, nejvýš za X" (closed). Never an error on the default path. */
+  /* 1.15.1: an own trade prefilled from outside (the experimental daily robot): its stop, no target (it exits at the close) */
+  if (!useSig && opt.sl > 0) st.sl = round(opt.sl);
+  if (!useSig && 'tp' in opt) st.tp = opt.tp > 0 ? round(opt.tp) : null;
   if (st.type === 'lim' && useSig && st.limit > 0 && W.marketable(side, st.limit, q.p) && open) st.type = 'mkt';
   const isLim = () => st.type === 'lim';
   const atOpen = () => isLim() && !open && st.limit > 0 && W.marketable(side, st.limit, q.p);

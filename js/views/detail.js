@@ -139,7 +139,8 @@ function rsHtml(s) {
   const item = (x, ok) => `<li class="rs-i ${ok ? 'is-ok' : 'is-no'}">${x.why ? `<details><summary>${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><p>${F.esc(x.why)}</p></details>`
     : `<p class="rs-n">${icon(ok ? 'check' : 'close', 'icon-xs')}<span>${F.esc(x.name)}</span></p>`}</li>`;
   return `<section class="d-rs" aria-label="${F.esc(t('pd.rs'))}"><p class="d-rs-h">${t('pd.rs')}</p>
-    <ul class="rs-list">${r.ok.map((x) => item(x, true)).join('')}</ul>
+    <ul class="rs-list">${r.ok.slice(0, 3).map((x) => item(x, true)).join('')}</ul>
+    ${r.ok.length > 3 ? `<details class="rs-more"><summary><span>${t('rs.all', { n: r.ok.length })}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><ul class="rs-list">${r.ok.slice(3).map((x) => item(x, true)).join('')}</ul></details>` : ''}
     ${r.no.length ? `<details class="rs-no"><summary><span>${t('rs.no')}</span>${icon('chev-down', 'icon-xs rs-chev')}</summary><ul class="rs-list">${r.no.map((x) => item(x, false)).join('')}</ul></details>` : ''}
     <p class="pd-rs-note">${t('pd.rsNote')}</p></section>`;
 }
@@ -194,6 +195,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const brief = `<div class="d-brief">
       ${['mine', 'order', 'late', 'done'].includes(cs.code) || s.preview ? `<p class="bc-tags">${['mine', 'order', 'late', 'done'].includes(cs.code) ? `<span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>` : ''}
       <p class="d-ctitle">${D.sigPhase(s, now) === 'open' || ['mine', 'order'].includes(cs.code) ? `<span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span>` : `<span class="cc-dir is-held">${t(D.sigPhase(s, now) === 'closed' ? 'u.chip.done' : 'c.held')}</span>`}<span>${t(`c.type.${s.horizon}`)}</span>${s.exit_date ? `<span class="num">${F.esc(B.lenText(s, now))}</span>` : ''}<span class="sc-no num">#${D.sigNo(s)}</span></p>
+      ${(() => { const sw = B.sentWhen(s, now); const end = D.sigPhase(s, now) === 'open' ? D.entryWindowEnd(s) : null; return sw ? `<p class="d-sent num">${icon('clock', 'icon-xs')}<span>${F.esc(t('ts.sent', { d: sw }))}${end ? ` · ${F.esc(t('ts.until', { d: D.whenLabel(new Date(end), now) }))}` : ''}</span></p>` : ''; })()}
       ${whyTop ? `<p class="cc-why d-why"><b>${t('c.why')}</b> ${F.esc(whyTop)}</p>` : ''}
       <div id="d-rs">${rsHtml(s)}</div>
       ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : ''}

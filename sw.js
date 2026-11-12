@@ -16,6 +16,7 @@ const SHELL_FILES = [
   './manifest.webmanifest',
   './css/app.css',
   './css/skin.css',
+  './css/v1151.css',
   './js/app.js',
   './js/ui.js',
   './js/format.js',
@@ -90,6 +91,10 @@ const SHELL_FILES = [
   './js/i18n/cs1139.js',
   './js/i18n/en1139.js',
   './js/i18n/cs1150.js',
+  './js/i18n/cs1151.js',
+  './js/i18n/en1151.js',
+  './js/alloc.js',
+  './js/den.js',
   './js/i18n/en1150.js',
   './js/i18n/cs1152.js',
   './js/i18n/en1152.js',
@@ -110,6 +115,9 @@ const SHELL_FILES = [
   './img/il/13_puls_sipka.webp',
   './img/il/02_robot.webp',
   './img/il/08_cekani.webp',
+  /* the app background (Noční tyrkys, AB) – there right after the update and offline */
+  './img/bg/bg-phone.webp',
+  './img/bg/bg-desktop.webp',
 ];
 
 self.addEventListener('install', (event) => {
