@@ -92,12 +92,14 @@ const SHELL_FILES = [
   './js/views/portfolio.js',
   './fonts/archivo-latin.woff2',
   './fonts/archivo-latin-ext.woff2',
-  './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/badge-96.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
+  './icons/favicon-16.png',
+  './icons/mark-64.png',
+  './icons/mark-128.png',
 ];
 
 self.addEventListener('install', (event) => {

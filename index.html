@@ -12,9 +12,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="PULSE">
   <meta name="format-detection" content="telephone=no">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="PULSE Signals">
+  <meta property="og:title" content="PULSE Signals">
+  <meta property="og:description" content="Obchodní signály od robota · zkus si to nanečisto">
+  <meta property="og:url" content="https://pulse.178-105-154-81.sslip.io/">
+  <meta property="og:image" content="https://pulse.178-105-154-81.sslip.io/icons/og-1200x630.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="PULSE Signals">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PULSE Signals">
+  <meta name="twitter:description" content="Obchodní signály od robota · zkus si to nanečisto">
+  <meta name="twitter:image" content="https://pulse.178-105-154-81.sslip.io/icons/og-1200x630.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="./icons/favicon-16.png" sizes="16x16" type="image/png">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="preload" href="./fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="./fonts/archivo-latin-ext.woff2" as="font" type="font/woff2" crossorigin>
@@ -75,13 +88,13 @@
 
   <div class="app" id="app">
     <aside class="sidebar" aria-label="Hlavní navigace">
-      <div class="side-top"><a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/icon.svg" alt="" width="32" height="32"><span class="brand-name" data-slot="appname">PULSE Signals</span></a><div data-slot="bell"></div></div>
+      <div class="side-top"><a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/mark-64.png" srcset="./icons/mark-64.png 2x, ./icons/mark-128.png 4x" alt="" width="32" height="32"><span class="brand-name" data-slot="appname">PULSE Signals</span></a><div data-slot="bell"></div></div>
       <nav class="side-nav" id="side-nav"></nav>
       <div class="side-foot"><div data-slot="live"></div><div data-slot="badge"></div><p class="side-meta" id="side-meta"></p></div>
     </aside>
 
     <header class="topbar">
-      <a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/icon.svg" alt="" width="28" height="28"><span class="brand-name" data-slot="appname">PULSE Signals</span></a>
+      <a class="brand" href="#/dnes"><img class="brand-mark" src="./icons/mark-64.png" srcset="./icons/mark-64.png 2x, ./icons/mark-128.png 4x" alt="" width="28" height="28"><span class="brand-name" data-slot="appname">PULSE Signals</span></a>
       <div class="topbar-r"><div data-slot="live"></div><div data-slot="badge"></div><div data-slot="bell"></div></div>
     </header>
 
@@ -92,13 +105,7 @@
 
   <div class="splash" id="splash" aria-hidden="true">
     <div class="splash-in">
-      <div class="splash-mark"><svg viewBox="0 0 92 92" fill="none" stroke-linecap="round">
-        <defs><linearGradient id="sg" x1="20" y1="18" x2="72" y2="74" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#EED6A7"/><stop offset="1" stop-color="#D9B779"/></linearGradient></defs>
-        <path class="d d1" pathLength="1" d="M46 26V66" stroke="#3B3F49" stroke-width="2.6"/>
-        <path class="d d2" pathLength="1" d="M31 26H61" stroke="url(#sg)" stroke-width="5"/>
-        <path class="d d3" pathLength="1" d="M46 48.5a6.3 6.3 0 1 1 0 12.6a6.3 6.3 0 1 1 0-12.6" stroke="url(#sg)" stroke-width="2.8"/>
-        <path class="d d4" pathLength="1" d="M38 66H54" stroke="#6B707B" stroke-width="5"/>
-      </svg></div>
+      <div class="splash-mark"><img src="./icons/mark-128.png" alt="" width="64" height="64"></div>
       <p class="splash-name" data-slot="appname">PULSE Signals</p>
     </div>
   </div>
