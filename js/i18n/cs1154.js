@@ -49,4 +49,7 @@ export default {
   'rx.sub1': 'Robot z obchodu vystoupil. Chceš taky?',
   'rx.sub': 'Robot z těchto obchodů vystoupil. Chceš taky?',
   'term.lastCh': 'poslední den {v}',
+  /* P1-03: the bell */
+  'ev.rExit': 'Robot ukončil {sym} – tvůj obchod běží dál',
+  'ev.rExit.s': 'Ukončit taky? Otevři svůj obchod',
 };

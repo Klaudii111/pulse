@@ -58,4 +58,8 @@ export default {
   /* P1-07: one trade -> singular */
   'rx.sub1': 'The robot has left this trade. Leave too?',
   'term.lastCh': 'last session {v}',
+  /* P1-03: the bell */
+  'ev.rExit': 'The robot closed {sym} – your trade is still open',
+  'ev.rExit.s': 'Close yours too? Open your trade',
+  'ev.ordPlaced.s': 'Waiting to {side}, {a} set aside',
 };

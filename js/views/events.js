@@ -5,6 +5,8 @@ import { t } from '../i18n/index.js';
 import { icon } from '../ui.js';
 import * as store from '../store.js';
 import * as B from '../brief.js';
+import * as D from '../domain.js';
+import * as P from '../portfolio.js';
 
 let seenBefore = 0; // read marker before this visit: items newer than it are highlighted
 
@@ -32,10 +34,22 @@ export function tradeHref(e) {
   return id ? `#/obchod/${encodeURIComponent(id)}` : '#/portfolio';
 }
 
+/* P1-03 (a): the name a market has in the trade rows and on the cards (B.whatIs(sym, name) with the name my trade /
+   order / the signal carries), so the bell says "Apple", not "Apple Inc." */
+let names = new Map();
+function nameMap(data) {
+  const m = new Map();
+  const put = (sym, nm) => { if (sym && nm && !m.has(sym)) m.set(sym, nm); };
+  const w = store.get('wallet', null) || {};
+  (w.positions || []).concat(w.orders || [], w.closed || [], w.ordEnded || []).forEach((x) => put(x.sym, x.name));
+  D.allOpen(data).concat(data?.history?.signals || []).forEach((s) => put(s.symbol, s.name));
+  return m;
+}
+
 /* What one event says: icon, tone, title, detail, value, and where it leads */
 export function describe(e) {
   /* A10 / K3-09: the same market names as the rest of the app ("Zlato", not XAUUSD) */
-  const sym = F.esc(e.sym ? B.whatIs(e.sym, e.name || null).name : '');
+  const sym = F.esc(e.sym ? B.whatIs(e.sym, e.name || names.get(e.sym) || null).name : '');
   const sig = e.sid ? { action: 'open-signal', id: e.sid } : null;
   const mine = { href: tradeHref(e) };
   switch (e.k) {
@@ -45,6 +59,8 @@ export function describe(e) {
     case 'ended': return { ic: 'clock', tn: e.v != null ? tone(e.v) : 'gold', title: t('ev.ended', { sym }), sub: t('ev.ended.s'), val: e.v != null ? F.spct(e.v, 1) : '', go: sig };
     case 'robot-order': return { ic: 'shield', tn: 'gold', title: t('ev.rOrder', { sym, side: side(e.side) }), sub: t('ev.robot.s'), go: { href: '#/robot' } };
     case 'robot-open': return { ic: 'shield', tn: 'up', title: t('ev.rOpen', { sym, side: side(e.side) }), sub: t('ev.robot.s'), go: { href: '#/robot' } };
+    /* P1-03 (c): the robot ended a trade I still hold (the card "Robot ukončil" on Dnes) -> opens my trade */
+    case 'robot-exit': return { ic: 'robot', tn: 'gold', title: t('ev.rExit', { sym }), sub: t('ev.rExit.s'), val: e.v != null ? F.spct(e.v, 1) : '', go: { href: `#/obchod/${encodeURIComponent(e.pid)}` } };
     case 'robot-close': return { ic: 'shield', tn: tone(e.v), title: t('ev.rClose', { sym }), sub: t('ev.robot.s'), val: Number.isFinite(e.v) ? sm(e.v, 'USD') : '', go: { href: '#/robot' } };
     case 'my-open': return { ic: 'spark', tn: 'gold', title: t('ev.myOpen', { sym, side: side(e.side) }), sub: t('ev.myOpen.s', { a: F.money(e.v, e.ccy, 0) }), go: mine };
     case 'my-close': return { ic: 'spark', tn: tone(e.v), title: t('ev.myClose', { sym }), sub: t(`term.why.${['tp', 'sl', 'out', 'signal', 'manual'].includes(e.why) ? e.why : 'manual'}`), val: Number.isFinite(e.v) ? sm(e.v, e.ccy) : '', go: mine };
@@ -81,7 +97,14 @@ function dayLabel(ts, now) {
 
 export function render(ctx) {
   const now = ctx.now();
-  const list = Feed.display();
+  names = nameMap(ctx.data);
+  /* P1-03 (c): one row per trade of mine the robot has ended (derived, never stored -> no duplicates); the robot's own
+     "ukončil" row for the same market around that time gives way to it */
+  let exits = [];
+  try { exits = P.robotExits(ctx.data); } catch (_) { exits = []; }
+  const xr = exits.filter((x) => x.at > 0).map((x) => ({ k: 'robot-exit', sym: x.pos.sym, pid: x.pos.id, v: x.pnlPct, t: x.at, at: x.at, ts: x.at, id: `rx-${x.pos.id}` }));
+  const near = (e) => xr.some((x) => x.sym === e.sym && Math.abs(x.ts - e.ts) < 12 * 3600000);
+  const list = Feed.display().filter((e) => !(e.k === 'robot-close' && near(e))).concat(xr).sort((a, b) => b.ts - a.ts);
   const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('ev.title')}</h1><p class="page-sub">${t('ev.sub')}</p></div></header>`;
   if (!list.length) {
     return head + `<section class="calm ev-empty"><span class="ev-empty-ic">${icon('bell')}</span><div><h3 class="calm-t">${t('ev.empty.t')}</h3><p class="calm-s">${t('ev.empty.s')}</p></div></section>`;
