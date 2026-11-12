@@ -81,7 +81,7 @@ function heroHtml(sm) {
     <div class="pf-rrow"><div class="range-chips pf-ranges" role="group" aria-label="${F.esc(t('po.rangeAria'))}">${P.RANGES.map((r) => `<button type="button" class="range-chip" data-pf-range="${r.id}" aria-pressed="${r.id === P.curRange()}">${t(`po.r.${r.id}`)}</button>`).join('')}</div></div>
     <p class="pf-cnote num" id="pf-cnote"></p>
     <div class="pf-split num" data-free="${h.free}" data-inplay="${h.inPlay}">
-      <a href="#/penezenka"><small>${t('acc.inPlay')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b></a>
+      <a href="#/penezenka"><small>${t('acc.inPlay')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b>${sm.reserved > 0.5 ? `<small class="pf-wait num" data-pf="wait">${t('po.inWait', { v: F.money(Math.round(sm.reserved), c, 0) })}</small>` : ''}</a>
       <a href="#/penezenka"><small>${t('acc.free')}</small><b data-pf="free">${F.money(h.free, c, 0)}</b></a>
       <a href="#pf-open" data-action="pf-jump"><small>${t('po.nOpen')}</small><b data-pf="n">${h.n}</b></a>
     </div>
@@ -242,8 +242,9 @@ function partOne(ctx, sm) {
 
 /* ---------- part two: the donut ---------- */
 function donutSvg(al) {
-  const R = 80, C = 2 * Math.PI * R, GAP = al.kinds.length + (al.free > 0 ? 1 : 0) > 1 ? 2.5 : 0;
-  const parts = al.kinds.map((k) => ({ id: k.id, v: k.amount })).concat(al.free > 0 ? [{ id: 'free', v: al.free }] : []);
+  /* B6: what I hold now (value of the trades) + waiting buys (grey) + free money = the account value */
+  const parts = al.kinds.map((k) => ({ id: k.id, v: k.amount })).concat(al.wait.amount > 0 ? [{ id: 'wait', v: al.wait.amount }] : [], al.free > 0 ? [{ id: 'free', v: al.free }] : []);
+  const R = 80, C = 2 * Math.PI * R, GAP = parts.length > 1 ? 2.5 : 0;
   const tot = parts.reduce((a, x) => a + x.v, 0) || 1;
   let off = 0;
   const segs = parts.map((x, i) => {
@@ -257,22 +258,41 @@ function donutSvg(al) {
 function allocHtml(sm) {
   const c = sm.w.ccy;
   const al = A.allocation(sm);
-  const pc = (v) => (v > 0 && v < 1 ? '<1 %' : F.pct(v, 0));
+  /* whole percent that add up to 100; a slice with money that rounds to 0 % says "<1 %" */
+  const pc = (v, amt) => (amt > 0 && v < 1 ? `<${F.pct(1, 0)}` : F.pct(v, 0));
   if (!(al.inPlay > 0)) {
     return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
       <div class="al-empty">${il('04_portfolio', 72)}<p>${t('al.empty', { v: F.money(al.free, c, 0) })}</p><a class="btn btn-primary btn-small" href="#/dnes">${icon('signals', 'icon-sm')}${t('p2.toToday')}</a></div></section>`;
   }
   const sel = pfKind ? al.kinds.find((k) => k.id === pfKind) : null;
   const legend = al.kinds.map((k) => `<button type="button" class="al-row${pfKind === k.id ? ' is-sel' : ''}" data-action="al-kind" data-k="${k.id}" aria-pressed="${pfKind === k.id}">
-      <i class="al-dot al-c-${k.id}" aria-hidden="true"></i><span class="al-n">${t(`al.k.${k.id}`)}</span><b class="num" data-al-amt="${k.id}">${F.money(k.amount, c, 0)}</b><span class="al-p num">${pc(k.pct)}</span></button>`).join('')
-    + (al.free > 0 ? `<a class="al-row is-free" href="#/penezenka"><i class="al-dot al-c-free" aria-hidden="true"></i><span class="al-n">${t('al.k.free')}</span><b class="num" data-al-free>${F.money(al.free, c, 0)}</b><span class="al-p num">${pc(al.freePct)}</span></a>` : '');
+      <i class="al-dot al-c-${k.id}" aria-hidden="true"></i><span class="al-n">${t(`al.k.${k.id}`)}</span><b class="num" data-al-amt="${k.id}">${F.money(k.amount, c, 0)}</b><span class="al-p num">${pc(k.pct, k.amount)}</span></button>`).join('')
+    + (al.wait.amount > 0 ? `<a class="al-row is-wait" href="#/portfolio" data-action="al-wait"><i class="al-dot al-c-wait" aria-hidden="true"></i><span class="al-n">${t('al.k.wait')}</span><b class="num" data-al-wait>${F.money(al.wait.amount, c, 0)}</b><span class="al-p num">${pc(al.wait.pct, al.wait.amount)}</span></a>` : '')
+    + (al.free > 0 ? `<a class="al-row is-free" href="#/penezenka"><i class="al-dot al-c-free" aria-hidden="true"></i><span class="al-n">${t('al.k.free')}</span><b class="num" data-al-free>${F.money(al.free, c, 0)}</b><span class="al-p num">${pc(al.freePct, al.free)}</span></a>` : '');
   const second = sel ? `<div class="al-sub" id="al-sub"><p class="al-sub-h">${t('al.subH', { k: t(`al.k.${sel.id}`), v: F.money(sel.amount, c, 0) })}</p>
-      ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share)}</span></p>`).join('')}</div>` : '';
+      ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share, x.amount)}</span></p>`).join('')}</div>` : '';
   return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
-    <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.inPlay, c, 0) }))}">${donutSvg(al)}
-      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.inPlay, c, 0).length > 10 ? ' is-long' : ''}" data-al-inplay="${al.inPlay}">${F.money(al.inPlay, c, 0)}</b></div></div>
+    <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.total, c, 0) }))}">${donutSvg(al)}
+      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.total, c, 0).length > 10 ? ' is-long' : ''}" data-al-total="${al.total}">${F.money(al.total, c, 0)}</b></div></div>
       <div class="al-legend">${legend}</div></div>
-    ${second}<p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
+    ${second}<p class="al-note al-rule">${t('al.rule')}</p><p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
+}
+
+/* B6 live: the donut holds the trades' value now – its numbers and slices follow the prices (in place, no re-animation) */
+function patchAlloc(root, sm) {
+  const box = root.querySelector('#al');
+  if (!box || !box.querySelector('.al-svg')) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = allocHtml(sm);
+  const nw = tmp.querySelector('#al');
+  if (!nw) return;
+  const segsN = nw.querySelectorAll('.al-seg'), segsO = box.querySelectorAll('.al-seg');
+  if (segsN.length !== segsO.length) { box.replaceWith(nw); return; }
+  segsN.forEach((n, i) => { ['stroke-dasharray', 'stroke-dashoffset', 'style'].forEach((k) => { const v = n.getAttribute(k); if (segsO[i].getAttribute(k) !== v) segsO[i].setAttribute(k, v); }); });
+  const txt = (el) => [...el.querySelectorAll('.al-legend b, .al-legend .al-p, .al-mid b, .al-sub b, .al-sub .al-p')];
+  const a = txt(nw), b = txt(box);
+  if (a.length !== b.length) { box.replaceWith(nw); return; }
+  a.forEach((n, i) => { if (b[i].textContent !== n.textContent) b[i].textContent = n.textContent; });
 }
 
 export function render(ctx) {
@@ -435,7 +455,7 @@ export function mount(el, ctx) {
     const sm = W.summary(ctx.data);
     /* a trade closed / filled meanwhile -> the lists change: re-render once */
     if (sm.rows.map((p) => p.id).sort().join(',') !== shownIds) { ctx.rerender({ soft: true }); return; }
-    patchHero(el, sm); patchRows(el, sm); patchSigs(el, ctx); drawChart(ctx);
+    patchHero(el, sm); patchRows(el, sm); patchSigs(el, ctx); patchAlloc(el, sm); drawChart(ctx);
   };
   document.addEventListener('pulse:live', onLive);
   off.push(() => document.removeEventListener('pulse:live', onLive));
@@ -467,7 +487,7 @@ function kolikHtml(p, sm) {
   const rows = [
     kvRow(t('pd.k.dep'), F.money(p.margin, c, 0), { hint: t('pd.k.depS'), key: 'dep' }),
     kvRow(t('pd.k.lev'), F.esc(levTxt(p.lev)), { hint: p.lev > 1 ? t('pd.k.levS', { v: p.lev }) : t('pd.k.lev1S'), key: 'lev' }),
-    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.ccyWrap(F.num(f.fx, f.fx >= 10 ? 1 : f.fx >= 1 ? 2 : 4), c) })}</small>` : ''}` : ''}`, { key: 'size' }),
+    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.ccyWrap(F.num(f.fx, f.fx >= 10 ? 1 : f.fx >= 0.1 ? 3 : 4), c) })}</small>` : ''}` : ''}`, { key: 'size' }),
     kvRow(t(p.side === 'SELL' ? 'pd.k.sellPx' : 'pd.k.buyPx'), pxC(p.sym, p.entry), { key: 'entry' }),
     f.closed ? kvRow(t(p.side === 'SELL' ? 'pd.k.buyBack' : 'pd.k.exitPx'), pxC(p.sym, p.exit), { key: 'exit' }) : kvRow(t('pd.k.px'), pxC(p.sym, f.px), { key: 'px' }),
     kvRow(t(f.closed ? 'pd.k.valEnd' : 'pd.k.val'), F.money(f.value, c, 0), { key: 'value', cls: 'is-strong' }),
@@ -866,6 +886,7 @@ export const actions = {
   'pd-more'(el, ev, ctx) { const g = P.find(ctx.data, el.dataset.id); if (g?.open) buyMore(ctx, g.row); },
   'pd-term'(el) { store.set('termSym', el.dataset.sym); store.set('termView', 'one'); window.__pulseGo(`#/terminal?k=${encodeURIComponent(el.dataset.sym)}`); },
   'pd-share'(el, ev, ctx) { share(ctx, el.dataset.id); },
+  'al-wait'(el, ev, ctx) { ev && ev.preventDefault && ev.preventDefault(); store.set('pfMode', 'mine'); store.set('pfTab', 'wait'); pfKind = null; haptic(); ctx.rerender({ soft: true }); setTimeout(() => { const n = document.getElementById('pf-p1'); if (n) n.scrollIntoView({ block: 'start' }); }, 60); },
   'pd-follow-off'(el, ev, ctx) { P.followOff(el.dataset.id); haptic(); ctx.rerender({ soft: true }); },
   'pf-jump'(el, ev, ctx) {
     /* "Otevřené obchody" tile: show my open trades (switch / tab / filter reset when needed), then scroll to them */

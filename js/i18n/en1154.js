@@ -27,4 +27,10 @@ export default {
   'pd.st.noSig': 'A trade from a robot signal. The signal is no longer in today’s data – we keep watching your stop and target.',
   /* K3: a sentence without guessing */
   'pd.gone': 'This trade is no longer in the wallet.',
+  /* B6: the donut = what I hold now */
+  'al.mid': 'Account value',
+  'al.k.wait': 'Waiting to buy',
+  'al.aria': 'Donut: account value {v}, what is in it by kind of market',
+  'al.rule': 'Trades at their value now (deposit + result), waiting buys and free money add up to the account value.',
+  'po.inWait': 'of which {v} waits to buy',
 };

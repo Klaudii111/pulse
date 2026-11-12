@@ -12,3 +12,10 @@
 .pd-rb-b { display: flex; gap: 8px; flex-wrap: wrap; }
 .pd-rb-b .btn { flex: 1 1 140px; }
 .pd-rb-line { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12.5px; color: var(--ink-3); }
+/* B6: waiting buys = their own grey slice (free money keeps its own grey) */
+.al-c-wait { stroke: var(--ink-3); background: var(--ink-3); opacity: .7; }
+.al-row.is-wait { text-decoration: none; color: inherit; }
+.pf-split .pf-wait { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); }
+.al-rule { margin-top: 8px; }
+/* K2-16: Portfolio tabs Otevřené / Čekající / Historie show their counts on the phone too */
+.p2-tabs .seg-btn .seg-count { display: inline-grid; }

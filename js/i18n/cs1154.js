@@ -27,4 +27,10 @@ export default {
   'pd.st.noSig': 'Obchod podle signálu robota. Signál už v dnešních datech není – stop a cíl tvého obchodu hlídáme dál.',
   /* K3: věta bez dohadů */
   'pd.gone': 'Tenhle obchod už v peněžence není.',
+  /* B6: koláč = co mám teď */
+  'al.mid': 'Hodnota účtu',
+  'al.k.wait': 'Čeká na nákup',
+  'al.aria': 'Koláč: hodnota účtu {v}, co v ní máš podle druhu trhu',
+  'al.rule': 'Obchody v hodnotě teď (vklad + výsledek), čekající nákupy a volné peníze dávají dohromady hodnotu účtu.',
+  'po.inWait': 'z toho {v} čeká na nákup',
 };

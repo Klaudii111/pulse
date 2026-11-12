@@ -170,7 +170,9 @@ export function summary(data) {
     if (v.today != null) openChg += v.today;
   });
   const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + closedToday(w, c, t0), 0);
-  const fees = w.cash.filter((c) => c.k === 'swap' && c.at >= t0).reduce((a, c) => a + c.amount, 0);
+  /* B1: an overnight fee belongs to the 23:00 it was charged for (upTo), not to the moment the app booked it – the fees of
+     Thursday and Friday night booked on Saturday morning are not Saturday's */
+  const fees = w.cash.filter((c) => c.k === 'swap' && (c.upTo ?? c.at) >= t0).reduce((a, c) => a + c.amount, 0);
   /* 1.15.0: one equity snapshot per day (refreshed at most every 30 min) – the Portfolio chart's real history from now on */
   /* only a value made of real prices is kept (every open trade has a price on this device) */
   if (rows.every((r) => r.live) && snapDue(w, equity)) dirty = true;
