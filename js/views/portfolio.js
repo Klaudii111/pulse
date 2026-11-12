@@ -705,6 +705,14 @@ function orderPage(ctx, o, sm) {
   </div></div>`;
 }
 
+/* K2-13: the period is chosen BEFORE the chips are drawn (render path, once per trade id), so chip, store and axis agree on the first paint */
+function pickPd(id, p0, closed) {
+  if (lastPd === id) return;
+  lastPd = id;
+  const age = Date.now() - (p0.openedAt || p0.placedAt || Date.now());
+  store.set('barsTf.pd', closed ? ((p0.closedAt - p0.openedAt) < 3 * 86400000 && Date.now() - p0.closedAt < 4 * 86400000 ? '5D' : '1M') : age < 20 * 3600000 ? '1D' : '5D');
+}
+
 export function renderTrade(ctx) {
   const id = ctx.route.sub;
   const head0 = `<header class="page-head"><div>${backLink(ctx)}<h1 class="page-title">${t('pd.title')}</h1></div></header>`;
@@ -713,6 +721,7 @@ export function renderTrade(ctx) {
   if (!f) {
     return head0 + `<section class="pf-empty"><p>${t('pd.gone')}</p><div class="pf-empty-b"><a class="btn btn-primary btn-small" href="#/portfolio">${t('pd.toPortfolio')}</a><a class="btn btn-secondary btn-small" href="#/historie">${t('hi.title')}</a></div></section>`;
   }
+  pickPd(id, f.order ? { ...f.row, entry: f.row.limit } : f.row, !f.open && !f.order);
   if (f.order) return orderPage(ctx, f.row, f.sm);
   const p = f.row, sm = f.sm, closed = !f.open;
   const w = B.whatIs(p.sym, p.name);
@@ -743,11 +752,7 @@ export function mountTrade(el, ctx) {
   const closed = !f.open && !f.order;
   Live.onData();
   /* the chart opens on a period that shows my buy: 1D when it happened in the last 20 h, else 5D (closed: 1M) */
-  if (lastPd !== id) {
-    lastPd = id;
-    const age = Date.now() - (p0.openedAt || p0.placedAt || Date.now());
-    store.set('barsTf.pd', closed ? ((p0.closedAt - p0.openedAt) < 3 * 86400000 && Date.now() - p0.closedAt < 4 * 86400000 ? '5D' : '1M') : age < 20 * 3600000 ? '1D' : '5D');
-  }
+  pickPd(id, p0, closed);
   const levels = () => {
     const g = id ? P.find(ctx.data, id) : null;
     const x = g ? (g.order ? { ...g.row, entry: g.row.limit } : g.row) : p0;
