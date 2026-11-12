@@ -83,4 +83,13 @@ export default {
   'den.lg.win.other': 'Ziskem skončily: {list}.', 'den.lg.loss.other': 'Ztrátou skončily: {list}.', 'den.lg.flat.other': 'Na nule skončily: {list}.',
   'den.lg.nodata.other': 'Výsledek zatím chybí: {list}.', 'den.lg.other.other': 'Už skončily: {list} – nic nedělej.',
   'den.todayLead2': 'Další dnešní signály:',
+  /* 1.15.3 (E): skupiny robota, žluté pásmo (PB), pozastavené skupiny */
+  'den.pb.tag': 'žluté pásmo', 'den.pb.aria': 'Co je žluté pásmo', 'den.pb.title': 'Žluté pásmo',
+  'den.pb.line': 'Žluté pásmo = postup, u kterého v testu vyšlo očekávání kolem nuly. Ber ho jako pokus.',
+  'den.pb.more': 'Může vyjít i nevyjít zhruba stejně často. Když ho zkusíš v demu, sázej málo.',
+  'den.pb.robot': 'Robot k tomu píše:',
+  'den.g.V4': 'Trend po ranním rozpětí', 'den.g.V1EU': 'Průraz po klidu v Evropě', 'den.g.V1US': 'Průraz po klidu v USA', 'den.g.PB': 'Postupy denních obchodníků',
+  'den.gs.bezi': 'běží', 'den.gs.pozastaveno': 'pozastaveno',
+  'den.s.groups': 'Části robota',
+  'den.pausedG': 'Pozastaveno: {list}. Odtud teď signály nechodí, zbytek robota běží dál.',
 };

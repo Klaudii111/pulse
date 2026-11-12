@@ -151,8 +151,19 @@ export function resultLine(j) {
 /* 1.15.3 den.json v3: European indices come as 'over_u_brokera' (their data are 15 min late) – actionable like 'plati',
    shown with a sentence "check the price at the broker" */
 const ENTRY_OPEN = ['plati', 'over_u_brokera'];
+/* 1.15.3 groups (styly[]): V4 / V1EU / V1US / PB; PB = "yellow band" (expectation around zero in the test) */
+const isPB = (s) => s?.strategie === 'PB';
+const pbTag = () => `<button type="button" class="den-pb" data-action="den-pb" aria-label="${F.esc(t('den.pb.aria'))}">${t('den.pb.tag')}</button>`;
+const gName = (k) => (t(`den.g.${k}`) !== `den.g.${k}` ? t(`den.g.${k}`) : String(k || '–'));
+/* codes of the paused groups: robot.pozastavene_skupiny (codes or {kod}) + styly[].stav === 'pozastaveno' */
+export function pausedGroups(j) {
+  const l = arr(j?.robot?.pozastavene_skupiny).map((x) => (x && typeof x === 'object' ? x.kod : x)).filter(Boolean).map(String);
+  arr(j?.styly).forEach((y) => { if (y?.stav === 'pozastaveno' && y.kod && !l.includes(String(y.kod))) l.push(String(y.kod)); });
+  return l;
+}
 export function canTrade(j, s, now = D.clock()) {
   if (j?.robot?.stav !== 'bezi' || !ENTRY_OPEN.includes(s?.stav)) return false;
+  if (s.strategie && pausedGroups(j).includes(String(s.strategie))) return false;
   if (s.vstup_stav === 'pozde' || s.pozde_pri_zapisu === true) return false;
   const until = ms(s.vstup?.plati_do);
   if (until && +now > until) return false;
@@ -185,7 +196,7 @@ export function sigState(j, s, now = D.clock()) {
 const todayText = (x) => t(`den.t.${x.code}`, { m: x.m, until: x.until, out: x.out });
 const TODAY_CAP = 4;
 /* a market name in a today line (escaped HTML) */
-const nameHtml = (o) => F.esc(o.x.m);
+const nameHtml = (o) => `${F.esc(o.x.m)}${isPB(o.s) ? ` ${pbTag().replace('class="den-pb"', 'class="den-pb den-pb-s"')}` : ''}`;
 /* today's non-actionable signals as short grey lines: one signal -> the usual sentence; more -> one line per state,
    identical states grouped ("3 signály přišly pozdě: Nasdaq 100, Ropa WTI, DAX – nepočítají se.") */
 function todayLines(list, afterGo = false) {
@@ -242,7 +253,7 @@ function sigBlock(j, s) {
   const btn = demoOk(s.trh)
     ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
     : `<p class="den-note den-nodemo" data-den-nodemo="1">${t('den.noDemo')}</p>`;
-  const title = `<p class="den-sig-t"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span></p>`;
+  const title = `<p class="den-sig-t"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span>${isPB(s) ? pbTag() : ''}</p>${isPB(s) ? `<p class="den-st den-pb-l">${t('den.pb.line')}</p>` : ''}`;
   if (s.stav === 'over_u_brokera') {
     const at = ms(s.cas_signalu);
     const n = Number.isFinite(+s.data_zpozdena_min) ? Math.round(+s.data_zpozdena_min) : 0;
@@ -271,6 +282,8 @@ function todayBody(j, now) {
     const why = cs() && j.robot?.duvod_stavu ? t('den.paused', { why: F.human(j.robot.duvod_stavu) }) : t('den.paused0');
     return `<p class="den-note" data-den-state="paused">${F.esc(why)}</p>`;
   }
+  const pg = pausedGroups(j);
+  const pgHtml = pg.length ? `<p class="den-note den-pg" data-den-paused="${F.esc(pg.join(','))}">${F.esc(t('den.pausedG', { list: pg.map((k) => { const y = arr(j.styly).find((z) => z?.kod === k); return y && arr(y.trhy).length ? `${gName(k)} (${mktList(y.trhy)})` : gName(k); }).join('; ') }))}</p>` : '';
   const xs = arr(j.signaly).map((s) => ({ s, x: sigState(j, s, now) }));
   const go = xs.filter((o) => o.x.code === 'go');
   const rest = xs.filter((o) => o.x.code !== 'go' && o.x.today).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
@@ -285,7 +298,7 @@ function todayBody(j, now) {
     const last = lastOld(j, now);
     html = `<p class="den-note" data-den-state="none">${t('den.none')}</p>${last ? `<p class="den-note den-note-2">${F.esc(lastText(last))}</p>` : ''}`;
   }
-  return html;
+  return pgHtml + html;
 }
 function headHtml(link = true) {
   const name = `<span>${t('den.h')}</span><span class="den-badge">${t('den.badge')}</span>`;
@@ -355,7 +368,7 @@ function factsHtml(j, s, now) {
   const r = +s.vysledek_R;
   const row = (k, val) => `<dt>${k}</dt><dd>${F.esc(val)}</dd>`;
   const at = ms(s.cas_signalu);
-  return `<p class="den-sub">${F.esc(`${at ? `${dayLabel(at)} · ` : ''}${mkt(s.trh)} · ${t(sell ? 'den.sell' : 'den.buy')}`)}</p>
+  return `<p class="den-sub">${F.esc(`${at ? `${dayLabel(at)} · ` : ''}${mkt(s.trh)} · ${t(sell ? 'den.sell' : 'den.buy')}`)}${isPB(s) ? ` ${pbTag()}` : ''}</p>
     <dl class="den-kv num">${row(t('den.k.sent'), at ? F.time(new Date(at)) : '–')}
       ${row(t('den.k.entry'), sell ? t('den.e.min', { v: px(v.nejniz) }) : t('den.e.max', { v: px(v.nejvys) }))}
       ${row(t('den.k.until'), x.until)}${row(t('den.k.stop'), px(s.stop))}
@@ -376,6 +389,19 @@ function certainty(v) {
 /* the robot's style groups: order of the markets as the user reads them (USA first) */
 const styleLines = (j) => arr(j?.styly).filter((y) => y && y.test).map((y) => `<li>${F.esc(t('den.style', { m: mktList(y.trhy), p: period(y.test.obdobi), pf: n2(y.test.pf, 2), n: y.test.obchodu ?? '–', w: y.test.vyhry_pct != null ? F.pct(+y.test.vyhry_pct, 0) : '–', j: certainty(y.test.jistota_pct) }))}</li>`).join('');
 
+/* the four groups with their state (běží / pozastaveno) – "Pro pokročilé" on #/den */
+function groupsHtml(j) {
+  const ys = arr(j?.styly).filter((y) => y && y.kod);
+  if (!ys.length) return '';
+  const pg = pausedGroups(j);
+  const li = ys.map((y) => {
+    const k = String(y.kod);
+    const stv = pg.includes(k) ? 'pozastaveno' : y.stav === 'bezi' || !y.stav ? 'bezi' : String(y.stav);
+    const lbl = t(`den.gs.${stv}`) !== `den.gs.${stv}` ? t(`den.gs.${stv}`) : '–';
+    return `<li data-den-group="${F.esc(k)}">${F.esc(`${gName(k)} – ${mktList(y.trhy)}: `)}<b class="${stv === 'bezi' ? 'up' : 'down'}">${F.esc(lbl)}</b>${k === 'PB' ? ` ${pbTag()}` : ''}</li>`;
+  }).join('');
+  return `<h3>${t('den.s.groups')}</h3><ul class="den-ul den-groups">${li}</ul>`;
+}
 export function render(ctx) {
   const now = ctx.now();
   const j = st.j;
@@ -408,6 +434,7 @@ export function render(ctx) {
       <details class="den-adv card"><summary>${t('den.adv')}</summary>
         ${s0 ? `<h3>${t('den.s.sig')}</h3>${factsHtml(j, s0, now)}` : ''}
         <h3>${t('den.s.resT')}</h3>${resTbl}
+        ${groupsHtml(j)}
         ${styles ? `<h3>${t('den.s.styles')}</h3><ul class="den-ul">${styles}</ul>` : ''}
         <h3>${t('den.s.safe')}</h3><p>${F.esc(t('den.safe', { n: pj.po_obchodech ?? 30, pf: n2(pj.pf_min ?? 1, 1), dd: n2(pj.propad_max_pct ?? 10, 0), z: pj.zbyva_do_kontroly ?? '–' }))}</p>
         <h3>${t('den.s.hist')}</h3>${histHtml}
@@ -433,6 +460,19 @@ export const actions = {
       html: `<div class="sheet-head"><div><p class="sheet-title">${t('den.h')} · ${t('den.badge')}</p></div><button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
         <div class="sheet-body"><p class="th-text">${t('den.help1')}</p><p class="th-text">${t('den.help2')}</p>
           <details class="den-more"><summary>${t('den.more')}</summary><p class="th-text">${t('den.r.pfS')}</p>${styles ? `<ul class="den-ul">${styles}</ul>` : ''}${note}</details></div>`,
+      onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
+    });
+  },
+  'den-pb'() {
+    const y = arr(st.j?.styly).find((z) => z?.kod === 'PB');
+    /* the robot's own sentence about the expectation ("… očekávání je kolem nuly …"), else its first sentence */
+    const sents = y?.co_cekat ? String(y.co_cekat).split(/(?<=[.!?:])\s+|\s*⚠\s*/).map((x) => x.trim()).filter(Boolean) : [];
+    const first = sents.find((x) => /očekáván/i.test(x)) || sents[0] || '';
+    const robot = first ? (cs() ? `<p class="th-text den-st">${t('den.pb.robot')} ${hum(first)}</p>` : `<details class="den-cz"><summary>${t('den.czShow')}</summary><p class="th-text" lang="cs">${hum(y.co_cekat)}</p></details>`) : '';
+    openSheet({
+      small: true, label: t('den.pb.tag'),
+      html: `<div class="sheet-head"><div><p class="sheet-title">${t('den.pb.title')}</p></div><button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+        <div class="sheet-body"><p class="th-text">${t('den.pb.line')}</p><p class="th-text">${t('den.pb.more')}</p>${robot}</div>`,
       onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
     });
   },

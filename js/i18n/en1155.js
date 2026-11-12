@@ -127,4 +127,13 @@ export default {
   'den.lg.win.other': 'Ended in profit: {list}.', 'den.lg.loss.other': 'Ended in a loss: {list}.', 'den.lg.flat.other': 'Ended flat: {list}.',
   'den.lg.nodata.other': 'Result still missing: {list}.', 'den.lg.other.other': 'Already ended: {list} – nothing to do.',
   'den.todayLead2': 'Other signals today:',
+  /* 1.15.3 (E): the robot's groups, the yellow band (PB), paused groups */
+  'den.pb.tag': 'yellow band', 'den.pb.aria': 'What the yellow band means', 'den.pb.title': 'Yellow band',
+  'den.pb.line': 'Yellow band = a method whose expected result in the test was around zero. Treat it as an experiment.',
+  'den.pb.more': 'It can work or fail about equally often. If you try it in the demo, keep the stake small.',
+  'den.pb.robot': 'The robot says:',
+  'den.g.V4': 'Trend after the morning range', 'den.g.V1EU': 'Breakout after a quiet spell in Europe', 'den.g.V1US': 'Breakout after a quiet spell in the US', 'den.g.PB': 'Day traders’ methods',
+  'den.gs.bezi': 'running', 'den.gs.pozastaveno': 'paused',
+  'den.s.groups': 'Parts of the robot',
+  'den.pausedG': 'Paused: {list}. No signals come from there now; the rest of the robot keeps running.',
 };
