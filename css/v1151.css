@@ -140,7 +140,7 @@
   .p2-right .pf-chart { height: 150px; }
   .p2-right .al-wrap { grid-template-columns: minmax(0, 1fr); }
 }
-@media (min-width: 1380px) { .p2-right .al-wrap { grid-template-columns: 200px minmax(0, 1fr); } }
+/* desktop right column (~430–520 px): the legend always under the donut – side by side cut the names ("Sha…") */
 
 /* ---------- CS | EN switch ---------- */
 .lang-sw { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--raise-2); border: 1px solid var(--line-2); gap: 2px; }
