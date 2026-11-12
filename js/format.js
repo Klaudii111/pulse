@@ -84,6 +84,8 @@ export const dm = (s) => dtf('dm', isCs() ? { day: 'numeric', month: 'numeric' }
 export const dmy = (s) => dtf('dmy', isCs() ? { day: 'numeric', month: 'numeric', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' }).format(toDate(s)).replace(/\s/g, '\u00a0');
 export const time = (s) => dtf('time', { hour: '2-digit', minute: '2-digit', hour12: false }).format(toDate(s));
 export const weekday = (s) => dtf('wd', { weekday: 'long' }).format(toDate(s));
+/* 1.15.0: short weekday for narrow chips (EN "Wednesday" was cut at 390 px) */
+export const weekdayShort = (s) => dtf('wds', { weekday: 'short' }).format(toDate(s)).replace('.', '');
 export const monthYear = (s) => { const m = dtf('my', { month: 'long', year: 'numeric' }).format(toDate(s)); return m.charAt(0).toUpperCase() + m.slice(1); };
 export const monthName = (s) => { const m = dtf('mn', { month: 'long' }).format(toDate(s)); return m.charAt(0).toUpperCase() + m.slice(1); };
 export const monShort = (s) => dtf('ms', { month: 'short' }).format(toDate(s)).replace('.', '');

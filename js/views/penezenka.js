@@ -46,6 +46,25 @@ function ledgerRow(r, c) {
   return `<${tag} class="wl-row${r.p ? ' is-link' : ''}"${r.p ? ` href="#/obchod/${F.esc(r.p.id)}"` : ''}><span class="wl-ic tone-${tn}">${icon(ic, 'icon-xs')}</span><span class="wl-m"><b>${F.esc(title)}</b><small class="num">${F.esc(sub)}</small></span>
     <span class="wl-v num ${r.amount > 0.5 ? 'up' : ''}">${sm(r.amount, c, r.k === 'swap' ? 2 : 0)}</span></${tag}>`;
 }
+/* 1.15.0: live tick -> the hero numbers from ONE summary (the same one the header pill uses on this tick) */
+export function paintHero(data) {
+  const hero = document.getElementById('wl-hero');
+  if (!hero || !data?.signals) return;
+  const s = W.summary(data);
+  const c = s.w.ccy;
+  const pt = W.parts(s);
+  const put = (el, txt) => { if (el && el.textContent !== txt) el.textContent = txt; };
+  const v = hero.querySelector('.big-acc-v');
+  if (v) { put(v, F.money(pt.eq, c, 0)); v.dataset.eq = String(pt.eq); }
+  const sp = hero.querySelector('.wl-split');
+  if (sp) {
+    const b = sp.querySelectorAll('b');
+    put(b[0], F.money(pt.free, c, 0)); put(b[1], F.money(pt.inPlay, c, 0));
+    if (b[2]) { put(b[2], sm(pt.open, c)); b[2].className = tone(pt.open); }
+    sp.dataset.free = String(pt.free); sp.dataset.inplay = String(pt.inPlay); sp.dataset.open = String(pt.open);
+  }
+}
+
 export function renderWallet(ctx) {
   const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('wl.title')}</h1><p class="page-sub">${t('wl.sub')}</p></div></header>`;
   if (!ctx.data?.signals) return head + skBlock(220);

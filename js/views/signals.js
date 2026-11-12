@@ -27,7 +27,7 @@ function upcoming(now, n) {
     if (!x) break;
     const d = new Date(x.open);
     const days = F.daysUntil(d, now);
-    out.push({ day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(d), time: F.time(d) });
+    out.push({ day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekdayShort(d), time: F.time(d) });
     from = x.open + 60000;
   }
   return out;

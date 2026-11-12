@@ -29,7 +29,12 @@ export function whatIs(sym, name = '') {
   const cs = lang() === 'cs';
   const ext = extInstr(sym);
   if (ext) return { name: ext.name, phrase: ext.phrase };
-  if (!x) return { name: name || sym, phrase: '' };
+  if (!x) {
+    /* 1.15.0: before instruments.json is known (first launch) the main markets still get a plain name –
+       the Obchodovat header showed "BTCUSD BTCUSD" for about a second */
+    const k = t(`mkt.k.${sym}`);
+    return { name: name || (k !== `mkt.k.${sym}` ? k : sym), phrase: '' };
+  }
   const txt = cs ? x.cs : x.en;
   if (x.k === 'stock') {
     const m = /firmy (.+?) – /.exec(x.cs) || /company (.+?) – /.exec(x.en);

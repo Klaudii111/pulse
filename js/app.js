@@ -710,6 +710,9 @@ async function boot() {
     checkAlerts();
     if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
     else renderChrome();
+    /* 1.15.0: Peněženka's numbers follow the header on the same tick (one summary, one rounding) – they used to differ
+       by 1 Kč; patched in place, so a button being tapped is never replaced */
+    if (route.name === 'penezenka') Wal.paintHero(data);
     document.dispatchEvent(new CustomEvent('pulse:live'));
   });
   setInterval(() => renderChrome(), 30000);

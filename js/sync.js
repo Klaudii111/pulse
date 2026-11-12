@@ -121,12 +121,26 @@ function pullMerge(m, doc) {
   return changed;
 }
 
+/* 1.15.0: a server account is made only when there is something worth keeping (a top-up, a trade or order, a journal
+   entry, a changed profile) or when the user opens the pairing sheet (m.want). Before 1.15.0 the very first launch made
+   one, because firstSeen / onb / calc are synced keys written on every first run. Existing accounts are not affected. */
+export function worthKeeping() {
+  if (!W.untouched()) return true;
+  const j = store.get('journal', null);
+  if (j && typeof j === 'object' && Object.keys(j).length) return true;
+  const pr = store.get('levProfile', null);
+  if (pr && pr !== 'cons') return true;
+  if (+store.get('levOwn', 0) > 0 || store.get('proClient', false) === true) return true;
+  return false;
+}
+
 async function run() {
   let m = meta();
   if (!m) return;
   const anyDirty = () => Object.keys(m.dirty).length > 0;
   if (!m.id) {
     if (!anyDirty()) return;   // nothing to keep yet -> no account yet
+    if (!m.want && !worthKeeping()) return;   // only first-run bookkeeping (firstSeen, onb, calc …) -> still no account
     m.id = newId(); m.rev = 0; m.base = {}; m.newAcc = 1; saveMeta(m);
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) { setStatus('off'); return; }
@@ -437,6 +451,7 @@ async function showPair() {
     if (!m) { m = { v: 1, t: {}, base: {}, dirty: {} }; saveMeta(m); }
     SYNC_KEYS.forEach((k) => { if (store.has(k) && !m.base[k]) { m.dirty[k] = 1; if (!m.t[k]) m.t[k] = Date.now(); } });
     if (!Object.keys(m.dirty).length) { m.dirty.firstSeen = 1; m.t.firstSeen = Date.now(); store.firstSeen(); }
+    m.want = 1; /* the user asked to pair -> make the account now even with nothing else to keep */
     saveMeta(m);
     await sync();
   }
