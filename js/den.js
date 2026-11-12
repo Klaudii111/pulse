@@ -134,7 +134,7 @@ export function fresh(j, now = D.clock()) {
 }
 
 /* the robot's real running result (P.5): trades, wins, profit against loss + "N signals came late, not counted" */
-export function resultLine(j) {
+export function resultLine(j, { late: withLate = true } = {}) {
   const v = j?.vysledek;
   if (!v || typeof v !== 'object') return t('den.resNA');
   const n = +v.obchodu || 0;
@@ -146,7 +146,7 @@ export function resultLine(j) {
     s = t('den.res', { n, w: w != null ? w : '–', pf });
   }
   const late = +v.vynechano_pozde || 0;
-  return late > 0 ? `${s} ${tp('den.lateN', late)}` : s;
+  return late > 0 && withLate ? `${s} ${tp('den.lateN', late)}` : s;
 }
 
 /* ---------- one signal -> what the client can do now ---------- */
@@ -315,7 +315,9 @@ export function cardHtml(now = D.clock()) {
   try {
     const body = todayBody(j, now);
     const live = body.includes('data-den-state="go"');
-    return `<section class="den-card${live ? '' : ' is-quiet'}" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}${j ? `<p class="den-res">${F.esc(resultLine(j))}</p>` : ''}${body}</section>`;
+    /* the card says once that signals came late: when today's lines already list them, the result line does not repeat it */
+    const saysLate = body.includes('data-den-state="late"');
+    return `<section class="den-card${live ? '' : ' is-quiet'}" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}${j ? `<p class="den-res">${F.esc(resultLine(j, { late: !saysLate }))}</p>` : ''}${body}</section>`;
   } catch {
     return `<section class="den-card is-quiet" id="den-card">${headHtml()}<p class="den-off">${t('den.noData')}</p></section>`;
   }
