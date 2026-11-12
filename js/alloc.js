@@ -23,28 +23,41 @@ export function apportion(vals, total) {
   return out;
 }
 
-/* { inPlay, free, total, kinds: [{ id, amount, pct, items: [{ sym, name, amount, share, n, wait }] }] } – kinds with money only */
+/* 1.15.0 (B6) what I HOLD now: { total (= Hodnota účtu, W.parts().eq), inPlay (trades + waiting), held, free,
+   kinds: [{ id, amount, pct, items }] (current value of the open trades = the list rows' "value": deposit + result),
+   wait: { amount, pct, items } (money reserved in waiting buy orders – its own grey slice "Čeká na nákup"), freePct }.
+   Whole crowns that add up EXACTLY to the account value (largest remainder) and whole percent that add up to 100. */
 export function allocation(sm) {
   const p = W.parts(sm);
   const bySym = new Map();
-  const add = (sym, name, v, wait) => {
-    const x = bySym.get(sym) || { sym, name: name || '', raw: 0, n: 0, wait: 0 };
-    x.raw += v; if (wait) x.wait += v; else x.n++;
-    if (!x.name && name) x.name = name;
-    bySym.set(sym, x);
-  };
-  (sm.rows || []).forEach((r) => add(r.sym, r.name, +r.margin || 0, false));
-  (sm.w.orders || []).forEach((o) => add(o.sym, o.name, +o.amount || 0, true));
+  (sm.rows || []).forEach((r) => {
+    const x = bySym.get(r.sym) || { sym: r.sym, name: r.name || '', raw: 0, n: 0 };
+    x.raw += Math.max(0, (+r.margin || 0) + (+r.pnl || 0)); x.n++;
+    bySym.set(r.sym, x);
+  });
+  const ords = (sm.w.orders || []);
+  const waitAmt = Math.round(sm.reserved || 0);
+  const held = Math.max(0, p.eq - p.free - waitAmt); // = deposits + open result of the trades (the rounding crown lands here)
   const syms = [...bySym.values()];
   const kinds = KINDS.map((id) => ({ id, list: syms.filter((x) => kindOf(x.sym) === id) })).filter((k) => k.list.length);
-  const kAmt = apportion(kinds.map((k) => k.list.reduce((a, x) => a + x.raw, 0)), p.inPlay);
-  const total = p.inPlay + p.free;
+  const kAmt = apportion(kinds.map((k) => k.list.reduce((a, x) => a + x.raw, 0)), held);
+  const total = p.eq;
   const out = kinds.map((k, i) => {
     const amount = kAmt[i];
     const iAmt = apportion(k.list.map((x) => x.raw), amount);
-    const items = k.list.map((x, j) => ({ sym: x.sym, name: x.name, amount: iAmt[j], share: amount > 0 ? (iAmt[j] / amount) * 100 : 0, n: x.n, wait: x.wait > 0 && x.n === 0 }))
+    const items = k.list.map((x, j) => ({ sym: x.sym, name: x.name, amount: iAmt[j], share: amount > 0 ? (iAmt[j] / amount) * 100 : 0, n: x.n, wait: false }))
       .sort((a, b) => b.amount - a.amount);
-    return { id: k.id, amount, pct: total > 0 ? (amount / total) * 100 : 0, items };
+    return { id: k.id, amount, items };
   }).filter((k) => k.amount > 0).sort((a, b) => b.amount - a.amount);
-  return { inPlay: p.inPlay, free: p.free, total, freePct: total > 0 ? (p.free / total) * 100 : 0, kinds: out };
+  /* the waiting orders by instrument (second level of the grey slice) */
+  const wMap = new Map();
+  ords.forEach((o) => { const x = wMap.get(o.sym) || { sym: o.sym, name: o.name || '', raw: 0 }; x.raw += +o.amount || 0; wMap.set(o.sym, x); });
+  const wl = [...wMap.values()];
+  const wAmt = apportion(wl.map((x) => x.raw), waitAmt);
+  const wait = { amount: waitAmt, items: wl.map((x, j) => ({ sym: x.sym, name: x.name, amount: wAmt[j], share: waitAmt > 0 ? (wAmt[j] / waitAmt) * 100 : 0, wait: true })).sort((a, b) => b.amount - a.amount) };
+  /* whole percent of the account value, adding up to 100 */
+  const pcts = apportion(out.map((k) => k.amount).concat([wait.amount, p.free]), total > 0 ? 100 : 0);
+  out.forEach((k, i) => { k.pct = pcts[i]; k.pctRaw = total > 0 ? k.amount / total * 100 : 0; });
+  wait.pct = pcts[out.length]; wait.pctRaw = total > 0 ? wait.amount / total * 100 : 0;
+  return { inPlay: held + waitAmt, held, free: p.free, total, freePct: pcts[out.length + 1], freePctRaw: total > 0 ? p.free / total * 100 : 0, kinds: out, wait };
 }

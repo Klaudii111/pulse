@@ -26,6 +26,10 @@ let source = null;            // 'server' | 'worker' | null
 let dataAt = 0;               // ms: how old the newest price data is (server updated_at, or the worker fetch time)
 let serverOpen = null;        // market_open flag from quotes.json (null = unknown)
 let quotesMissingUntil = 0;   // quotes.json answered 404: try it again only after this time
+/* 1.15.0 (B1): true once a price source answered in this session (quotes.json, the worker or the stream). Before that the
+   prices are the ones kept on the device from an earlier visit – "today" of a trade is then unknown, never a wrong ±0 */
+let answered = false;
+export const loaded = () => answered;
 
 /* times come as seconds, ms or ISO – Alpaca writes nanoseconds ("…:35.123456789Z"), trimmed to ms before parsing */
 const toMs = (t) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(String(t || '').replace(/(\.\d{3})\d+/, '$1')) || 0);
@@ -104,6 +108,7 @@ async function pollServer() {
     const r = await fetch(quotesUrl(), { cache: 'no-store' });
     if (!r.ok) { quotesMissingUntil = Date.now() + (r.status === 404 ? 10 * 60000 : 60000); return false; }
     const j = await r.json();
+    answered = true;
     const at = toMs(j.updated_at);
     if (!at || Date.now() - at > (L.QUOTES_STALE_SEC || 120) * 1000) { serverOpen = null; if (source !== 'worker') dataAt = Math.max(dataAt, at); return false; }
     if (typeof j.market_open === 'boolean') serverOpen = j.market_open;
@@ -125,6 +130,7 @@ async function pollWorker(only = null) {
     if (!r.ok) return;
     const j = await r.json();
     let any = false;
+    answered = true;
     Object.entries(j.q || {}).forEach(([sym, q]) => { if (q && take(sym, q.p, q.t, q.pc)) any = true; });
     if (!only) { source = 'worker'; dataAt = Date.now(); }
     if (any) mark();
@@ -189,6 +195,14 @@ let extraFn = () => [];
 export const setExtraSymbols = (fn) => { extraFn = fn; };
 const symbols = () => [...new Set(extraFn().concat(openSignals(getData()).map((s) => s.symbol), 'SPY'))].slice(0, 60);
 export const quote = (sym) => prices.get(sym) || null;
+/* 1.15.0 (B1): the previous close of sym consistent with dayChange() (the server's close wins; a change that disagrees with
+   the server's by > 2 points uses the server's change) – null when unknown */
+export function prevClose(sym) {
+  const q = prices.get(sym);
+  const ch = dayChange(sym);
+  if (!q || !(q.p > 0) || ch == null) return null;
+  return q.p / (1 + ch / 100);
+}
 const nyDay = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 /* Apply known live prices to the current data object. Returns true when anything changed. */
@@ -267,7 +281,7 @@ export function syncStream() {
   es.onmessage = (ev) => {
     let d; try { d = JSON.parse(ev.data); } catch { return; }
     if (!d || !d.k) return;
-    got = true; esFails = 0; streamAt = Date.now();
+    got = true; esFails = 0; streamAt = Date.now(); answered = true;
     takeMeta(d.k, d);
     if (take(d.k, +d.p, toMs(d.t) || Date.now())) { dataAt = Math.max(dataAt, toMs(d.t) || Date.now()); mark(); }
   };

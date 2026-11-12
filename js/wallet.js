@@ -79,6 +79,9 @@ export function priceOf(sym, data) {
 /* a buy is closed at the bid, a sell at the ask (mid price px -+ half spread) */
 export const exitPx = (pos, px) => px - dirOf(pos.side) * (pos.half || 0);
 export const pnlAt = (pos, px) => pos.notional * dirOf(pos.side) * (exitPx(pos, px) - pos.entry) / pos.entry;
+/* 1.15.0 (B3) the mid price at which leverage ends the trade (the whole deposit gone): check() closes at
+   pnlAt(pos, px) <= -margin  <=>  px = entry * (1 - dir / lev) + dir * half.  null without leverage. */
+export const endLevel = (pos) => ((pos.lev || 1) > 1 && pos.entry > 0 ? pos.entry * (1 - dirOf(pos.side) / pos.lev) + dirOf(pos.side) * (pos.half || 0) : null);
 /* What happens at the stop-loss / take-profit (shown before the user confirms) */
 export function outcome({ side, entry, amount, lev, sl, tp }) {
   const notional = amount * lev;
@@ -101,6 +104,32 @@ export function amountForRisk(w, { entry, sl, lev, riskPct }) {
 
 /* 1.13.1: the last data a summary was made with, so screens without data (Více, Nastavení, sizing) show the SAME wallet */
 let lastData = null;
+/* 1.15.0 (B1) one trade's "dnes" (see summary): { today: number | null, base: start-of-day value to remember | null, pc, why } */
+const capped = (pos, px) => Math.max(-pos.margin, pnlAt(pos, px));
+function todayOf(w, pos, pnl, pxT, t0, ready) {
+  if ((pos.openedAt || 0) >= t0) return { today: pnl, base: null, why: 'new' };
+  if (pxT == null) return { today: null, base: null, why: 'wait' };            // no price on this device yet
+  if (pxT < t0) return ready ? { today: 0, base: null, why: 'closed' } : { today: null, base: null, why: 'wait' }; // not traded today (or still loading)
+  const lq = Live.quote(pos.sym);
+  const pc = lq && lq.t >= t0 ? Live.prevClose(pos.sym) : null; // a kept quote from an earlier day carries an older close
+  if (pc > 0) { const base = capped(pos, pc); return { today: pnl - base, base, pc: true, why: 'pc' }; }
+  /* no previous close known: the first look of the day (only with a fresh price, never yesterday's kept one) */
+  if (w.dayOpen[pos.id] != null) return { today: pnl - w.dayOpen[pos.id], base: null, why: 'first' };
+  if (!ready) return { today: null, base: null, why: 'wait' };
+  return { today: 0, base: pnl, why: 'first' };
+}
+/* a trade closed today: its result, minus its value at the start of the day when it was opened before today */
+function closedToday(w, c, t0) {
+  if ((c.openedAt || 0) >= t0) return c.pnl;
+  if (w.dayOpen && w.dayOpen[c.id] != null) return c.pnl - w.dayOpen[c.id];   // remembered while it was open today
+  const q = Live.quote(c.sym);
+  const pc = q && q.t >= t0 ? Live.prevClose(c.sym) : null;
+  if (pc > 0) return c.pnl - capped(c, pc);
+  /* closed at a price from before today (market closed): only the conversion fee is today's */
+  if (q && q.t < t0 && Live.loaded()) return c.pnl - capped(c, c.mid ?? c.exit);
+  return c.pnl;
+}
+export const lastDataOf = () => lastData;
 const dayStart = (ms = Date.now()) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
 export function summary(data) {
   if (data) lastData = data; else data = lastData;
@@ -113,38 +142,48 @@ export function summary(data) {
     const pnl = Math.max(-pos.margin, pnlAt(pos, px)); // never lose more than the money put in
     used += pos.margin; open += pnl;
     /* % = result on the money put in (includes leverage), same as the money figure */
-    return { ...pos, px, pnl, pnlPct: (pnl / pos.margin) * 100, live: !!q };
+    return { ...pos, px, pxT: q ? q.t || null : null, pnl, pnlPct: (pnl / pos.margin) * 100, live: !!q };
   });
   /* Peněženka (equity) = volné + ve hře + otevřený zisk/ztráta */
   const equity = w.balance + open;
-  /* 1.13.1 "Dnes": trades closed today + today's change of the open trades + today's overnight fees
-     (never the money loaded / withdrawn). Open trades from before today count from their value at the day's first look. */
+  /* 1.15.0 (B1) "Dnes" = the change since yesterday's close, the same for every screen (rows, Portfolio, trade page, Dnes,
+     Peněženka, the pill): trades closed today + today's change of the open trades + today's overnight fees (never the money
+     loaded / withdrawn). One trade (todayOf):
+       opened today                                   -> its whole result
+       opened before today, its newest price is from today and the previous close is known
+                                                      -> result now − result it had at the previous close (both capped at −deposit)
+       the instrument has not traded today (weekend, holiday, before its session) -> 0
+       no price on this device yet / prices still loading                         -> null (unknown: "dnes …", never a wrong ±0)
+     The first look of the day (w.dayOpen) is only the fallback for an instrument without a previous close. */
   const t0 = dayStart();
   const today0 = new Date(t0).toDateString();
   let dirty = false;
-  /* 1.15.0: a trade without a known price yet (fresh device, prices still loading) is not "looked at" – its start-of-day
-     value waits for the first real price (else yesterday's move would count as today's) */
-  if (w.day !== today0) { w.day = today0; w.dayEquity = equity; w.dayOpen = {}; rows.forEach((r) => { if (r.live) w.dayOpen[r.id] = r.pnl; }); dirty = true; }
+  if (w.day !== today0) { w.day = today0; w.dayEquity = equity; w.dayOpen = {}; dirty = true; }
   if (!w.dayOpen || typeof w.dayOpen !== 'object') { w.dayOpen = {}; dirty = true; }
+  const ready = Live.loaded();
   let openChg = 0;
-  /* 1.15.0: each row carries its own "dnes" (the same numbers that add up to the wallet's "Dnes") */
   rows.forEach((r) => {
-    if (r.openedAt >= t0) { r.today = r.pnl; openChg += r.pnl; return; }
-    if (w.dayOpen[r.id] == null) { if (!r.live) { r.today = 0; return; } w.dayOpen[r.id] = r.pnl; dirty = true; }
-    r.today = r.pnl - w.dayOpen[r.id];
-    openChg += r.today;
+    const v = todayOf(w, r, r.pnl, r.pxT, t0, ready);
+    if (v.base != null && (w.dayOpen[r.id] == null || (v.pc && Math.abs(w.dayOpen[r.id] - v.base) > 0.005))) { w.dayOpen[r.id] = v.base; dirty = true; }
+    r.today = v.today;
+    r.todayWhy = v.why;
+    if (v.today != null) openChg += v.today;
   });
-  const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + c.pnl - (c.openedAt < t0 ? (w.dayOpen[c.id] ?? 0) : 0), 0);
-  const fees = w.cash.filter((c) => c.k === 'swap' && c.at >= t0).reduce((a, c) => a + c.amount, 0);
+  const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + closedToday(w, c, t0), 0);
+  /* B1: an overnight fee belongs to the 23:00 it was charged for (upTo), not to the moment the app booked it – the fees of
+     Thursday and Friday night booked on Saturday morning are not Saturday's */
+  const fees = w.cash.filter((c) => c.k === 'swap' && (c.upTo ?? c.at) >= t0).reduce((a, c) => a + c.amount, 0);
   /* 1.15.0: one equity snapshot per day (refreshed at most every 30 min) – the Portfolio chart's real history from now on */
   /* only a value made of real prices is kept (every open trade has a price on this device) */
   if (rows.every((r) => r.live) && snapDue(w, equity)) dirty = true;
   if (dirty) save(w);
   const today = realized + openChg + fees;
+  /* false while at least one open trade has no price on this device yet – the screens show "Dnes …" instead of a number */
+  const todayReady = rows.every((r) => r.today != null);
   const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
   /* margin level (%): equity / money held in open trades; null without open trades */
   const level = used > 0 ? (equity / used) * 100 : null;
-  return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
+  return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayReady, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
     totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
 /* ---------- 1.15.0 Portfolio: daily equity snapshots (w.eqd = { 'YYYY-MM-DD': { eq, at, putIn } }) ----------
@@ -568,10 +607,26 @@ export function autoOpen(data, sig, mode, onSince = 0) {
   const w2 = get();
   w2.copied = [sig.id, ...(Array.isArray(w2.copied) ? w2.copied : [])].slice(0, 400);
   const p = r.pos || r.order;
-  const qty = p.notional ? p.notional / (p.entry * 1) : null;
+  /* 1.15.0 (B2): real units = size in the wallet currency / (price x rate of the instrument currency); unknown rate -> null */
+  const fxr = p.notional ? unitRate(M.ccy(sig.symbol), w2.ccy, data) : null;
+  const qty = p.notional && fxr ? p.notional / ((p.entry || p.limit) * fxr) : null;
   w2.olog.unshift({ id: `${sig.id}:auto:${Date.now()}`, k: r.pos ? 'auto' : 'autoLim', oid: p.id, sym: sig.symbol, side: sig.action, limit: r.pos ? p.entry : p.limit, amount, sigId: sig.id, at: Date.now(), reopen });
   save(w2);
   return { ok: true, pos: r.pos || null, order: r.order || null, amount, reopen, qty };
+}
+
+/* 1.15.0 (B2) how many units of the wallet currency one unit of the instrument currency is (1 $ ≈ 22,9 Kč) – the same FX the
+   app shows the robot's dollars with (D.fxRates: live USDCZK / EURUSD, else signals.json fx). null when no trustworthy rate
+   exists for that currency (only the config fallback) – then no units are shown */
+const FX_PAIR = { JPY: 'USDJPY', CHF: 'USDCHF', CAD: 'USDCAD', ZAR: 'USDZAR', GBP: 'GBPUSD', AUD: 'AUDUSD', TRY: 'EURTRY' };
+export function unitRate(from, to, data = lastData) {
+  if (!from || !to) return null;
+  if (from === to) return 1;
+  const fx = D.fxRates(data);
+  if (fx.source === 'config') return null;
+  const okC = (c) => ['USD', 'EUR', 'CZK'].includes(c) || (fx.source === 'live' && FX_PAIR[c] && Live.quote(FX_PAIR[c])?.p > 0);
+  if (!okC(from) || !okC(to) || !(fx[from] > 0) || !(fx[to] > 0)) return null;
+  return fx[to] / fx[from];
 }
 
 /* the robot-for-me's deposit per signal: D.stakeFor (risk % at the stop, max 10 / 20 % of the wallet), never more than free */

@@ -1,1 +1,36 @@
 /* 1.15.0 release round (B): Portfolio, trade page, Obchodovat, Peněženka, Historie, Více – fixes after the client's-eyes review. Skin tokens only (no hard colours). */
+/* B1: "dnes" not known yet (prices still loading) – quiet grey placeholder */
+.pf-td.is-unk, .pd-kvs .is-unk, .pd-res .is-unk, .pf-chg .is-unk, .pf-sum-v .is-unk, .pf-cnote .is-unk { color: var(--ink-3); font-weight: 500; }
+/* B2: the exchange rate under the units, small */
+.pd-q.pd-fx { display: block; color: var(--ink-3); font-weight: 500; }
+/* B3: the signal's stop as a quiet second line when leverage ends the trade first */
+.pd-stop2 { margin: 2px 0 6px; font-size: 12.5px; color: var(--ink-3); }
+/* B5: the robot left – a clear block at the top of the trade page */
+.pd-rb { border: 1px solid var(--sk-edge); }
+.pd-rb-t { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; line-height: 1.4; }
+.pd-rb-t b { white-space: nowrap; }
+.pd-rb-b { display: flex; gap: 8px; flex-wrap: wrap; }
+.pd-rb-b .btn { flex: 1 1 140px; }
+.pd-rb-line { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12.5px; color: var(--ink-3); }
+/* B6: waiting buys = their own grey slice (free money keeps its own grey) */
+.al-c-wait { stroke: var(--ink-3); background: var(--ink-3); opacity: .7; }
+.al-row.is-wait { text-decoration: none; color: inherit; }
+.pf-split .pf-wait { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); }
+.al-rule { margin-top: 8px; }
+/* K2-16: Portfolio tabs Otevřené / Čekající / Historie show their counts on the phone too */
+.p2-tabs .seg-btn .seg-count { display: inline-grid; }
+/* K1-13: comparing with others = one closed block at the bottom of Historie */
+.hi-cm { margin: 18px 0 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.hi-cm > summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-3); min-height: 44px; }
+.hi-cm > summary::-webkit-details-marker { display: none; }
+.hi-cm[open] > summary .icon { transform: rotate(180deg); }
+/* K1-20: trade page – one primary, one secondary, the rest under "Další možnosti" */
+.pd-acts2 { display: grid; gap: 8px; }
+.pd-more { margin-top: 4px; }
+.pd-more > summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--ink-3); min-height: 44px; }
+.pd-more > summary::-webkit-details-marker { display: none; }
+.pd-more[open] > summary .icon { transform: rotate(180deg); }
+.pd-more .pd-acts { margin-top: 4px; }
+/* K3-08: names get two lines instead of a one-line cut; the money column keeps its width */
+.pf-row .pf-n b, .rb-c .rb-n { white-space: normal; overflow: hidden; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word; }
+.pf-row .pf-v { flex-shrink: 0; }

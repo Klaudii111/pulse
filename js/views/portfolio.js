@@ -23,6 +23,10 @@ import { ziRobot } from './home.js';
 
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 const sg = (v, c, dec = 0) => (v == null || !Number.isFinite(v) ? '–' : Math.abs(v) < 0.5 && dec === 0 ? `±${F.money(0, c, 0)}` : (v > 0 ? '+' : '') + F.money(v, c, dec));
+/* 1.15.0 (B1): "dnes" of a trade is null while its price has not arrived on this device -> a quiet "…", never a wrong ±0 */
+const UNK = '…';
+const sgT = (v, c) => (v == null ? UNK : sg(v, c));
+const toneT = (v) => (v == null ? 'is-unk' : tone(v));
 const nm = (p) => B.whatIs(p.sym, p.name).name;
 const levTxt = (lev) => B.levTxt(lev || 1);
 const dayStart = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return +d; };
@@ -60,6 +64,9 @@ export function unmount() { cleanup(); }
 /* ======================================================================================================
    PORTFOLIO
    ====================================================================================================== */
+/* the header's "Dnes": a number only when every open trade has its price (W.summary().todayReady) */
+const heroToday = (sm, h, td, c) => (sm.todayReady === false ? t('po.todayWait') : t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) }));
+const heroTodayCls = (sm, td) => (sm.todayReady === false ? 'is-unk' : `tone-${td.tone}`);
 function heroHtml(sm) {
   const h = P.head(sm);
   const c = h.ccy;
@@ -68,13 +75,13 @@ function heroHtml(sm) {
   return `<section class="pf-hero" id="pf-hero" aria-label="${F.esc(t('po.value'))}">
     <p class="d-k">${t('po.value')}${B.qh('PFVAL')}<span class="demo-chip">${t('badge.paperShort')}</span></p>
     <p class="pf-eq num" data-pf="eq" data-eq="${h.eq}">${F.money(h.eq, c, 0)}</p>
-    <p class="pf-chg num"><span class="tone-${td.tone}" data-pf="today">${t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) })}</span>
+    <p class="pf-chg num"><span class="${heroTodayCls(sm, td)}" data-pf="today">${heroToday(sm, h, td, c)}</span>
       <span class="pf-dot" aria-hidden="true">·</span><span class="tone-${tt.tone}" data-pf="total">${t('po.total', { v: tt.zero ? `±${F.money(0, c, 0)}` : F.esc(tt.text), p: F.mpct(h.totalPct, h.total) })}</span></p>
     <div class="pf-chart" id="pf-chart" role="img" aria-label="${F.esc(t('po.chartAria'))}"><p class="pchart-empty">${t('common.loading')}</p></div>
     <div class="pf-rrow"><div class="range-chips pf-ranges" role="group" aria-label="${F.esc(t('po.rangeAria'))}">${P.RANGES.map((r) => `<button type="button" class="range-chip" data-pf-range="${r.id}" aria-pressed="${r.id === P.curRange()}">${t(`po.r.${r.id}`)}</button>`).join('')}</div></div>
     <p class="pf-cnote num" id="pf-cnote"></p>
     <div class="pf-split num" data-free="${h.free}" data-inplay="${h.inPlay}">
-      <a href="#/penezenka"><small>${t('acc.inPlay')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b></a>
+      <a href="#/penezenka"><small>${t('acc.inPlay')}</small><b data-pf="inplay">${F.money(h.inPlay, c, 0)}</b>${sm.reserved > 0.5 ? `<small class="pf-wait num" data-pf="wait">${t('po.inWait', { v: F.money(Math.round(sm.reserved), c, 0) })}</small>` : ''}</a>
       <a href="#/penezenka"><small>${t('acc.free')}</small><b data-pf="free">${F.money(h.free, c, 0)}</b></a>
       <a href="#pf-open" data-action="pf-jump"><small>${t('po.nOpen')}</small><b data-pf="n">${h.n}</b></a>
     </div>
@@ -95,7 +102,7 @@ export function row(p, sm, { compact = false, sel = false } = {}) {
       ${compact ? '' : `<span class="pf-when"><span class="pf-src is-${f.src.kind}">${F.esc(srcText(f.src))}</span></span>`}</span>
     <span class="pf-v num">${compact ? '' : `<span class="pf-spark mi-spark ${tone(td ?? 0)}" data-f="spark" aria-hidden="true">${sp ? sparkline(sp, { w: 56, h: 18 }) : ''}</span>`}<b data-f="value">${F.money(f.value, c, 0)}</b>
       <span class="pf-res ${tone(p.pnl)}" data-f="pnl">${sg(p.pnl, c)} · ${F.mpct(p.pnlPct, p.pnl)}</span>
-      ${compact ? '' : `<small class="pf-td ${tone(td ?? 0)}" data-f="today">${t('po.rowToday', { v: sg(td ?? 0, c) })}</small>`}</span>
+      ${compact ? '' : `<small class="pf-td ${toneT(td)}" data-f="today">${t('po.rowToday', { v: sgT(td, c) })}</small>`}</span>
   </a>`;
 }
 
@@ -235,8 +242,9 @@ function partOne(ctx, sm) {
 
 /* ---------- part two: the donut ---------- */
 function donutSvg(al) {
-  const R = 80, C = 2 * Math.PI * R, GAP = al.kinds.length + (al.free > 0 ? 1 : 0) > 1 ? 2.5 : 0;
-  const parts = al.kinds.map((k) => ({ id: k.id, v: k.amount })).concat(al.free > 0 ? [{ id: 'free', v: al.free }] : []);
+  /* B6: what I hold now (value of the trades) + waiting buys (grey) + free money = the account value */
+  const parts = al.kinds.map((k) => ({ id: k.id, v: k.amount })).concat(al.wait.amount > 0 ? [{ id: 'wait', v: al.wait.amount }] : [], al.free > 0 ? [{ id: 'free', v: al.free }] : []);
+  const R = 80, C = 2 * Math.PI * R, GAP = parts.length > 1 ? 2.5 : 0;
   const tot = parts.reduce((a, x) => a + x.v, 0) || 1;
   let off = 0;
   const segs = parts.map((x, i) => {
@@ -250,22 +258,41 @@ function donutSvg(al) {
 function allocHtml(sm) {
   const c = sm.w.ccy;
   const al = A.allocation(sm);
-  const pc = (v) => (v > 0 && v < 1 ? '<1 %' : F.pct(v, 0));
+  /* whole percent that add up to 100; a slice with money that rounds to 0 % says "<1 %" */
+  const pc = (v, amt) => (amt > 0 && v < 1 ? `<${F.pct(1, 0)}` : F.pct(v, 0));
   if (!(al.inPlay > 0)) {
     return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
       <div class="al-empty">${il('04_portfolio', 72)}<p>${t('al.empty', { v: F.money(al.free, c, 0) })}</p><a class="btn btn-primary btn-small" href="#/dnes">${icon('signals', 'icon-sm')}${t('p2.toToday')}</a></div></section>`;
   }
   const sel = pfKind ? al.kinds.find((k) => k.id === pfKind) : null;
   const legend = al.kinds.map((k) => `<button type="button" class="al-row${pfKind === k.id ? ' is-sel' : ''}" data-action="al-kind" data-k="${k.id}" aria-pressed="${pfKind === k.id}">
-      <i class="al-dot al-c-${k.id}" aria-hidden="true"></i><span class="al-n">${t(`al.k.${k.id}`)}</span><b class="num" data-al-amt="${k.id}">${F.money(k.amount, c, 0)}</b><span class="al-p num">${pc(k.pct)}</span></button>`).join('')
-    + (al.free > 0 ? `<a class="al-row is-free" href="#/penezenka"><i class="al-dot al-c-free" aria-hidden="true"></i><span class="al-n">${t('al.k.free')}</span><b class="num" data-al-free>${F.money(al.free, c, 0)}</b><span class="al-p num">${pc(al.freePct)}</span></a>` : '');
+      <i class="al-dot al-c-${k.id}" aria-hidden="true"></i><span class="al-n">${t(`al.k.${k.id}`)}</span><b class="num" data-al-amt="${k.id}">${F.money(k.amount, c, 0)}</b><span class="al-p num">${pc(k.pct, k.amount)}</span></button>`).join('')
+    + (al.wait.amount > 0 ? `<a class="al-row is-wait" href="#/portfolio" data-action="al-wait"><i class="al-dot al-c-wait" aria-hidden="true"></i><span class="al-n">${t('al.k.wait')}</span><b class="num" data-al-wait>${F.money(al.wait.amount, c, 0)}</b><span class="al-p num">${pc(al.wait.pct, al.wait.amount)}</span></a>` : '')
+    + (al.free > 0 ? `<a class="al-row is-free" href="#/penezenka"><i class="al-dot al-c-free" aria-hidden="true"></i><span class="al-n">${t('al.k.free')}</span><b class="num" data-al-free>${F.money(al.free, c, 0)}</b><span class="al-p num">${pc(al.freePct, al.free)}</span></a>` : '');
   const second = sel ? `<div class="al-sub" id="al-sub"><p class="al-sub-h">${t('al.subH', { k: t(`al.k.${sel.id}`), v: F.money(sel.amount, c, 0) })}</p>
-      ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share)}</span></p>`).join('')}</div>` : '';
+      ${sel.items.map((x) => `<p class="al-item"><span>${F.esc(B.whatIs(x.sym, x.name).name)}${x.wait ? ` <small>${t('al.wait')}</small>` : ''}</span><b class="num">${F.money(x.amount, c, 0)}</b><span class="al-p num">${pc(x.share, x.amount)}</span></p>`).join('')}</div>` : '';
   return `<section class="al-card card" id="al" aria-labelledby="al-h"><h2 class="d-h" id="al-h">${t('al.h')}</h2>
-    <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.inPlay, c, 0) }))}">${donutSvg(al)}
-      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.inPlay, c, 0).length > 10 ? ' is-long' : ''}" data-al-inplay="${al.inPlay}">${F.money(al.inPlay, c, 0)}</b></div></div>
+    <div class="al-wrap"><div class="al-donut" role="img" aria-label="${F.esc(t('al.aria', { v: F.money(al.total, c, 0) }))}">${donutSvg(al)}
+      <div class="al-mid"><small>${t('al.mid')}</small><b class="num${F.money(al.total, c, 0).length > 10 ? ' is-long' : ''}" data-al-total="${al.total}">${F.money(al.total, c, 0)}</b></div></div>
       <div class="al-legend">${legend}</div></div>
-    ${second}<p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
+    ${second}<p class="al-note al-rule">${t('al.rule')}</p><p class="al-note">${t(pfKind ? 'al.noteSel' : 'al.note')}</p></section>`;
+}
+
+/* B6 live: the donut holds the trades' value now – its numbers and slices follow the prices (in place, no re-animation) */
+function patchAlloc(root, sm) {
+  const box = root.querySelector('#al');
+  if (!box || !box.querySelector('.al-svg')) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = allocHtml(sm);
+  const nw = tmp.querySelector('#al');
+  if (!nw) return;
+  const segsN = nw.querySelectorAll('.al-seg'), segsO = box.querySelectorAll('.al-seg');
+  if (segsN.length !== segsO.length) { box.replaceWith(nw); return; }
+  segsN.forEach((n, i) => { ['stroke-dasharray', 'stroke-dashoffset', 'style'].forEach((k) => { const v = n.getAttribute(k); if (segsO[i].getAttribute(k) !== v) segsO[i].setAttribute(k, v); }); });
+  const txt = (el) => [...el.querySelectorAll('.al-legend b, .al-legend .al-p, .al-mid b, .al-sub b, .al-sub .al-p')];
+  const a = txt(nw), b = txt(box);
+  if (a.length !== b.length) { box.replaceWith(nw); return; }
+  a.forEach((n, i) => { if (b[i].textContent !== n.textContent) b[i].textContent = n.textContent; });
 }
 
 export function render(ctx) {
@@ -287,8 +314,10 @@ function eqSvg(box, h, c) {
   const first = h.base != null ? h.base : vs[0], last = vs[vs.length - 1];
   if (h.base != null) vs.push(h.base);
   let lo = Math.min(...vs), hi = Math.max(...vs);
-  /* a calm scale: a few crowns never fill the whole height (at least 0,2 % of the value) */
-  const minSpan = Math.abs(last) * 0.002 || 1;
+  /* a calm scale: a few crowns never fill the whole height – K1-15: at least ±1 % of the account value around the day's
+     start (Dnes) / 0,4 % of the value otherwise, so a 0,3 % move looks small */
+  const minSpan = Math.abs(last) * (h.range === 'd' ? 0.02 : 0.004) || 1;
+  if (h.range === 'd' && h.base != null) { lo = Math.min(lo, h.base - minSpan / 2); hi = Math.max(hi, h.base + minSpan / 2); }
   if (hi - lo < minSpan) { const m = (hi + lo) / 2; lo = m - minSpan / 2; hi = m + minSpan / 2; }
   const pad = { l: 2, r: 2, t: 10, b: 18 };
   const t0 = pts[0].t, t1 = pts[pts.length - 1].t, span = Math.max(1, t1 - t0);
@@ -327,7 +356,7 @@ function noteHtml(h, c) {
   const n = document.getElementById('pf-cnote');
   if (!n) return;
   const tn = D.moneyTone(h.change, c, h.changePct);
-  const parts = [`<span class="tone-${tn.tone}">${t(`po.ch.${h.range}`, { v: tn.zero ? `±${F.money(0, c, 0)}` : F.esc(tn.text), p: F.mpct(h.changePct, h.change) })}</span>`];
+  const parts = [h.range === 'd' && h.unk ? `<span class="is-unk">${t('po.todayWait')}</span>` : `<span class="tone-${tn.tone}">${t(`po.ch.${h.range}`, { v: tn.zero ? `±${F.money(0, c, 0)}` : F.esc(tn.text), p: F.mpct(h.changePct, h.change) })}</span>`];
   if (h.short) parts.push(F.esc(t('po.since', { d: F.dm(new Date(h.made)) })));
   if (h.approx) parts.push(`<span class="pf-approx">${F.esc(t('po.approx', { s: h.missing.join(', ') }))}</span>`);
   n.innerHTML = parts.join(' · ');
@@ -355,7 +384,7 @@ function drawChart(ctx) {
   const flows = (sm.w.cash || []).filter((x) => (x.k === 'dep' || x.k === 'wd') && x.at > h.pts[0].t).reduce((a, x) => a + x.amount, 0);
   h.change = h.pts[lastI].v - h.pts[0].v - flows; h.changePct = h.change / (h.pts[0].v || 1) * 100;
   /* "Dnes" on the chart = the header's "Dnes" (ONE number: W.summary().today); the dashed line = where the day started */
-  if (h.range === 'd') { const hd = P.head(sm); h.change = hd.today; h.changePct = hd.todayPct; h.base = sm.equity - sm.today; } else h.base = null;
+  if (h.range === 'd') { const hd = P.head(sm); if (sm.todayReady === false) { h.unk = true; } else h.unk = false; h.change = hd.today; h.changePct = hd.todayPct; h.base = sm.equity - sm.today; } else h.base = null;
   eqSvg(document.getElementById('pf-chart'), h, sm.w.ccy);
   noteHtml(h, sm.w.ccy);
 }
@@ -371,7 +400,7 @@ function patchRows(root, sm) {
       if (vEl && !matchMedia('(prefers-reduced-motion: reduce)').matches) { vEl.classList.remove('flash-up', 'flash-down'); void vEl.offsetWidth; vEl.classList.add(f.value >= +(vEl.dataset.v || f.value) ? 'flash-up' : 'flash-down'); }
       if (vEl) vEl.dataset.v = String(f.value);
       const pn = set('pnl', `${sg(p.pnl, c)} · ${F.mpct(p.pnlPct, p.pnl)}`); if (pn) pn.className = `pf-res ${tone(p.pnl)}`;
-      const td = set('today', t('po.rowToday', { v: sg(f.today ?? 0, c) })); if (td) td.className = `pf-td ${tone(f.today ?? 0)}`;
+      const td = set('today', t('po.rowToday', { v: sgT(f.today, c) })); if (td) td.className = `pf-td ${toneT(f.today)}`;
       el.classList.remove('pf-t-up', 'pf-t-down', 'pf-t-flat'); el.classList.add(`pf-t-${tone(p.pnl)}`);
     });
   });
@@ -382,7 +411,7 @@ function patchHero(root, sm) {
   const set = (k, v) => { const n = root.querySelector(`[data-pf="${k}"]`); if (n && n.innerHTML !== v) n.innerHTML = v; return n; };
   const e = set('eq', F.money(h.eq, c, 0)); if (e) e.dataset.eq = String(h.eq);
   const td = D.moneyTone(h.today, c, h.todayPct), tt = D.moneyTone(h.total, c, h.totalPct);
-  const a = set('today', t('po.today', { v: td.zero ? `±${F.money(0, c, 0)}` : F.esc(td.text), p: F.mpct(h.todayPct, h.today) })); if (a) a.className = `tone-${td.tone}`;
+  const a = set('today', heroToday(sm, h, td, c)); if (a) a.className = heroTodayCls(sm, td);
   const b = set('total', t('po.total', { v: tt.zero ? `±${F.money(0, c, 0)}` : F.esc(tt.text), p: F.mpct(h.totalPct, h.total) })); if (b) b.className = `tone-${tt.tone}`;
   set('inplay', F.money(h.inPlay, c, 0)); set('free', F.money(h.free, c, 0)); set('n', String(h.n));
 }
@@ -428,7 +457,7 @@ export function mount(el, ctx) {
     const sm = W.summary(ctx.data);
     /* a trade closed / filled meanwhile -> the lists change: re-render once */
     if (sm.rows.map((p) => p.id).sort().join(',') !== shownIds) { ctx.rerender({ soft: true }); return; }
-    patchHero(el, sm); patchRows(el, sm); patchSigs(el, ctx); drawChart(ctx);
+    patchHero(el, sm); patchRows(el, sm); patchSigs(el, ctx); patchAlloc(el, sm); drawChart(ctx);
   };
   document.addEventListener('pulse:live', onLive);
   off.push(() => document.removeEventListener('pulse:live', onLive));
@@ -460,16 +489,20 @@ function kolikHtml(p, sm) {
   const rows = [
     kvRow(t('pd.k.dep'), F.money(p.margin, c, 0), { hint: t('pd.k.depS'), key: 'dep' }),
     kvRow(t('pd.k.lev'), F.esc(levTxt(p.lev)), { hint: p.lev > 1 ? t('pd.k.levS', { v: p.lev }) : t('pd.k.lev1S'), key: 'lev' }),
-    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>` : ''}`, { key: 'size' }),
+    kvRow(t('pd.k.size'), `${F.money(p.notional, c, 0)}${f.qty != null && f.qty > 0 ? `<small class="pd-q" data-d="units">${t('pd.k.units', { q: F.num(f.qty, f.qty >= 100 ? 0 : f.qty >= 1 ? 2 : 4) })}</small>${f.fx !== 1 ? `<small class="pd-q pd-fx" data-d="fx">${t('pd.k.fx', { a: F.ccyWrap('1', f.fxFrom), b: F.ccyWrap(F.num(f.fx, f.fx >= 10 ? 1 : f.fx >= 0.1 ? 3 : 4), c) })}</small>` : ''}` : ''}`, { key: 'size' }),
     kvRow(t(p.side === 'SELL' ? 'pd.k.sellPx' : 'pd.k.buyPx'), pxC(p.sym, p.entry), { key: 'entry' }),
     f.closed ? kvRow(t(p.side === 'SELL' ? 'pd.k.buyBack' : 'pd.k.exitPx'), pxC(p.sym, p.exit), { key: 'exit' }) : kvRow(t('pd.k.px'), pxC(p.sym, f.px), { key: 'px' }),
     kvRow(t(f.closed ? 'pd.k.valEnd' : 'pd.k.val'), F.money(f.value, c, 0), { key: 'value', cls: 'is-strong' }),
     kvRow(t(f.closed ? 'pd.k.resEnd' : 'pd.k.res'), `<span class="${tone(p.pnl)}">${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})</span>`, { key: 'pnl', cls: 'is-strong' }),
-    f.closed ? '' : kvRow(t('pd.k.today'), `<span class="${tone(f.today ?? 0)}">${sg(f.today ?? 0, c)}</span>`, { hint: t('pd.k.todayS'), key: 'today' }),
+    f.closed ? '' : kvRow(t('pd.k.today'), `<span class="${toneT(f.today)}">${sgT(f.today, c)}</span>`, { hint: t('pd.k.todayS'), key: 'today' }),
     kvRow(t('pd.k.fees'), `${t('pd.k.feesV', { s: F.money(f.spread, c, f.spread < 10 && c === 'CZK' ? 0 : f.spread < 10 ? 2 : 0), n: F.money(f.swap, c, f.swap > 0 && f.swap < 10 ? 2 : 0) })}${f.closed && p.fee > 0.5 ? `<small class="pd-q">${t('term.convFee', { v: F.money(p.fee, c, 0) })}</small>` : ''}`, { hint: t(p.lev > 1 ? 'pd.k.feesS' : 'pd.k.feesS1'), key: 'fees' }),
   ];
   if (!f.closed) {
-    rows.push(kvRow(t('pd.k.atStop', { v: p.sl > 0 ? pxOf(p.sym, p.sl) : '–' }), p.sl > 0 ? `<span class="${tone(f.atStop)}">${sg(f.atStop, c)}</span>` : `<span class="pd-none">${t('pd.k.noStop')}</span>`, { key: 'atStop' }));
+    if (f.endPx != null) {
+      /* B3: leverage ends the trade before the stop – this row replaces "Při stopu"; the stop stays as a quiet line */
+      rows.push(kvRow(`${t('pd.k.atEnd', { v: pxOf(p.sym, f.endPx) })}${B.qh('LEVEND')}`, `<span class="down">${sg(f.atEnd, c)}</span>`, { hint: t('pd.k.atEndS', { m: F.num(100 / p.lev, 100 / p.lev >= 10 ? 0 : 1) }), key: 'atEnd', cls: 'is-end' }));
+      if (p.sl > 0) rows.push(`<p class="pd-stop2 num" data-k="stop2">${t('pd.k.stop2', { v: pxOf(p.sym, p.sl) })}</p>`);
+    } else rows.push(kvRow(t('pd.k.atStop', { v: p.sl > 0 ? pxOf(p.sym, p.sl) : '–' }), p.sl > 0 ? `<span class="${tone(f.atStop)}">${sg(f.atStop, c)}</span>` : `<span class="pd-none">${t('pd.k.noStop')}</span>`, { key: 'atStop' }));
     rows.push(kvRow(t('pd.k.atTarget', { v: p.tp > 0 ? pxOf(p.sym, p.tp) : '–' }), p.tp > 0 ? `<span class="${tone(f.atTarget)}">${sg(f.atTarget, c)}</span>` : `<span class="pd-none">${t('pd.k.noTarget')}</span>`, { key: 'atTarget' }));
   } else {
     rows.push(kvRow(t('pd.k.why'), F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`)), { key: 'why' }));
@@ -483,6 +516,8 @@ function sigSentence(ctx, p, s) {
   const f = P.sourceOf(p, W.get());
   if (f.kind === 'own') return t('pd.st.own');
   const rb = P.robotState(ctx.data, p);
+  /* B5: the robot already left -> never "nemusíš nic dělat" (the block at the top says what to decide) */
+  if (rb?.k === 'closed') return t('pd.st.robotOut');
   if (!s) return t(rb?.k === 'holds' ? 'pd.st.holds0' : 'pd.st.noSig');
   const ended = s.status !== 'open' || (s.intraday_hit && !s.live_hit);
   if (ended) return t('pd.st.ended', { why: t(`pd.end.${['target', 'stop'].includes(s.status) ? s.status : s.intraday_hit === 'target' || s.intraday_hit === 'stop' ? s.intraday_hit : 'time'}`) });
@@ -516,11 +551,14 @@ function dnesHtml(ctx, p, sm) {
     out.push(`<div class="pd-range"><p class="pd-sub">${t(dr.today ? 'pd.d.range' : 'pd.d.rangeLast', { d: F.dm(new Date(dr.day)) })}</p>
       <div class="pd-rrow num"><span>${pxOf(p.sym, dr.lo)}</span>${bar(dr.lo, dr.hi, Math.max(dr.lo, Math.min(dr.hi, f.px)), { cls: 'is-range' })}<span>${pxOf(p.sym, dr.hi)}</span></div></div>`);
   }
-  if (p.sl > 0 || p.tp > 0) {
-    const way = p.sl > 0 && p.tp > 0;
-    out.push(`<div class="pd-way"><p class="pd-sub">${t('pd.d.way')}</p>
-      ${way ? `<div class="pd-rrow num"><span class="down">${t('lad.stop')}</span>${bar(p.sl, p.tp, f.px, { entry: p.entry, cls: 'is-way' })}<span class="up">${t('lad.target')}</span></div>` : ''}
-      <p class="pd-dist num">${p.tp > 0 ? `<span class="up">${t('pd.d.toTarget', { v: F.pct(f.toTarget, 1), m: sg(f.atTarget - p.pnl, c) })}</span>` : ''}${p.sl > 0 ? `<span class="down">${t('pd.d.toStop', { v: F.pct(f.toStop, 1), m: sg(f.atStop - p.pnl, c) })}</span>` : ''}</p></div>`);
+  /* B3 / B4: the lower end is the leverage end when it comes first; only distances in % from the price now here – the money
+     sits once in "Kolik mám" (Při cíli / Při stopu = the whole result since I bought) */
+  if (f.low > 0 || p.tp > 0) {
+    const end = f.endPx != null;
+    const way = f.low > 0 && p.tp > 0;
+    out.push(`<div class="pd-way"><p class="pd-sub">${t(end ? 'pd.d.wayEnd' : 'pd.d.way')}</p>
+      ${way ? `<div class="pd-rrow num"><span class="down">${t(end ? 'pd.lv.end' : 'lad.stop')}</span>${bar(f.low, p.tp, f.px, { entry: p.entry, cls: 'is-way' })}<span class="up">${t('lad.target')}</span></div>` : ''}
+      <p class="pd-dist num">${p.tp > 0 ? `<span class="up">${t('pd.d.toTarget', { v: F.pct(f.toTarget, 1) })}</span>` : ''}${end ? `<span class="down">${t('pd.d.toEnd', { v: F.pct(f.toEnd, 1) })}</span>` : p.sl > 0 ? `<span class="down">${t('pd.d.toStop', { v: F.pct(f.toStop, 1) })}</span>` : ''}</p></div>`);
   }
   out.push(kvRow(t('pd.d.held'), F.esc(dur(f.held)), { key: 'held' }));
   if (s?.exit_date && f.src.kind !== 'own') out.push(kvRow(t('pd.d.exit'), F.esc(`${F.weekday(s.exit_date)} ${F.dm(s.exit_date)}`), { hint: t('pd.d.exitS'), key: 'exit' }));
@@ -580,7 +618,11 @@ function actionsHtml(ctx, p, sm, closed) {
   items.push(`<button type="button" class="btn btn-secondary" data-action="pd-share" data-id="${F.esc(p.id)}">${icon('share', 'icon-sm')}<span>${t('pd.a.share')}</span></button>`);
   if (closed) items.push(`<a class="btn btn-secondary" href="#/historie">${icon('history', 'icon-sm')}<span>${t('hi.title')}</span></a>`);
   const bar0 = closed ? '' : `<div class="pd-cta" id="pd-cta"><button type="button" class="btn btn-primary btn-block pd-close" data-action="pos-close" data-id="${F.esc(p.id)}"><span>${t('pd.a.close')}</span><b class="num" data-d="ctaV">${sg(p.pnl, c)}</b></button></div>`;
-  return `${bar0}<section class="pd-acts" aria-label="${F.esc(t('pd.acts'))}">${items.join('')}</section>`;
+  if (closed) return `${bar0}<section class="pd-acts" aria-label="${F.esc(t('pd.acts'))}">${items.join('')}</section>`;
+  /* K1-20: one primary (Ukončit obchod, the bar), one secondary (Upravit stop / cíl), the rest under a closed "Další možnosti" */
+  const [lv, ...rest] = items;
+  return `${bar0}<section class="pd-acts2" aria-label="${F.esc(t('pd.acts'))}">${lv.replace('class="btn btn-secondary"', 'class="btn btn-secondary btn-block"')}
+    <details class="pd-more"><summary>${t('pd.moreOpts')}${icon('chev-down', 'icon-xs')}</summary><div class="pd-acts">${rest.join('')}</div></details></section>`;
 }
 
 /* the side list on desktop (same rows as Portfolio, compact) */
@@ -589,6 +631,20 @@ function sideList(sm, id) {
   return `<aside class="pd-side" aria-label="${F.esc(t('zi.open'))}"><p class="d-h">${t('zi.open')}<span class="num"> · ${rows.length}</span></p>
     <div class="pf-list">${rows.map((p) => row(p, sm, { compact: true, sel: p.id === id })).join('')}</div>
     <a class="hs-row" href="#/portfolio">${icon('wallet', 'icon-xs')}<span>${t('pd.toPortfolio')}</span>${icon('chev-right', 'icon-xs')}</a></aside>`;
+}
+
+/* B5: the robot ended its own trade of this signal and mine still runs -> say it at the top, with "Ukončit taky" /
+   "Nechat běžet" (the choice is remembered per trade: then one small grey line). Never "nemusíš nic dělat" for such a trade. */
+function robotLeftHtml(ctx, p, sm) {
+  const x = P.robotExits(ctx.data, sm.w).find((e) => e.pos.id === p.id);
+  if (!x) return '';
+  const c = sm.w.ccy;
+  const when = x.at ? whenText(x.at) : '';
+  const how = [x.exit ? t('pd.rb.at', { v: pxC(p.sym, x.exit) }) : '', x.pnlPct != null ? `(${F.spct(x.pnlPct, 1)})` : ''].filter(Boolean).join(' ');
+  const head = t('pd.rb.head', { d: when, how: how ? ` ${how}` : '' });
+  if (P.isFollowOff(p.id)) return `<p class="pd-rb-line" id="pd-rb">${icon('robot', 'icon-xs')}<span>${F.esc(t('pd.rb.kept', { h: head }))}</span></p>`;
+  return `<section class="pd-rb card" id="pd-rb" aria-live="polite"><p class="pd-rb-t">${icon('robot', 'icon-sm')}<span>${F.esc(head)} <b class="num ${tone(p.pnl)}" data-d="rbMine">${F.esc(t('pd.rb.mine', { v: sg(p.pnl, c) }))}</b></span></p>
+    <div class="pd-rb-b"><button type="button" class="btn btn-primary" data-action="pos-close" data-id="${F.esc(p.id)}">${t('pd.rb.close')}</button><button type="button" class="btn btn-ghost" data-action="pd-follow-off" data-id="${F.esc(p.id)}">${t('pd.rb.keep')}</button></div></section>`;
 }
 
 function topHtml(p, sm, closed) {
@@ -602,7 +658,7 @@ function topHtml(p, sm, closed) {
   return `<section class="pd-top card pf-t-${tone(p.pnl)}"><p class="d-k">${t('pd.valK')}</p>
     <p class="pd-val num" data-d="value">${F.money(f.value, c, 0)}</p>
     <p class="pd-res num"><span class="${tone(p.pnl)}" data-d="pnl">${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})</span><span class="pd-res-l">${t('pd.resK')}</span></p>
-    <p class="pd-res num"><span class="${tone(f.today ?? 0)}" data-d="today">${sg(f.today ?? 0, c)}</span><span class="pd-res-l">${t('pd.todayK')}</span></p></section>`;
+    <p class="pd-res num"><span class="${toneT(f.today)}" data-d="today">${sgT(f.today, c)}</span><span class="pd-res-l">${t('pd.todayK')}</span></p></section>`;
 }
 
 function chartHtml(p, closed, data) {
@@ -665,6 +721,7 @@ export function renderTrade(ctx) {
   return `<header class="page-head pd-head"><div>${backLink(ctx)}<div class="pd-title">${monogram(p.sym, w.name)}<div><h1 class="page-title pd-name">${F.esc(w.name)}</h1>
     <p class="page-sub">${F.esc(sub)}</p><p class="pd-when">${F.esc(t(p.side === 'SELL' ? 'po.soldAt' : 'po.boughtAt', { d: whenText(p.openedAt) }))}${closed ? ` · ${F.esc(t('pd.endedAt', { d: whenText(p.closedAt) }))}` : ''}</p></div></div></div></header>
   <div class="pd-grid">${closed ? '' : sideList(sm, p.id)}<div class="pd-main" data-pd="${F.esc(p.id)}">
+    ${closed ? '' : robotLeftHtml(ctx, p, sm)}
     ${topHtml(p, sm, closed)}
     ${chartHtml(p, closed, ctx.data)}
     <section class="pd-sec card" id="pd-kolik"><h2 class="d-h">${t(closed ? 'pd.kolikEnd' : 'pd.kolik')}</h2><div data-d="kolik">${kolikHtml(p, sm)}</div></section>
@@ -698,6 +755,8 @@ export function mountTrade(el, ctx) {
     if (x.tp > 0) lv.push({ v: x.tp, label: t('lad.target'), cls: 'up' });
     lv.push({ v: x.entry, label: t(f.order ? 'pd.lv.limit' : 'pd.lv.entry'), cls: 'ent' });
     if (x.sl > 0) lv.push({ v: x.sl, label: t('lad.stop'), cls: 'down' });
+    /* B3: where leverage ends the trade (before the stop) – the same level as in "Kolik mám" */
+    if (!closed && !f.order) { const e = W.endLevel(x); if (e > 0 && (!(x.sl > 0) || (x.side === 'SELL' ? -1 : 1) * (e - x.sl) > 0)) lv.push({ v: e, label: t('pd.lv.end'), cls: 'down' }); }
     if (closed && x.exit > 0) lv.push({ v: x.exit, label: t('pd.lv.exit'), cls: 'ext' });
     return lv;
   };
@@ -740,7 +799,7 @@ export function mountTrade(el, ctx) {
       if (vEl && !matchMedia('(prefers-reduced-motion: reduce)').matches) { vEl.classList.remove('flash-up', 'flash-down'); void vEl.offsetWidth; vEl.classList.add(fx.value >= +(vEl.dataset.v || fx.value) ? 'flash-up' : 'flash-down'); }
       if (vEl) vEl.dataset.v = String(fx.value);
       const a = set('pnl', `${sg(p.pnl, c)} (${F.mpct(p.pnlPct, p.pnl)})`); if (a) a.className = tone(p.pnl);
-      const b = set('today', sg(fx.today ?? 0, c)); if (b) b.className = tone(fx.today ?? 0);
+      const b = set('today', sgT(fx.today, c)); if (b) b.className = toneT(fx.today);
       set('ctaV', sg(p.pnl, c));
       const q = W.priceOf(p.sym, ctx.data);
       const pxEl = el.querySelector('[data-d="px"]');
@@ -833,6 +892,8 @@ export const actions = {
   'pd-more'(el, ev, ctx) { const g = P.find(ctx.data, el.dataset.id); if (g?.open) buyMore(ctx, g.row); },
   'pd-term'(el) { store.set('termSym', el.dataset.sym); store.set('termView', 'one'); window.__pulseGo(`#/terminal?k=${encodeURIComponent(el.dataset.sym)}`); },
   'pd-share'(el, ev, ctx) { share(ctx, el.dataset.id); },
+  'al-wait'(el, ev, ctx) { ev && ev.preventDefault && ev.preventDefault(); store.set('pfMode', 'mine'); store.set('pfTab', 'wait'); pfKind = null; haptic(); ctx.rerender({ soft: true }); setTimeout(() => { const n = document.getElementById('pf-p1'); if (n) n.scrollIntoView({ block: 'start' }); }, 60); },
+  'pd-follow-off'(el, ev, ctx) { P.followOff(el.dataset.id); haptic(); ctx.rerender({ soft: true }); },
   'pf-jump'(el, ev, ctx) {
     /* "Otevřené obchody" tile: show my open trades (switch / tab / filter reset when needed), then scroll to them */
     const go = () => { const n = document.getElementById('pf-open'); if (n) n.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); };
@@ -887,7 +948,7 @@ export function dnesBlock(ctx) {
   const td = D.moneyTone(sm.todayOpen, c, null);
   const ords = (sm.w.orders || []).map((o) => ordRow(o, ctx.data, c)).join('');
   const head = `<a class="pf-sum" href="#/portfolio" id="d-pf"><span class="pf-sum-l"><b>${t('po.sumK', { n: h.n })}</b><small class="num">${t('po.sumS', { a: F.money(sm.used, c, 0) })}</small></span>
-    <span class="pf-sum-v num"><b class="tone-${open.tone}">${open.zero ? `±${F.money(0, c, 0)}` : F.esc(open.text)}</b><small class="tone-${td.tone}">${t('po.rowToday', { v: sg(sm.todayOpen, c) })}</small></span>${icon('chev-right', 'icon-xs')}</a>`;
+    <span class="pf-sum-v num"><b class="tone-${open.tone}">${open.zero ? `±${F.money(0, c, 0)}` : F.esc(open.text)}</b><small class="${sm.todayReady === false ? 'is-unk' : `tone-${td.tone}`}">${t('po.rowToday', { v: sm.todayReady === false ? UNK : sg(sm.todayOpen, c) })}</small></span>${icon('chev-right', 'icon-xs')}</a>`;
   const max = 4;
   const more = rows.length > max ? `<a class="d-more" href="#/portfolio">${t('po.allN', { n: rows.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
   return `${head}${rows.length || ords ? `<div class="pf-list">${rows.slice(0, max).map((p) => row(p, sm)).join('')}${ords}</div>${more}` : `<p class="d-empty">${t('d.mine0')}</p>`}`;
