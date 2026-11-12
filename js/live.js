@@ -242,17 +242,25 @@ function mark() {
 /* ---------- 1.9.0: real-time stream (Server-Sent Events, GET /api/stream?keys=…) ----------
    ~1 update per second per symbol while it runs; quotes.json polling keeps running underneath (flags, previous close)
    and is the fallback when the stream fails (reconnect with backoff) or on a GitHub Pages copy (no stream there). */
-let es = null, esKey = '', esFails = 0, esTimer = null, streamAt = 0;
+let es = null, esKey = '', esFails = 0, esTimer = null, streamAt = 0, esWaitUntil = 0;
+/* 1.15.0 stream hygiene (production allows 40 streams per IP): at most ONE EventSource per tab; closed ~30 s after the
+   tab is hidden and reopened on return; a refused stream (429 / any non-200 -> the browser closes it for good) waits
+   30–60 s, then longer (max 5 min), and prices meanwhile come from quotes.json polling – never a tight retry loop. */
+const HIDE_CLOSE_MS = 30000;
+let hideTimer = null;
+const backoffMs = (n) => Math.min(300000, (30000 + Math.random() * 30000) * 2 ** Math.min(3, Math.max(0, n - 1)));
 const streamUrl = () => (CONFIG.LIVE?.STREAM_URL && !location.hostname.endsWith('github.io') ? CONFIG.LIVE.STREAM_URL : '');
 export const streaming = () => !!es && Date.now() - streamAt < 30000;
 function closeStream() { if (es) { try { es.close(); } catch { /* ignore */ } } es = null; esKey = ''; }
 export function syncStream() {
-  if (!streamUrl() || typeof EventSource === 'undefined' || document.visibilityState !== 'visible') { closeStream(); return; }
+  if (!streamUrl() || typeof EventSource === 'undefined') { closeStream(); return; }
+  if (document.visibilityState !== 'visible') return;   // hidden: never opens; an open one is closed by the ~30 s hide timer
   const keys = symbols().slice(0, 80).join(',');
   if (!keys) { closeStream(); return; }
   if (es && keys === esKey) return;
+  if (!es && Date.now() < esWaitUntil) return;   // backing off after a refused stream: the timer reopens it
   closeStream();
-  clearTimeout(esTimer);
+  clearTimeout(esTimer); esTimer = null;
   esKey = keys;
   let got = false;
   try { es = new EventSource(`${streamUrl()}?keys=${encodeURIComponent(keys)}`); } catch { es = null; return; }
@@ -263,17 +271,24 @@ export function syncStream() {
     takeMeta(d.k, d);
     if (take(d.k, +d.p, toMs(d.t) || Date.now())) { dataAt = Math.max(dataAt, toMs(d.t) || Date.now()); mark(); }
   };
+  const mine = es;
   es.onerror = () => {
-    /* the browser retries by itself; when it keeps failing, give up for a while (backoff) and live on quotes.json */
-    if (got) return;
+    if (es !== mine) return;
+    /* CONNECTING = the browser retries by itself (network blip, server "retry:") – after 3 failures without any data
+       we stop it; CLOSED = the server refused (429 / 5xx): the browser never retries -> our own backoff */
+    const closed = mine.readyState === 2;
+    if (got && !closed) return;
     esFails++;
-    if (esFails >= 3) {
+    if (closed || esFails >= 3) {
       closeStream();
-      const wait = Math.min(300000, 15000 * 2 ** Math.min(4, esFails - 3));
-      esTimer = setTimeout(syncStream, wait);
+      const wait = backoffMs(esFails);
+      esWaitUntil = Date.now() + wait;
+      clearTimeout(esTimer);
+      esTimer = setTimeout(() => { esTimer = null; esWaitUntil = 0; syncStream(); }, wait);
     }
   };
 }
+export const streamState = () => ({ open: !!es, readyState: es ? es.readyState : null, fails: esFails, waitMs: Math.max(0, esWaitUntil - Date.now()) });
 
 function stop() {
   clearTimeout(pollTimer); pollTimer = null; polledKey = '';
@@ -289,7 +304,12 @@ function start() {
 /* Call once at boot. `dataGetter` returns the app's live data object. */
 export function initLive(dataGetter) {
   getData = dataGetter;
-  document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? start() : stop()));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { clearTimeout(hideTimer); hideTimer = null; start(); return; }
+    /* a quick look at another app keeps the stream; ~30 s hidden closes it (and the polling) */
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { hideTimer = null; if (document.visibilityState !== 'visible') stop(); }, HIDE_CLOSE_MS);
+  });
   start();
 }
 
