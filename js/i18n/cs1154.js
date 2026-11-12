@@ -42,4 +42,6 @@ export default {
   'pd.rs': 'Proč koupit',
   /* fixer D */
   'cf.fee': 'po poplatku za převod měny {v} (0,5 % z výsledku)',
+  'tk.clamp': 'Styl by vložil {w}, volných peněz máš {f} – vkládáš {v}.',
+  'tk.clampOwn': 'Zadal jsi {w}, volných peněz máš {f} – vkládáš {v}.',
 };

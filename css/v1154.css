@@ -34,3 +34,5 @@
 /* K3-08: names get two lines instead of a one-line cut; the money column keeps its width */
 .pf-row .pf-n b, .rb-c .rb-n { white-space: normal; overflow: hidden; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word; }
 .pf-row .pf-v { flex-shrink: 0; }
+/* fixer D (P2-02): the style's deposit was cut to the free money */
+.tk-clamp-m { color: var(--ink-2); font-size: 12.5px; line-height: 1.35; max-width: 34ch; }

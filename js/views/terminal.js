@@ -592,7 +592,13 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   const sizeSig = () => (useSig ? sig : { symbol: sym, action: side, entry: basePx(), stop: st.sl });
   /* 1.13.2: the profile of this ticket (risk + leverage) – starts at mine, a tap on a column changes it only here */
   const stakeAt = (lev) => D.stakeFor(sizeSig(), { prof: st.prof, lev, px: basePx() });
-  const resize = () => { if (!st.auto) return; st.amount = stakeAt(st.lev); if (sm.free >= minAmt && st.amount > sm.free) st.amount = Math.floor(sm.free); };
+  /* P2-02: when the style's deposit is cut to the free money, remember both, so the ticket says it (pxLine) */
+  const resize = () => {
+    if (!st.auto) return;
+    st.amount = stakeAt(st.lev); st.clamp = null;
+    const fr = Math.max(0, Math.floor(W.summary(ctx.data).free));
+    if (fr >= minAmt && st.amount > fr) { st.clamp = { want: st.amount, to: fr, own: false }; st.amount = fr; }
+  };
   resize();
   const stake = st.amount;
   const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
@@ -630,7 +636,10 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       : isLim() ? t('tk.pxLim' + S, { v: pxC(sym, st.limit || 0) })
       : t('tk.pxNow', { v: pxC(sym, fillPx()) });
     const fr = short() ? `<span class="tk-short-m">${t('tk.freeShort', { v: money(freeNow(), c) })}</span>` : '';
-    return `${fr}<span>${v}</span>`;
+    /* P2-02 / P1-02: the deposit was cut to the free money -> one small line (gone as soon as the amount changes) */
+    const cl = !short() && st.clamp && st.clamp.to === st.amount && st.clamp.want > st.amount
+      ? `<span class="tk-clamp-m">${t(st.clamp.own ? 'tk.clampOwn' : 'tk.clamp', { w: money(st.clamp.want, c), f: money(freeNow(), c), v: money(st.amount, c) })}</span>` : '';
+    return `${fr}${cl}<span>${v}</span>`;
   };
   const blocked = () => false;
   /* the at-open line: when it buys, the protection and until when the order waits (the instrument's own session) */
@@ -709,7 +718,19 @@ function ticket(ctx, side, sym, sig, opt = {}) {
       };
       document.addEventListener('pulse:prof', onStyle);
       /* A8: after "Dobít peněženku" the ticket below refreshes (button back to "Koupit za …") */
-      const onWal = () => { if (!root.isConnected) { document.removeEventListener('pulse:wallet', onWal); return; } upd(); };
+      const onWal = () => {
+        if (!root.isConnected) { document.removeEventListener('pulse:wallet', onWal); return; }
+        /* P1-02: after a top-up made from this ticket an amount above the free money becomes the free money (whole units) */
+        if (st.topup && short()) {
+          const fr = freeNow();
+          if (fr >= minAmt) {
+            if (st.auto) resize();
+            else { st.clamp = { want: st.amount, to: fr, own: true }; st.amount = fr; }
+            st.topup = false;
+          }
+        }
+        upd();
+      };
       document.addEventListener('pulse:wallet', onWal);
       const upd = () => {
         root.querySelector('#tk-out').innerHTML = preview();
@@ -752,7 +773,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         const dt = ev.target.closest('[data-tkdet]'); if (dt) st.detOpen = !dt.parentElement.open;
         const goB = ev.target.closest('[data-go]');
         if (!goB || goB.disabled) return;
-        if (short()) { loadSheet(ctx, 'dep'); return; }
+        if (short()) { st.topup = true; loadSheet(ctx, 'dep'); return; }
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
         if (mktOpen()) {
           const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: capPx(), amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen && useSig ? sig.id : null, valid: 'sess', sig: sigW, atOpen: true });
