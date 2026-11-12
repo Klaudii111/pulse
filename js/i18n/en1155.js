@@ -37,5 +37,6 @@ export default {
   'den.s.resT': 'Result so far and in the test', 'den.s.styles': 'The robot’s styles in the test', 'den.s.note': 'The robot’s note',
   'den.style': '{m}: in the {p} test profit against loss {pf} ({n} trades, {w} won); chance the style makes money at all: {j}.',
   'den.czNote': 'The robot writes its own notes in Czech only.', 'den.czShow': 'Show the robot’s commentary (in Czech)',
+  'den.safe': 'After {n} trades the robot stops itself when profit vs loss is below {pf} or the drop is bigger than {dd}%. {z} trades left to the first check.',
   'den.disc': 'Experimental robot, fictional money only. Its results are counted separately.',
 };

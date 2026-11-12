@@ -224,7 +224,7 @@ function whyBlocks(lines) {
     const s = String(ln || '').trim();
     if (!s || /^Převaha\s*:/i.test(s) || /\bW\s*=\s*[-−]?\d/.test(s)) return '';
     const m = /^([^:;]{3,40}):\s*(.+)$/.exec(s);
-    if (m && /^Proč\b/i.test(m[1])) {
+    if (m && /^Proč(\s|$)/i.test(m[1])) {
       const items = m[2].split(/;\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9])/).filter(Boolean);
       return `<p class="den-sub">${hum(m[1])}</p>${ul(items)}`;
     }

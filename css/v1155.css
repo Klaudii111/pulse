@@ -14,3 +14,7 @@
 .den-ul li { font-size: 15px; line-height: 1.45; margin: 2px 0; overflow-wrap: anywhere; }
 .den-sub { margin: 8px 0 2px; font-weight: 650; }
 .den-sub2 { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.den-adv > summary, .den-cz > summary, .den-more > summary { list-style: none; gap: 10px; }
+.den-adv > summary::-webkit-details-marker, .den-cz > summary::-webkit-details-marker, .den-more > summary::-webkit-details-marker { display: none; }
+.den-adv > summary::after, .den-cz > summary::after, .den-more > summary::after { content: ''; flex: none; width: 8px; height: 8px; margin-left: auto; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg); transition: transform .2s; }
+.den-adv[open] > summary::after, .den-cz[open] > summary::after, .den-more[open] > summary::after { transform: rotate(-135deg); }
