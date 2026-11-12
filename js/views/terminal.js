@@ -31,6 +31,9 @@ const smoney = (v, ccy, dec = 0) => (v > 0.5 ? '+' : '') + F.money(v, ccy, dec);
 const tone = (v) => (v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat');
 /* price in the instrument's own decimals (EUR/USD 1,10940; US500 7 633,70) */
 export const pxOf = (sym, v) => F.price(v, M.get(sym) ? M.decimals(sym, v) : null);
+/* 1.13.0: KOUPIT shows the ask, PRODAT the bid (mid ± half of the simulated spread) */
+export const pxC = (sym, v) => `${pxOf(sym, v)} ${F.ccySign(M.ccy(sym))}`;
+const sidePx = (sym, mid, side) => mid + (side === 'SELL' ? -1 : 1) * M.spread(sym, mid) / 2;
 
 function openSigs(data) { return D.allOpen(data).filter((s) => s.status === 'open' && !s.intraday_hit); }
 
@@ -95,24 +98,28 @@ function accBar(sm) {
   ${lvl}${sm.reserved > 0 ? `<p class="acc-res">${icon('clock', 'icon-xs')}${t('term.reservedLine', { v: money(sm.reserved, c), n: sm.w.orders.length })}</p>` : ''}`;
 }
 
+/* 1.13.0 ONE trade row (Dnes, Zainvestováno, Obchodovat): full name, side + leverage + deposit, one status line
+   ("Do cíle" only when there is a target), the result, and [Ukončit] */
+export function tradeRow(p, c, extra = '') {
+  const st = posStatus(p);
+  const w = B.whatIs(p.sym, p.name);
+  const toT = p.tp > 0 && p.px > 0 ? Math.abs(p.tp - p.px) / p.px * 100 : null;
+  return `<div class="tr-row tone-${tone(p.pnl)}">
+    <button type="button" class="tr-main" ${p.sigId ? `data-action="open-signal" data-id="${F.esc(p.sigId)}"` : `data-action="t-sym" data-sym="${F.esc(p.sym)}"`}>
+      ${monogram(p.sym, w.name)}
+      <span class="tr-id"><b class="tr-n">${F.esc(w.name)}</b>
+        <span class="tr-meta num">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</span>
+        <span class="tr-st tone-${st.tone}">${F.esc(st.text)}${toT != null && st.near !== 'target' ? ` · ${t('d.toTarget', { v: F.pct(toT, 1) })}` : ''}</span></span>
+      <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, 1)}</small></span>
+      ${extra}
+    </button>
+    <button type="button" class="btn btn-secondary btn-small tr-x" data-action="pos-close" data-id="${p.id}">${t('tr.close')}</button>
+  </div>`;
+}
 function posList(sm, data) {
   const c = sm.w.ccy;
   if (!sm.rows.length) return `<p class="quiet">${t('term.noPos')}</p>`;
-  return `<div class="tp-list">${sm.rows.map((p) => {
-    const st = posStatus(p);
-    return `<div class="tp-row tone-${tone(p.pnl)}">
-      <button type="button" class="tp-main" ${p.sigId ? `data-action="open-signal" data-id="${F.esc(p.sigId)}"` : 'data-action="t-sym" data-sym="' + F.esc(p.sym) + '"'}>
-        ${monogram(p.sym, p.name)}
-        <span class="tp-id"><span class="tp-t"><span class="ticker">${F.esc(p.sym)}</span><span class="side-tag ${p.side === 'SELL' ? 'sell' : ''}">${F.SIDE[p.side]}</span><span class="hz-tag lev-tag">${t('term.levTag', { v: p.lev || 1 })}</span></span>
-          <span class="tp-m num">${t('term.posMeta', { a: money(p.margin, c), e: pxOf(p.sym, p.entry), p: pxOf(p.sym, p.px) })}</span>
-          <span class="tp-m tp-open">${F.esc(B.myOpenText(p, c))}</span>
-          <span class="st-line tone-${st.tone}"><i aria-hidden="true"></i><b>${F.esc(st.text)}</b></span>
-          ${p.swap > 0 ? `<span class="tp-m">${t('term.swapPaid', { v: money(p.swap, c, 0) })}</span>` : ''}</span>
-        <span class="tp-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.spct(p.pnlPct, 2)}</small></span>
-      </button>
-      <button type="button" class="btn btn-secondary btn-small tp-close" data-action="t-close" data-id="${p.id}">${t('term.close')}</button>
-    </div>`;
-  }).join('')}</div>`;
+  return `<div class="tp-list">${sm.rows.map((p) => tradeRow(p, c)).join('')}</div>`;
 }
 
 /* Same plain-language vocabulary as signals */
@@ -122,7 +129,7 @@ export function posStatus(p) {
   const prog = p.tp ? (p.px - p.entry) / (p.tp - p.entry) : 0;
   const progS = p.sl ? (p.px - p.entry) / (p.sl - p.entry) : 0;
   if (p.sl && (progS >= D.NEAR_PROGRESS || toS <= D.proximityPct())) return { tone: 'down', text: `${t('st.nearStop')} · ${t('st.toStop', { v: F.pct(toS, 1) })}` };
-  if (p.tp && (prog >= D.NEAR_PROGRESS || toT <= D.proximityPct())) return { tone: 'up', text: t('st.nearTarget', { v: F.pct(toT, 1) }) };
+  if (p.tp && (prog >= D.NEAR_PROGRESS || toT <= D.proximityPct())) return { tone: 'up', near: 'target', text: t('st.nearTarget', { v: F.pct(toT, 1) }) };
   /* leverage: how far the price may still go against me before the deposit is gone */
   if (p.lev > 1 && p.margin > 0) {
     const left = (p.margin + Math.min(0, p.pnl)) / p.notional * 100;
@@ -324,8 +331,8 @@ export function render(ctx) {
       <div class="tv-box" id="t-tv" ${cmode === 'tv' ? '' : 'hidden'}></div>
       <a class="link verify-link" href="${verifyUrl(sym)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
       <div class="trade-btns" id="t-btns">
-        <button type="button" class="trade-btn buy" data-action="t-ticket" data-side="BUY"><span>${t('term.buy')}</span><b class="num" data-tpx>${pb.q ? pxOf(sym, pb.q.p) : '–'}</b></button>
-        <button type="button" class="trade-btn sell" data-action="t-ticket" data-side="SELL"><span>${t('term.sell')}</span><b class="num" data-tpx>${pb.q ? pxOf(sym, pb.q.p) : '–'}</b></button>
+        <button type="button" class="trade-btn buy" data-action="t-ticket" data-side="BUY"><span>${t('term.buy')}</span><b class="num" data-tpx="BUY">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'BUY')) : '–'}</b></button>
+        <button type="button" class="trade-btn sell" data-action="t-ticket" data-side="SELL"><span>${t('term.sell')}</span><b class="num" data-tpx="SELL">${pb.q ? pxOf(sym, sidePx(sym, pb.q.p, 'SELL')) : '–'}</b></button>
       </div>
       ${closedNote(sym)}
       <p class="trade-hint">${t('term.hint2', { lev: M.maxLev(sym) })}</p>
@@ -355,7 +362,7 @@ function refresh(el, ctx) {
   if (pb.q && old != null && Number.isFinite(old) && Math.abs(old - pb.q.p) > 1e-9 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const n = el.querySelector('#t-px [data-px]'); if (n) n.classList.add(pb.q.p > old ? 'flash-up' : 'flash-down');
   }
-  el.querySelectorAll('[data-tpx]').forEach((b) => { b.textContent = pb.q ? pxOf(sym, pb.q.p) : '–'; });
+  el.querySelectorAll('[data-tpx]').forEach((b) => { b.textContent = pb.q ? pxOf(sym, sidePx(sym, pb.q.p, b.dataset.tpx)) : '–'; });
   const tb = el.querySelector('#t-tab'); if (tb) tb.innerHTML = tabBody(sm, ctx.data);
   const segEl = el.querySelector('[data-seg="ttab"]');
   if (segEl) {
@@ -473,8 +480,11 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   if (!q) { toast(t('term.noPrice')); return; }
   const open = M.isOpen(sym);
   /* 1.10.0: four deposits from the minimum (100 Kč); the default = the example on the signal card (D.offerNums) */
-  const presets = D.DEP_CHIPS[c] || [100, 1000, 5000, 10000];
   const minAmt = D.DEP_MIN[c] || 0;
+  /* 1.13.0: the default = Můj profil (D.stakeFor: risk % at the stop, max 10 / 20 % of the wallet) – the same number as on the card */
+  const stake = D.stakeFor(sig && sig.action === side ? sig : null);
+  const BASE = { CZK: [1000, 5000, 10000], EUR: [40, 200, 400], USD: [50, 250, 500] }[c] || [minAmt * 10, minAmt * 50, minAmt * 100];
+  const presets = [...new Set([stake, ...BASE.filter((v) => Math.abs(v - stake) / stake > 0.2)])].sort((a, b) => a - b).slice(0, 4);
   const useSig = sig && sig.action === side;
   const dir = side === 'SELL' ? -1 : 1;
   const maxLev = M.maxLev(sym);
@@ -484,22 +494,32 @@ function ticket(ctx, side, sym, sig, opt = {}) {
   /* the robot's signals are LIMIT entries: price already past the entry (above it for a buy) -> wait for the entry price */
   const sigLim = useSig && sig.entry > 0 && dir * (q.p - sig.entry) > 0;
   const sigOpen = useSig && sig.status === 'open' && !sig.intraday_hit;
-  const st = { side, amount: D.EXAMPLE_DEP[c] || presets[1], lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
-    type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: true, exOpen: false };
+  const st = { side, amount: stake, lev: levs.includes(B.selLev(sym)) ? B.selLev(sym) : 1, sl: useSig ? sig.stop : round(q.p * (1 - 0.03 * dir)), tp: useSig ? sig.target : round(q.p * (1 + 0.06 * dir)), risk: null,
+    type: (opt.mode ? opt.mode === 'limit' : sigLim) || !open ? 'lim' : 'mkt', limit: useSig ? sig.entry : round(q.p * (1 - 0.01 * dir)), valid: sigOpen ? 'sig' : 'day', ownOpen: false, exOpen: false };
+  /* 1.13.0 BLOCKER fix: the live price is already at / better than the signal's entry -> the default is a plain
+     "Koupit hned za X" (market open) or "koupí se při otevření, nejvýš za X" (closed). Never an error on the default path. */
+  if (st.type === 'lim' && useSig && st.limit > 0 && W.marketable(side, st.limit, q.p) && open) st.type = 'mkt';
   const isLim = () => st.type === 'lim';
+  const atOpen = () => isLim() && !open && st.limit > 0 && W.marketable(side, st.limit, q.p);
+  const half = M.spread(sym, q.p) / 2;
+  const fillPx = () => q.p + dir * half; // a buy pays the ask, a sell gets the bid
   const basePx = () => (isLim() && st.limit > 0 ? st.limit : q.p);
+  if (sm.free >= minAmt && st.amount > sm.free) st.amount = Math.floor(sm.free);
   const fmtIn = (v) => (v == null ? '' : String(v));
   const validItems = () => [{ id: 'day', label: t('term.valid.day') }, { id: 'gtc', label: t('term.valid.gtc') }].concat(sigOpen ? [{ id: 'sig', label: t('term.valid.sig') }] : []);
   /* plain-language line about the limit: when it fills, how far, until when */
   const limLine = () => {
     if (!isLim()) return '';
     if (!(st.limit > 0)) return `<p class="tk-lim is-bad">${t('term.err.limit')}</p>`;
+    if (atOpen()) return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'tk.atOpenSell' : 'tk.atOpen', { h: F.esc(M.hours(sym)), v: pxC(sym, st.limit) })}</span></p>`;
     if (W.marketable(side, st.limit, q.p)) return `<p class="tk-lim is-bad">${t(side === 'SELL' ? 'term.err.limitNowSell' : 'term.err.limitNowBuy')}</p>`;
     const d = limitDistance({ side, limit: st.limit }, q.p);
     const exp = W.expiryFor(st.valid, useSig ? sig : null);
     return `<p class="tk-lim">${icon('clock', 'icon-xs')}<span>${t(side === 'SELL' ? 'term.tkLimSell' : 'term.tkLimBuy', { v: pxOf(sym, st.limit), sym })} ${F.esc(d.text.charAt(0).toUpperCase() + d.text.slice(1))}. ${t('term.tkLimUntil', { d: F.dmTime(exp) })}</span></p>`;
   };
-  const goText = () => (isLim() ? t('inv.confirmLim', { v: pxOf(sym, st.limit || 0) }) : t('inv.confirm'));
+  const goText = () => (atOpen() ? t(side === 'SELL' ? 'inv.goOpenSell' : 'inv.goOpen', { v: pxC(sym, st.limit || 0) })
+    : isLim() ? t(side === 'SELL' ? 'inv.goLimSell' : 'inv.goLim', { v: pxC(sym, st.limit || 0) })
+    : t(side === 'SELL' ? 'inv.goNowSell' : 'inv.goNow', { v: pxC(sym, fillPx()) }));
   const blocked = () => !isLim() && !open;
   const costLine = () => {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
@@ -509,7 +529,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     const k = W.costs({ sym, side, amount: st.amount, lev: st.lev, px: q.p, ccy: c });
     /* 1.11.1: B.moneyBlock – the same block as the card and the detail (average in the test, loss, best case, leverage profiles) */
     return `<div class="tk-out">
-      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen })}
+      ${B.moneyBlock({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, open: st.ownOpen, dd: false })}
       ${B.levExamples({ s: useSig ? sig : null, data: ctx.data, sym, side: st.side, amount: st.amount, ccy: c, base: basePx(), sl: st.sl, tp: st.tp, sel: st.lev, exOpen: st.exOpen })}
       ${st.amount > 0 && st.amount < minAmt ? `<p class="tk-small is-bad">${t('inv.min', { a: money(minAmt, c) })}</p>` : ''}
       <p><span>${t('inv.fee')}</span><b class="num">~${money(k.spread, c, k.spread < 10 && c !== 'CZK' ? 2 : 0)}</b></p>
@@ -517,7 +537,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     </div>${limLine()}`;
   };
   const body = () => `
-    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num">${pxOf(sym, q.p)}</b></div>
+    <div class="tk-side ${side === 'SELL' ? 'sell' : 'buy'}"><span>${t(side === 'SELL' ? 'term.tkSell' : 'term.tkBuy', { sym: F.esc(nameOf(sym, ctx.data)) })}</span><b class="num">${pxC(sym, fillPx())}</b></div>
     ${side === 'SELL' ? `<p class="tk-short">${t('tk.short')}</p>` : ''}
     ${useSig ? `<p class="tk-sig">${icon('signals', 'icon-xs')}${t('term.tkFromSig')}</p>` : ''}
     <p class="sheet-label">${t('inv.howMuch')}</p>
@@ -542,7 +562,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
     </details>
     <p class="tk-block" id="tk-block" ${blocked() ? '' : 'hidden'}>${icon('clock', 'icon-xs')}<span>${t('term.closedWhy', { h: F.esc(M.hours(sym)) })}</span></p>
     <button type="button" class="btn btn-primary btn-block tk-go" data-go ${blocked() ? 'disabled' : ''}>${goText()}</button>
-    <p class="jnote" style="margin-top:10px">${t('term.fict')}</p>`;
+    <p class="risk-line">${t('risk.line')}</p>`;
   openSheet({
     small: true, label: t('term.ticket'),
     html: `<div class="sheet-head"><div><p class="sheet-title">${t('term.ticket')}</p><p class="sheet-sub">${t('term.demo')}</p></div>
@@ -574,7 +594,8 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (va) { ev.preventDefault(); ev.stopPropagation(); st.valid = va.dataset.id; segMove(root, 'tvalid', st.valid); haptic(); upd(); }
         if (a) { st.risk = null; st.amount = +a.dataset.amt; root.querySelector('[data-in="amount"]').value = String(st.amount); haptic(); upd(); }
         if (r) { st.risk = +r.dataset.risk; applyRisk(); haptic(); upd(); }
-        if (lv) { st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd(); }
+        /* a one-off leverage for THIS ticket: never reaches the global profile handler */
+        if (lv) { ev.stopPropagation(); st.lev = +lv.dataset.lev; applyRisk(); haptic(); upd(); }
         /* 1.11.2: the chip list and "Příklady pák" stay as the user left them when the sheet re-renders */
         if (ev.target.closest('[data-action="lev-own-open"]')) st.ownOpen = !st.ownOpen;
         const lx = ev.target.closest('[data-lx]'); if (lx) st.exOpen = !lx.parentElement.open;
@@ -582,11 +603,11 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (!goB || goB.disabled) return;
         if (st.amount < minAmt) { toast(t('inv.min', { a: money(minAmt, c) })); return; }
         if (isLim()) {
-          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: st.limit, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen ? sig.id : null, valid: st.valid, sig: useSig ? sig : null });
+          const res = W.placeOrder(ctx.data, { sym, name: nameOf(sym, ctx.data), side, limit: st.limit, amount: st.amount, lev: st.lev, sl: st.sl, tp: st.tp, sigId: sigOpen ? sig.id : null, valid: st.valid, sig: useSig ? sig : null, atOpen: true });
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
-          toast(t('inv.placedOk', { v: pxOf(sym, st.limit) }), { timeout: 7000 });
+          toast(t(atOpen() ? 'inv.placedOpen' : 'inv.placedOk', { v: pxC(sym, st.limit) }), { timeout: 7000 });
           document.dispatchEvent(new CustomEvent('pulse:wallet'));
           tab = 'ord';
           setTimeout(() => ctx.rerender({ soft: true }), 380);

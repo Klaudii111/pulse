@@ -157,10 +157,11 @@ function levelsBad(side, px, sl, tp) {
 const clampLev = (lev, sym) => Math.max(CONFIG.CALC.LEVERAGE_MIN, Math.min(M.maxLev(sym), Math.round(lev)));
 
 /* The position itself (shared by "Hned" and a filled limit order) */
-function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId, order = null, half = 0, mid = null }) {
+function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId, order = null, half = 0, mid = null, auto = false }) {
   const pos = { id: `w${w.seq++}`, sym, name, side, entry, entryT, lev, margin: amount, notional: amount * lev, sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, openedAt: Date.now(), sigId,
     half, mid: mid ?? entry, ccy: M.ccy(sym), swap: 0, swapAt: Date.now() };
   if (order) pos.order = order;
+  if (auto) pos.auto = true; // the robot-for-me logs its own bell event (feed.js skips "my-open")
   w.positions.push(pos);
   /* journal: never overwrite the user's own entry (only a fresh one, or one this wallet wrote) */
   const j = sigId ? D.journal()[sigId] : null;
@@ -168,7 +169,7 @@ function addPos(w, { sym, name, side, entry, entryT, lev, amount, sl, tp, sigId,
   return pos;
 }
 
-export function open(data, { sym, name = '', side, amount, lev = 1, sl = null, tp = null, sigId = null }) {
+export function open(data, { sym, name = '', side, amount, lev = 1, sl = null, tp = null, sigId = null, auto = false }) {
   const w = get();
   const q = priceOf(sym, data);
   if (!q || !(q.p > 0)) return { ok: false, reason: 'noPrice' };
@@ -181,7 +182,7 @@ export function open(data, { sym, name = '', side, amount, lev = 1, sl = null, t
   const bad = levelsBad(side, q.p, sl, tp);
   if (bad) return { ok: false, reason: bad };
   const half = M.spread(sym, q.p) / 2;
-  const pos = addPos(w, { sym, name, side, entry: q.p + dirOf(side) * half, entryT: q.t || Date.now(), lev: clampLev(lev, sym), amount, sl, tp, sigId, half, mid: q.p });
+  const pos = addPos(w, { sym, name, side, entry: q.p + dirOf(side) * half, entryT: q.t || Date.now(), lev: clampLev(lev, sym), amount, sl, tp, sigId, half, mid: q.p, auto });
   save(w);
   return { ok: true, pos };
 }
@@ -234,23 +235,27 @@ function logOrder(w, k, o, extra = {}) {
   w.olog = w.olog.slice(0, 200);
 }
 
-export function placeOrder(data, { sym, name = '', side, limit, amount, lev = 1, sl = null, tp = null, sigId = null, valid = 'gtc', sig = null }) {
+/* atOpen (1.13.0): the market is closed and the price is already at / better than the limit -> the order waits and fills
+   at the first price after the open (never at a stale closed-market quote). quiet: no "placed" log row (the robot logs its own). */
+export function placeOrder(data, { sym, name = '', side, limit, amount, lev = 1, sl = null, tp = null, sigId = null, valid = 'gtc', sig = null, atOpen = false, quiet = false }) {
   const w = get();
   const q = priceOf(sym, data);
   if (!q || !(q.p > 0)) return { ok: false, reason: 'noPrice' };
   if (!(limit > 0)) return { ok: false, reason: 'limit' };
   /* a limit the price already passed would fill at once -> "Hned" is the right order type */
-  if (marketable(side, limit, q.p)) return { ok: false, reason: side === 'SELL' ? 'limitNowSell' : 'limitNowBuy' };
+  const now0 = marketable(side, limit, q.p);
+  if (now0 && !(atOpen && !M.isOpen(sym))) return { ok: false, reason: side === 'SELL' ? 'limitNowSell' : 'limitNowBuy' };
   if (!(amount > 0)) return { ok: false, reason: 'amount' };
   const s = summary(data);
   if (amount > s.free + 0.01) return { ok: false, reason: 'free' };
-  const bad = levelsBad(side, limit, sl, tp);
+  const bad = levelsBad(side, now0 ? q.p : limit, sl, tp);
   if (bad) return { ok: false, reason: bad };
   const now = Date.now();
   const v = valid === 'sig' && !sigId ? 'gtc' : valid;
   const o = { id: `o${w.seq++}`, sym, name, side, limit: +limit, amount, lev: clampLev(lev, sym), sl: sl > 0 ? sl : null, tp: tp > 0 ? tp : null, sigId, valid: v, placedAt: now, pxAt: q.p, expiresAt: expiryFor(v, sig, now) };
+  if (now0) o.atOpen = true;
   w.orders.push(o);
-  logOrder(w, 'placed', o);
+  if (!quiet) logOrder(w, 'placed', o);
   save(w);
   return { ok: true, order: o };
 }
@@ -313,7 +318,8 @@ export function checkOrders(data) {
     /* "do konce signálu": the signal ended (target, stop, time) -> the order ends with it */
     const sigEnd = o.valid === 'sig' && sig && (sig.status !== 'open' || sig.intraday_hit) ? (Date.parse(sig.closed_at || sig.hit_at || 0) || now) : null;
     const until = Math.min(o.expiresAt, sigEnd ?? Infinity);
-    const hit = pricesSince(data, o.sym, from).find((p) => p.t <= until && marketable(o.side, o.limit, p.p));
+    /* an "at the open" order fills only on a price seen while the market is open */
+    const hit = o.atOpen && !M.isOpen(o.sym) ? null : pricesSince(data, o.sym, from).find((p) => p.t <= until && marketable(o.side, o.limit, p.p));
     if (hit) {
       const reopen = hit.t < SESSION_START;
       const pos = addPos(w, { sym: o.sym, name: o.name, side: o.side, entry: o.limit, entryT: hit.t, lev: o.lev, amount: o.amount, sl: o.sl, tp: o.tp, sigId: o.sigId, order: o.id, half: M.spread(o.sym, o.limit) / 2 });
@@ -456,18 +462,19 @@ export function autoOpen(data, sig, mode, onSince = 0) {
   const q = priceOf(sig.symbol, data);
   if (!q) return { ok: false, reason: 'noPrice' };
   const s = summary(data);
-  const prof = CONFIG.CALC.RISK_PROFILES.find((p) => p.id === D.calcState().profile) || CONFIG.CALC.RISK_PROFILES[0];
-  const px = mode === 'now' ? q.p : sig.entry;
-  let amount = amountForRisk(w, { entry: px, sl: sig.stop, lev: 1, riskPct: prof.pct }) || 0;
-  amount = Math.floor(Math.min(amount, s.equity * 0.1, s.free)); // at most 10 % of the account per trade (like the robot)
+  const amount = autoAmount(data, sig, s);
   if (!(amount > 0)) return { ok: false, reason: 'free' };
   /* "the app was closed": the signal came while the switch was already on, but before this app session */
   const ca = Date.parse(sig.created_at || 0);
   const reopen = ca < SESSION_START && ca > onSince;
   let r;
-  if (mode === 'now' && M.isOpen(sig.symbol)) r = open(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id });
-  else r = placeOrder(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, limit: sig.entry, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id, valid: 'sig', sig });
-  if (!r.ok && (r.reason === 'limitNowBuy' || r.reason === 'limitNowSell') && M.isOpen(sig.symbol)) r = open(data, { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev: 1, sl: sig.stop, tp: sig.target, sigId: sig.id });
+  /* 1.13.0: never skipped because the price is already at the entry – buy now (market open) or at the open (closed) */
+  const mkt = M.isOpen(sig.symbol);
+  const atEntry = marketable(sig.action, sig.entry, q.p);
+  const lev = autoLev(sig.symbol);
+  const base = { sym: sig.symbol, name: sig.name || '', side: sig.action, amount, lev, sl: sig.stop, tp: sig.target, sigId: sig.id };
+  if (mkt && (mode === 'now' || atEntry)) r = open(data, { ...base, auto: true });
+  else r = placeOrder(data, { ...base, limit: sig.entry, valid: 'sig', sig, atOpen: true, quiet: true });
   if (!r.ok) return r;
   const w2 = get();
   w2.copied = [sig.id, ...(Array.isArray(w2.copied) ? w2.copied : [])].slice(0, 400);
@@ -477,6 +484,16 @@ export function autoOpen(data, sig, mode, onSince = 0) {
   save(w2);
   return { ok: true, pos: r.pos || null, order: r.order || null, amount, reopen, qty };
 }
+
+/* the robot-for-me's deposit per signal: D.stakeFor (risk % at the stop, max 10 / 20 % of the wallet), never more than free */
+export function autoAmount(data, sig, s = null) {
+  const sm = s || summary(data);
+  return Math.floor(Math.min(D.stakeFor(sig, get().balance, autoLev(sig.symbol)), Math.max(0, sm.free)));
+}
+/* the leverage the robot-for-me uses = the user's leverage profile for that instrument (Konzervativně 1:1 …) */
+let levFn = () => 1;
+export const setAutoLev = (fn) => { levFn = fn; };
+const autoLev = (sym) => { const v = +levFn(sym); return v >= 1 ? v : 1; };
 
 /* Symbols the terminal wants live prices for (positions + the chosen symbol) */
 export function watched() {

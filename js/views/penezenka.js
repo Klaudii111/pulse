@@ -56,8 +56,10 @@ export function renderWallet(ctx) {
     <p class="big-acc-v num">${F.money(s.equity, c, 0)}</p>
     <div class="wl-split num">
       <span><small>${t('wl.free')}</small><b>${F.money(Math.max(0, s.free), c, 0)}</b></span>
-      <span><small>${t('wl.inTrades')}</small><b>${F.money(s.used, c, 0)}</b>${s.rows.length ? `<em class="${tone(s.open)}">${t('wl.now', { v: sm(s.open, c) })}</em>` : ''}</span>
-      ${s.reserved > 0 ? `<span><small>${t('wl.reserved')}</small><b>${F.money(s.reserved, c, 0)}</b></span>` : ''}
+      <span><small>${t('acc.inPlay')}</small><b>${F.money(s.used + s.reserved, c, 0)}</b>${s.rows.length ? `<em class="${tone(s.open)}">${t('wl.now', { v: sm(s.open, c) })}</em>` : ''}</span>
+    </div>
+    ${s.used + s.reserved > 0 ? `<p class="wl-inplay num">${t(s.reserved > 0 ? 'zi.split' : 'zi.split0', { a: F.money(s.used, c, 0), b: F.money(s.reserved, c, 0) })}</p>` : ''}
+    <div hidden>
     </div>
     <div class="wl-btns"><button type="button" class="btn btn-primary" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('wl.topup')}</button>
       <button type="button" class="btn btn-secondary" data-action="w-withdraw">${t('wl.wd')}</button></div>
@@ -138,8 +140,8 @@ function mine(ctx) {
       <div class="hi-rate"><p class="hi-l">${t('hi.rate')}</p><p class="hi-big num" id="hi-rate">${F.pct(m.rate, 0)}</p><p class="hi-s">${t('hi.rateS', { w: m.wins, n: m.n })}</p></div>
       <div class="hi-rate"><p class="hi-l">${t('hi.total')}</p><p class="hi-big num ${tone(m.total)}">${sm(m.total, c)}</p><p class="hi-s">${t('hi.totalS', { n: m.n, u: F.unit('trade', m.n) })}</p></div>
     </div>
-    ${curveSvg(curve(s.w, s.open), c, (s.w.start || 100000) * 0.02)}
-    ${m.n < 2 ? '' : `<div class="hi-bw">
+    ${m.n < 3 ? '' : curveSvg(curve(s.w, s.open), c, (s.w.start || 100000) * 0.02)}
+    ${m.n < 3 ? '' : `<div class="hi-bw">
       <p><small>${t('hi.best')}</small><b class="num ${tone(m.best.pnl)}">${sm(m.best.pnl, c)}</b><span>${F.esc(nameOf(m.best))}</span></p>
       <p><small>${t('hi.worst')}</small><b class="num ${tone(m.worst.pnl)}">${sm(m.worst.pnl, c)}</b><span>${F.esc(nameOf(m.worst))}</span></p>
     </div>`}

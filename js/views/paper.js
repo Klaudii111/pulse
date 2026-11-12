@@ -12,6 +12,16 @@ const usd = (v, dec) => F.money(v, 'USD', dec ?? (Math.abs(v) >= 1000 ? 0 : 2));
 const tone = (v) => (v > 0.0001 ? 'up' : v < -0.0001 ? 'down' : 'flat');
 const sideTxt = (s) => t(s === 'short' || s === 'sell' ? 'pa.short' : 'pa.long');
 
+/* 1.13.0: the robot's money in the user's currency first, dollars small next to it ("2 104 000 Kč · 100 338 $") */
+const mineCcy = () => { const c = D.walletCcy(); return c === 'USD' ? null : c; };
+function kc(v, data, sign = false) {
+  const c = mineCcy();
+  const x = c ? D.convert(v, 'USD', c, data) : v;
+  const txt = F.money(Math.abs(x), c || 'USD', 0);
+  return sign ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${txt}` : txt;
+}
+const dual = (v, data, sign = false) => (mineCcy() ? `${kc(v, data, sign)} <small class="pa-usd">${sign && v > 0 ? '+' : ''}${usd(v, 0)}</small>` : `${sign && v > 0 ? '+' : ''}${usd(v, 0)}`);
+
 /* The paper account's equity: live P&L of positions is already in equity from the server */
 function eq(p) { return +p.account.equity; }
 
@@ -71,7 +81,7 @@ function posRow(x, data) {
       <span class="pa-meta num">${t('pa.qty2', { q: F.num(q, 0), e: F.price(e), v: usd(q * e, 0) })}</span>
       ${lg.tp != null ? `<span class="pa-leg num up">${t(x.side === 'short' ? 'pa.legTpS' : 'pa.legTp', { v: F.price(lg.tp) })}</span>` : ''}
       ${lg.sl != null ? `<span class="pa-leg num down">${t(x.side === 'short' ? 'pa.legSlS' : 'pa.legSl', { v: F.price(lg.sl) })}</span>` : ''}</span>
-    <span class="pa-r num ${mt.tone}">${mt.zero ? t('pa.zero') : usdTxt}<small>${mt.zero ? '' : F.spct(+x.pnl_pct, 2)}</small></span>
+    <span class="pa-r num ${mt.tone}">${mt.zero ? t('pa.zero') : kc(+x.pnl_usd, data, true)}<small>${mt.zero ? '' : `${usdTxt} · ${F.spct(+x.pnl_pct, 2)}`}</small></span>
   </button>`;
 }
 
@@ -95,7 +105,7 @@ function closedRow(c, data) {
     <span class="hist-bar ${tn === 'flat' ? '' : tn}"></span>
     <span class="pa-id"><span class="pa-sym">${F.esc(c.symbol)} <span class="side-tag ${c.side === 'short' ? 'sell' : ''}">${sideTxt(c.side)}</span></span>
       <span class="pa-meta num">${t('pa.closedMeta', { e: F.price(+c.entry), x: F.price(+c.exit), d: c.closed_at ? F.dm(c.closed_at) : '' })}</span></span>
-    <span class="pa-r num ${tn}">${+c.pnl_usd >= 0 ? '+' : ''}${usd(+c.pnl_usd, 2)}<small>${F.spct(+c.pnl_pct, 2)}</small></span>
+    <span class="pa-r num ${tn}">${kc(+c.pnl_usd, data, true)}<small>${+c.pnl_usd >= 0 ? '+' : ''}${usd(+c.pnl_usd, 2)} · ${F.spct(+c.pnl_pct, 2)}</small></span>
   </button>`;
 }
 
@@ -117,12 +127,12 @@ export function render(ctx) {
   <section class="pa-big tone-${tone(pnl)}">
     <span class="aurora" aria-hidden="true"><i></i><i></i></span>
     <div class="pa-top"><span class="pa-k">${t('pa.acc')}</span>${modeBadge(p)}</div>
-    <div class="hero-top"><p class="pa-v num">${usd(eq(p), 0)} ${inMine(eq(p), ctx.data)}</p>${spark}</div>
+    <div class="hero-top"><p class="pa-v num">${dual(eq(p), ctx.data)}</p>${spark}</div>
     <p class="pa-broker">${t('pa.broker')}</p>
-    <p class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${pnl >= 0 ? '+' : ''}${usd(pnl, 0)}</b> ${t('pa.heroS', { start: usd(start, 0) })}</p>
+    <p class="pa-s"><b class="num ${tone(pnl)}">${F.spct(pct, 2)} · ${kc(pnl, ctx.data, true)}</b> ${t('pa.heroS', { start: kc(start, ctx.data) })}</p>
     <div class="pa-stats">
-      <div><p class="tile-l">${t('pa.cash')}</p><p class="num">${usd(+a.cash, 0)}</p></div>
-      <div><p class="tile-l">${t('pa.bp')}</p><p class="num">${usd(+a.buying_power, 0)}</p></div>
+      <div><p class="tile-l">${t('pa.cash')}</p><p class="num">${kc(+a.cash, ctx.data)}</p></div>
+      <div><p class="tile-l">${t('pa.bp')}</p><p class="num">${kc(+a.buying_power, ctx.data)}</p></div>
       <div><p class="tile-l">${t('pa.wins')}</p><p class="num">${cl.length ? `${wins} / ${cl.length}` : '–'}</p></div>
     </div>
     ${p.mode === 'dry' ? `<p class="pa-note">${icon('info', 'icon-xs')}${t('pa.dryS')}</p>` : ''}

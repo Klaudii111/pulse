@@ -227,7 +227,8 @@ function buyBanner(s, now) {
 
 /* 1.10.0: Signály = three tabs by the SIGNAL's phase (Otevřené = can still enter · Běžící · Uzavřené)
    with the horizon chips (1 den · 2–3 dny · Týden · Měsíc · Vše) as a filter inside. One card everywhere (B.offer). */
-const HZ_TABS = ['ALL', 'DEN', 'DNY', 'TYDEN', 'MESIC'];
+/* 1.13.0: a horizon hidden until its strategy passes the test (1 den) has no tab at all */
+const HZ_TABS = ['ALL', 'DEN', 'DNY', 'TYDEN', 'MESIC'].filter((h) => !(CONFIG.HIDDEN_HORIZONS || []).includes(h));
 const PH = ['open', 'running', 'closed'];
 const curHz = () => { const h = store.get('sigHz', 'ALL'); return HZ_TABS.includes(h) ? h : 'ALL'; };
 const curPh = () => { const f = store.get('sigPh', 'open'); return PH.includes(f) ? f : 'open'; };
@@ -260,10 +261,10 @@ function sigBody(ctx) {
   } else if (ph === 'running') list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const off = ph === 'open' ? offLine(data, hz === 'ALL' ? null : hz) : '';
   if (!list.length) {
-    if (ph === 'open') return off || `<p class="empty-line">${t('sg.today0')} ${t('u.empty.buy', { when: F.esc(nextCheck(data, now)) })}</p>`;
+    if (ph === 'open') return off || `<p class="empty-line">${t('sig.none', { when: F.esc(nextCheck(data, now)) })}</p>`;
     return `<p class="empty-line">${t(`sg.empty.${ph}`)}</p>`;
   }
-  return `${off}<div class="sc-list">${((seen) => list.slice(0, 60).map((x, i) => B.offer(x, { data, now, i, seen })).join(''))(new Set())}</div>`;
+  return `${off}<div class="sc-list">${list.slice(0, 60).map((x, i) => B.compact(x, { data, now, i })).join('')}</div>`;
 }
 
 function phDesc(ph, data = null, now = D.clock()) {
@@ -271,10 +272,11 @@ function phDesc(ph, data = null, now = D.clock()) {
   if (ph === 'open' && data?.signals) {
     /* honest count: the robot sends only what passes its rules – some days 2, some days 10, some days none */
     const day = (x) => new Date(x).toDateString();
-    const list = phaseList(data, 'ALL', 'open', now);
+    const list = phaseList(data, 'ALL', 'open', now).filter((x) => ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
     const today = list.filter((x) => x.created_at && day(x.created_at) === day(now)).length;
-    if (!list.length) return t('sg.today0');
-    return `${today ? t('sg.todayN', { n: today }) : t('sg.todayNone')} ${t('sg.rules')}${list.length > today ? ` ${t('sg.older', { n: list.length - today })}` : ''}`;
+    /* 1.13.0: the same words as Dnes ("Můžeš koupit · N") – never "žádná" next to a list of signals */
+    if (!list.length) return t('sg.rules');
+    return `${t('sg.canBuy', { n: list.length })}${today ? ` ${t('sg.todayOf', { n: today })}` : ''} ${t('sg.rules')}`;
   }
   return t(`sg.phS.${ph}`, { a: F.money(D.EXAMPLE_DEP[c] || 10000, c, 0) });
 }

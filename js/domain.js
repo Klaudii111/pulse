@@ -10,6 +10,8 @@ import { priceOf, pnlAt, outcome, costs, nyCloseAfter } from './wallet.js';
 import * as M from './market.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
+/* 1.13.0: a signal's price with its currency, 2 decimals ("164,47 $") */
+export const spx = (s, v) => F.pxc(v, M.ccy(s?.symbol) || 'USD');
 
 /* App clock (overridable for demos via ?now=ISO) */
 let clockFn = () => new Date();
@@ -204,13 +206,41 @@ export function calcState() {
   const ccy = ['CZK', 'EUR', 'USD'].includes(s.ccy) ? s.ccy : 'CZK';
   return {
     ccy,
-    account: Number.isFinite(s.account) && s.account > 0 ? s.account : c.DEFAULT_ACCOUNT[ccy],
+    /* 1.13.0: the capital IS the wallet (Peněženka) once it exists – Kalkulačka, cards and the robot read one number */
+    account: walletBalance() || (Number.isFinite(s.account) && s.account > 0 ? s.account : c.DEFAULT_ACCOUNT[ccy]),
     leverage: Number.isFinite(s.leverage) ? s.leverage : 2,
     profile: c.RISK_PROFILES.some((p) => p.id === s.profile) ? s.profile : c.RISK_PROFILES[0].id,
     signalId: s.signalId || null,
   };
 }
-export const saveCalc = (patch) => store.set('calc', { ...calcState(), ...patch });
+/* the stored values only (calcState().account is the wallet once it exists – never write that back as "typed") */
+export const saveCalc = (patch) => { const c = calcState(); store.set('calc', { ...c, account: +(store.get('calc', {}) || {}).account || c.account, ...patch }); };
+function walletBalance() { const w = store.get('wallet', null); return w && w.v === 1 && w.balance > 0 ? Math.round(w.balance) : 0; }
+/* 1.13.0 "Můj profil": risk Opatrně 1 % / Odvážně 3 % (CONFIG.CALC.RISK_PROFILES) */
+export function riskProf() {
+  const cs = calcState();
+  return CONFIG.CALC.RISK_PROFILES.find((p) => p.id === cs.profile) || CONFIG.CALC.RISK_PROFILES[0];
+}
+/* 4 870 -> 4 800, 12 345 -> 12 000, 523 -> 500: a calm round number (never above v) */
+export function niceRound(v) {
+  if (!(v > 0)) return 0;
+  const step = 10 ** Math.floor(Math.log10(v)) / 5;
+  return Math.max(step, Math.floor(v / step + 1e-9) * step);
+}
+/* 1.13.0 THE default deposit (signal cards, detail, invest sheet, the robot-for-me):
+   lose at most risk % of the wallet at the stop, and put at most 10 % (Opatrně) / 20 % (Odvážně) of the wallet into one trade. */
+export const STAKE_CAP = { conservative: 0.1, aggressive: 0.2 };
+/* lev (robot-for-me): the deposit shrinks with the leverage, so the loss at the stop stays at risk % */
+export function stakeFor(s = null, equity = null, lev = 1) {
+  const ccy = walletCcy();
+  const eq = equity ?? (walletBalance() || calcState().account);
+  const p = riskProf();
+  const cap = eq * (STAKE_CAP[p.id] ?? 0.1);
+  let a = cap;
+  if (s && s.entry > 0 && s.stop > 0 && s.entry !== s.stop) a = Math.min(cap, (eq * p.pct / 100) / (Math.abs(s.entry - s.stop) / s.entry) / Math.max(1, lev));
+  a = niceRound(a);
+  return a >= (DEP_MIN[ccy] || 0) ? a : (DEP_MIN[ccy] || EXAMPLE_DEP[ccy] || 10000);
+}
 
 export function leverageCap(data, sig) {
   const c = CONFIG.CALC;
@@ -322,7 +352,7 @@ export function entryState(s, now = clock()) {
   const r = s.pnl_r ?? 0;
   const prog = s.progress ?? (s.rr ? r / s.rr : 0);
   if (r > E.LATE_R || prog > E.LATE_PROGRESS) return { code: 'late', label: t('entry.late'), note: t('entry.note.late') };
-  if (r > E.VALID_R) return { code: 'limit', label: t('entry.limit', { price: F.price(s.entry) }), note: t('entry.note.limit') };
+  if (r > E.VALID_R) return { code: 'limit', label: t('entry.limit', { price: spx(s, s.entry) }), note: t('entry.note.limit') };
   return { code: 'ok', label: t('entry.ok'), note: s.entry_valid_until ? t('entry.note.ok', { time: F.dmTime(s.entry_valid_until) }) : t('entry.note.okNear') };
 }
 
@@ -330,9 +360,9 @@ export function entryState(s, now = clock()) {
 export function orderLines(s) {
   const until = s.entry_valid_until || `${s.exit_date}T22:00:00`;
   return [
-    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: F.price(s.entry), time: F.dmTime(until) }),
-    t('order.stop', { price: F.price(s.stop) }),
-    t('order.target', { price: F.price(s.target) }),
+    t(s.action === 'BUY' ? 'order.limitBuy' : 'order.limitSell', { price: spx(s, s.entry), time: F.dmTime(until) }),
+    t('order.stop', { price: spx(s, s.stop) }),
+    t('order.target', { price: spx(s, s.target) }),
   ];
 }
 
@@ -466,7 +496,7 @@ export function cardState(s, data = null, now = clock()) {
   const { pos, ord } = walletFor(s);
   const j = journal()[s.id];
   const sell = s.action === 'SELL';
-  const e = F.price(s.entry);
+  const e = spx(s, s.entry);
   const mineIn = pos.length > 0 || j?.state === 'in';
   const my = (mineIn || j?.state === 'closed') ? myRealResult(s, data, pos, j) : null;
   const um = userMoney(s);
@@ -476,7 +506,7 @@ export function cardState(s, data = null, now = clock()) {
     return { ...base, code: 'done', tone: 'flat', badge: t('u.chip.done'), text: t(my ? 'u.do.endMine' : 'u.do.end'), cta: null };
   }
   if (mineIn) return { ...base, code: 'mine', tone: 'gold', badge: t(sell ? 'u.chip.mineSell' : 'u.chip.mine'), text: t(sell ? 'u.do.holdSell' : 'u.do.hold'), cta: null };
-  if (ord) return { ...base, code: 'order', tone: 'gold', badge: t('u.chip.order'), text: t('u.do.order', { v: F.price(ord.limit) }), cta: null };
+  if (ord) return { ...base, code: 'order', tone: 'gold', badge: t('u.chip.order'), text: t('u.do.order', { v: spx(s, ord.limit) }), cta: null };
   /* 1.9.1 "what if I did not invest right away?" – exactly three answers (CONFIG.ENTRY via entryState):
      (a) ok: price still near the entry -> invest now; (b) limit: the price ran a bit -> a limit order at the original
      entry, valid until the signal ends; (c) late / expired -> skip it. Market closed + (a) -> a limit for the open. */
@@ -485,7 +515,10 @@ export function cardState(s, data = null, now = clock()) {
     return { ...base, code: 'late', tone: 'flat', badge: t('u.chip.late'), text: t('u.do.late'), cta: null, est };
   }
   const mv = base.move ?? 0;
-  if (est.code === 'limit') {
+  /* 1.13.0: the live price came back to the entry (or better) -> it is a "buy now" again, not a wait for the price */
+  const lq = Live.quote(s.symbol)?.p;
+  const atEntry = lq > 0 && s.entry > 0 && (sell ? lq >= s.entry : lq <= s.entry);
+  if (est.code === 'limit' && !atEntry) {
     return { ...base, code: 'wait', tone: 'gold', est, badge: t('u.chip.wait'), text: t(sell ? 'u.do.waitSell' : 'u.do.wait', { d: F.pct(Math.abs(mv), 1), v: e }), cta: 'limit' };
   }
   if (!Live.marketOpen(now)) {
@@ -500,24 +533,25 @@ export function cardState(s, data = null, now = clock()) {
 
 /* 1.12.0 "Vstup: …" – one plain line WHEN and AT WHAT PRICE to enter, built from the same cardState (so the line,
    the badge and the button can never disagree). null for my own / ended signals. */
-export function entryLine(s, data = null, now = clock(), cs = null) {
+export function entryLine(s, data = null, now = clock(), cs = null, short = false) {
+  const k = (x) => (short ? 'es.' : 'en.') + x;
   const c = cs || cardState(s, data, now);
   const sell = s.action === 'SELL';
-  const e = F.price(s.entry);
+  const e = spx(s, s.entry);
   if (c.code === 'buy') {
     const risk = Math.abs((s.entry || 0) - (s.stop || 0));
     const lim = risk > 0 ? s.entry + (sell ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk : s.entry;
-    return { code: 'now', text: t(sell ? 'en.nowSell' : 'en.now', { c: F.time(new Date(nyCloseAfter(+now))), v: F.price(lim) }) };
+    return { code: 'now', text: t(sell ? k('nowSell') : k('now'), { c: F.time(new Date(nyCloseAfter(+now))), v: spx(s, lim) }) };
   }
   if (c.code === 'soon') {
     const o = nextUsOpen(now);
     const days = o ? F.daysUntil(o, now) : 1;
     const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
-    return { code: 'soon', text: t(sell ? 'en.soonSell' : 'en.soon', { day, time: o ? F.time(o) : '15:30', v: e }) };
+    return { code: 'soon', text: t(sell ? k('soonSell') : k('soon'), { day, time: o ? F.time(o) : '15:30', v: e }) };
   }
-  if (c.code === 'wait') return { code: 'wait', text: t(sell ? 'en.waitSell' : 'en.wait', { v: e, d: s.exit_date ? F.dm(s.exit_date) : '–' }) };
-  if (c.code === 'late') return { code: 'late', text: t('en.late') };
-  if (c.code === 'order' && c.ord) return { code: 'order', text: t(sell ? 'en.orderSell' : 'en.order', { v: F.price(c.ord.limit) }) };
+  if (c.code === 'wait') return { code: 'wait', text: t(sell ? k('waitSell') : k('wait'), { v: e, d: s.exit_date ? F.dm(s.exit_date) : '–' }) };
+  if (c.code === 'late') return { code: 'late', text: t(k('late')) };
+  if (c.code === 'order' && c.ord) return { code: 'order', text: t(sell ? k('orderSell') : k('order'), { v: spx(s, c.ord.limit) }) };
   return null;
 }
 
@@ -587,7 +621,7 @@ export function investBase(s, data, now = clock()) {
    maxLoss = the result at the stop (the trade is closed there; capped at the deposit), potential = at the robot's target. */
 export function offerNums(s, data, { amount = null, lev = 1, base = null, sl = null, tp = null, now = clock() } = {}) {
   const ccy = walletCcy();
-  const a = amount ?? EXAMPLE_DEP[ccy] ?? 10000;
+  const a = amount ?? stakeFor(s);
   const px = base ?? investBase(s, data, now).px;
   const side = s.action === 'SELL' ? 'SELL' : 'BUY';
   const o = outcome({ side, entry: px, amount: a, lev, sl: sl ?? s.stop, tp: tp ?? s.target });
@@ -596,7 +630,7 @@ export function offerNums(s, data, { amount = null, lev = 1, base = null, sl = n
 /* result of a CLOSED signal for the example deposit (leverage 1:1): money + % (= zhodnocení of the deposit) */
 export function closedNums(s) {
   const ccy = walletCcy();
-  const a = EXAMPLE_DEP[ccy] ?? 10000;
+  const a = stakeFor(null);
   const pct = priceMove(s);
   return { amount: a, ccy, pct, money: pct == null ? null : (a * pct) / 100 };
 }

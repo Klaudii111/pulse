@@ -6,7 +6,7 @@ import { icon, skBlock, ladderGeometry, liveState, monogram, sparkline, toast } 
 import * as B from '../brief.js';
 import * as W from '../wallet.js';
 import * as store from '../store.js';
-import { orderRow, histList } from './terminal.js';
+import { orderRow, histList, tradeRow } from './terminal.js';
 import { pricePoints } from '../charts.js';
 import { withLive } from './results.js';
 import { regimeLine, nextLine, disclaimer, emptyState, rTip, errorBlock, signalRow, nextCheck } from './signals.js';
@@ -105,41 +105,33 @@ const smoney = (v, c) => (v > 0.5 ? '+' : '') + F.money(v, c, 0);
 export function accountCard(ctx) {
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
-  const tot = D.moneyTone(sm.total, c, sm.totalPct);
-  /* 1.12.0 Peněženka: the whole left part opens #/penezenka, the gold button tops up */
-  return `<section class="d-acc d-wal" id="acc-card" aria-label="${t('wl.title')}">
-    <a class="d-acc-l d-wal-link" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
-      <p class="d-acc-v"><b class="num">${F.money(sm.equity, c, 0)}</b><span>${t('d.fict')}</span></p>
-      <p class="d-acc-s num">${t('wl.cardS', { f: F.money(Math.max(0, sm.free), c, 0) })}${tot.zero ? '' : ` · <span class="${tot.tone}">${t('wl.cardTot', { v: F.esc(tot.text) })}</span>`}</p></a>
-    <button type="button" class="btn btn-primary d-trade" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
+  const td = D.moneyTone(sm.today, c, sm.equity > 0 ? (sm.today / sm.equity) * 100 : null);
+  /* 1.13.0 ONE hero: balance, today's change in colour, small Volné / Ve hře (= in trades + waiting buys) */
+  return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
+    <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
+      <p class="d-hero-v num">${F.money(sm.equity, c, 0)}</p>
+      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.spct(sm.today / Math.max(1, sm.equity - sm.today) * 100, 1) })}</p>
+      <p class="d-hero-s num">${t('dh.split', { f: F.money(Math.max(0, sm.free), c, 0), u: F.money(sm.used + sm.reserved, c, 0) })}</p></a>
+    <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
 }
 
-/* 1.12.0 one calm line on top: "Tvoje peněženka dnes +120 Kč · 2 obchody běží" */
-function todayLine(ctx) {
-  const sm = W.summary(ctx.data);
-  const c = sm.w.ccy;
-  const td = D.moneyTone(sm.today, c, sm.equity > 0 ? (sm.today / sm.equity) * 100 : null);
-  const n = sm.rows.length;
-  const run = n ? t('dt.run', { n }) : sm.w.orders.length ? t('dt.wait', { n: sm.w.orders.length }) : t('dt.none');
-  const v = td.zero ? `±${F.money(0, c, 0)}` : td.text;
-  return `<p class="d-today">${t('dt.l')} <b class="num ${td.tone}">${F.esc(v)}</b><span> · ${F.esc(run)}</span></p>`;
-}
-
-/* 1.12.0 three ways to use PULSE – big clear tiles right under Peněženka */
-function profLine(on) {
-  const cs = D.calcState();
-  const p = CONFIG.CALC.RISK_PROFILES.find((x) => x.id === cs.profile) || CONFIG.CALC.RISK_PROFILES[0];
-  return t('pt.prof', { s: t(on ? 'pt.on' : 'pt.off'), p: t(`profile.${p.id}`).toLowerCase(), r: F.num(p.pct, 0) });
+/* 1.13.0 "Jak chceš obchodovat": one card, three chips – Sám · Signály · Robot za mě (switch + one status line) */
+export function profText() {
+  const lp = B.levProfile();
+  const rp = D.riskProf();
+  return `${lp.id === 'own' ? t('mb.own') : t(`mb.p.${lp.id}`)} · ${t(`profile.${rp.id}`)} (${F.num(rp.pct, 0)} %)`;
 }
 function paths() {
   const on = !!store.get('autoCopy', null)?.on;
-  return `<section class="paths" aria-label="${t('pt.aria')}">
-    <a class="path" href="#/terminal"><span class="path-ic">${icon('chart')}</span><span class="path-tx"><b>${t('pt.self')}</b><small>${t('pt.selfS')}</small></span>${icon('chev-right', 'icon-xs path-go')}</a>
-    <a class="path" href="#/signaly"><span class="path-ic">${icon('signals')}</span><span class="path-tx"><b>${t('pt.sig')}</b><small>${t('pt.sigS')}</small></span>${icon('chev-right', 'icon-xs path-go')}</a>
-    <button type="button" class="path path-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">
-      <span class="path-ic">${icon('robot')}</span><span class="path-tx"><b>${t('pt.auto')}</b><small>${t('pt.autoS')}</small><small class="path-prof">${F.esc(profLine(on))}</small></span>
-      <span class="auto-sw" aria-hidden="true"><i></i></span></button>
+  return `<section class="how-card" aria-label="${t('pt.aria')}">
+    <p class="d-k">${t('pt.aria')}</p>
+    <div class="how-chips">
+      <a class="hw-chip" href="#/terminal">${icon('chart', 'icon-sm')}<span>${t('pt.self')}</span></a>
+      <a class="hw-chip" href="#/signaly">${icon('signals', 'icon-sm')}<span>${t('pt.sig')}</span></a>
+      <button type="button" class="hw-chip hw-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">${icon('robot', 'icon-sm')}<span>${t('pt.auto')}</span><span class="auto-sw" aria-hidden="true"><i></i></span></button>
+    </div>
+    <p class="how-st"><b class="${on ? 'up' : ''}">${t(on ? 'pt.on' : 'pt.off')}</b> · <a class="link" href="#/nastaveni">${F.esc(profText())}</a></p>
   </section>`;
 }
 
@@ -153,10 +145,10 @@ export function autoSwitch() {
 
 /* 2 NOVÝ SIGNÁL: buyable signals (a / b / soon), not dismissed with "Teď ne", max 3.
    1.11.0: strategies switched off by the robot's watchdog are not offered; best first (H.sortByQuality). */
-export function newSignals(data, now) {
-  const nn = new Set(D.dismissed());
+export function newSignals(data, now, withDismissed = false) {
+  const nn = new Set(withDismissed ? [] : D.dismissed());
   const list = D.allOpen(data).filter((x) => D.horizonAllowed(data, x.horizon) && !(CONFIG.HIDDEN_HORIZONS || []).includes(x.horizon) && !nn.has(x.id) && H.offerable(x, data))
-    .filter((x) => ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
+    .filter((x) => D.sigPhase(x, now) === 'open' && ['buy', 'soon', 'wait'].includes(D.cardState(x, data, now).code));
   return H.sortByQuality(list, data, now);
 }
 
@@ -181,21 +173,7 @@ function myInvest(ctx) {
   return rows + ords ? `<div class="mi-list">${rows}${ords}</div>` : `<p class="d-empty">${t('d.mine0')}</p>`;
 }
 function myInvestRows(ctx, sm, bare = false) {
-  const c = sm.w.ccy;
-  const rows = sm.rows.map((p) => {
-    const mt = D.moneyTone(p.pnl, c, p.pnlPct);
-    const word = mt.zero ? '' : t(p.pnl > 0 ? 'd.win' : 'd.lose');
-    const toT = p.tp > 0 && p.px > 0 ? Math.abs(p.tp - p.px) / p.px * 100 : null;
-    const w = B.whatIs(p.sym, p.name);
-    return `<div class="mi-row">
-      <button type="button" class="mi-main" ${p.sigId ? `data-action="open-signal" data-id="${F.esc(p.sigId)}"` : `data-action="h-term" data-sym="${F.esc(p.sym)}"`}>
-        <span class="mi-id"><b class="mi-n">${F.esc(w.name)}</b><span class="mi-v num ${mt.tone}">${word ? `${word} ` : ''}${F.esc(mt.text)}${mt.zero ? '' : ` (${F.spct(p.pnlPct, 1)})`}</span>
-          ${toT != null ? `<span class="mi-s num">${t('d.toTarget', { v: F.pct(toT, 1) })}</span>` : ''}</span>
-        ${liveLine(p, ctx.data)}
-      </button>
-      <button type="button" class="btn btn-secondary btn-small mi-x" data-action="h-close" data-id="${p.id}">${t('d.close')}</button>
-    </div>`;
-  }).join('');
+  const rows = sm.rows.map((p) => tradeRow(p, sm.w.ccy, liveLine(p, ctx.data))).join('');
   return bare ? rows : `<div class="mi-list">${rows}</div>`;
 }
 
@@ -213,25 +191,26 @@ export function renderInvested(ctx) {
   /* followed signals (former Moje): only when there are some */
   const fol = D.followed().map((id) => D.findSignal(ctx.data, id)).filter(Boolean);
   return head + `
-  <section class="d-acc"><div class="d-acc-l"><p class="d-k">${t('zi.inTrades')}</p>
-    <p class="d-acc-v"><b class="num">${F.money(sm.used, c, 0)}</b><span>${t('d.fict')}</span></p>
-    <p class="d-acc-s num ${open.tone}">${t('zi.result', { v: open.text })}</p></div>
+  <section class="d-acc"><div class="d-acc-l"><p class="d-k">${t('acc.inPlay')}${B.qh('VEHRE')}</p>
+    <p class="d-acc-v"><b class="num">${F.money(sm.used + sm.reserved, c, 0)}</b><span>${t('d.fict')}</span></p>
+    <p class="d-acc-s num">${t(sm.reserved > 0 ? 'zi.split' : 'zi.split0', { a: F.money(sm.used, c, 0), b: F.money(sm.reserved, c, 0) })}${sm.rows.length ? ` · <span class="${open.tone}">${t('zi.result', { v: open.text })}</span>` : ''}</p></div>
     <a class="btn btn-secondary d-trade" href="#/penezenka">${icon('wallet', 'icon-sm')}<span>${t('wl.title')}</span></a></section>
   <section class="d-block"><h2 class="d-h">${t('zi.open')}<span class="num"> · ${sm.rows.length}</span></h2>${sm.rows.length ? myInvestRows(ctx, sm) : `<p class="d-empty">${t('d.mine0')}</p>`}</section>
   <section class="d-block"><h2 class="d-h">${t('zi.orders')}<span class="num"> · ${sm.w.orders.length}</span></h2>${ords ? `<div class="tp-list">${ords}</div>` : `<p class="d-empty">${t('zi.orders0')}</p>`}</section>
   <a class="hs-row zi-hrow" href="#/historie">${icon('history', 'icon-xs')}<span>${hs.n ? t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) }) : t('zi.histLine0')}</span>${icon('chev-right', 'icon-xs')}</a>
-  ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.offer(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;
+  ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.compact(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;
 }
 
 
 /* 4 ROBOT: one line -> the robot page */
-function robotLine1(ctx) {
+export function robotLine1(ctx) {
   const p = ctx.data?.paper;
   if (!p || !Array.isArray(p.positions)) return '';
   const n = p.positions.length;
   const sum = p.positions.reduce((a, x) => a + (+x.pnl_usd || 0), 0);
-  const v = (sum > 0.5 ? '+' : sum < -0.5 ? '−' : '') + F.money(Math.abs(sum), 'USD', 0);
-  return `<a class="d-robot" href="#/robot">${icon('shield', 'icon-sm')}<span>${t('d.robot', { n, u: F.unit('trade', n), v })}</span>${icon('chev-right', 'icon-xs')}</a>`;
+  const c = D.walletCcy();
+  const v = (sum > 0.5 ? '+' : sum < -0.5 ? '−' : '') + F.money(Math.abs(D.convert(sum, 'USD', c, ctx.data)), c, 0);
+  return `<p class="d-robot">${icon('shield', 'icon-sm')}<span>${t('d.robot', { n, u: F.unit('trade', n), v })}</span></p>`;
 }
 
 export const actions = {
@@ -254,19 +233,19 @@ export function render(ctx) {
     return head + `${skBlock(120, 22)}<div style="height:12px"></div>${skBlock(220)}`;
   }
   const fresh = newSignals(ctx.data, now);
+  const all = newSignals(ctx.data, now, true).length; // the same count as Signály → Otevřené ("Můžeš koupit N")
   const sigs = fresh.slice(0, 3);
-  const more = fresh.length > 3 ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: fresh.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
-  return head + `
-  ${todayLine(ctx)}
-  ${accountCard(ctx)}
+  const more = all > sigs.length ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: all })}${icon('chev-right', 'icon-xs')}</a>` : '';
+  /* 1.13.0: phone = one column (hero · how · signals · mine); desktop = left hero + how + mine, right the signals */
+  return head + `<div class="d-grid">
+  <div class="d-c1">${accountCard(ctx)}
   ${paths()}
-  ${B.statsRow(ctx.data, now)}
-  <section class="d-block" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${icon('chev-right', 'icon-xs')}</a></h2>
+  ${B.statsRow(ctx.data, now)}</div>
+  <section class="d-block d-c2" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${all ? `<span class="num"> · ${all}</span>` : ''}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
-    ${sigs.length ? `<div class="sc-list">${((seen) => sigs.map((x, i) => B.offer(x, { data: ctx.data, now, notNow: true, i, seen, isNew: true })).join(''))(new Set())}</div>${more}` : `<p class="d-empty">${t('d.new0')}</p>`}
+    ${sigs.length ? `<div class="sc-list">${sigs.map((x, i) => B.compact(x, { data: ctx.data, now, notNow: true, i, isNew: true })).join('')}</div>${more}` : `<p class="d-empty">${t('sig.none', { when: F.esc(nextCheck(ctx.data, now)) })}</p>`}
   </section>
-  <section class="d-block" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
-  ${robotLine1(ctx)}
-  ${linkLine(ctx.data, now)}
+  <section class="d-block d-c3" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
+  </div>
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

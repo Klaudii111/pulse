@@ -44,8 +44,8 @@ export function render(ctx) {
 
       <section class="field">
         <label class="field-l" for="acc">${t('calc.account')}</label>
-        <div class="money-input"><input id="acc" class="num" inputmode="decimal" autocomplete="off" value="${F.num(cs.account, 0)}" aria-describedby="acc-ccy"></div>
-        <div class="ccy" id="acc-ccy">${seg({ name: 'ccy', small: true, label: t('calc.ccy'), items: ['CZK', 'EUR', 'USD'].map((c) => ({ id: c, label: c })), active: cs.ccy })}</div>
+        <div class="money-input"><input id="acc" class="num" readonly aria-readonly="true" value="${F.num(cs.account, 0)} ${F.esc(cs.ccy === 'CZK' ? 'Kč' : cs.ccy)}" aria-describedby="acc-ccy"></div>
+        <p class="field-s" id="acc-ccy">${t('calc.accWallet')} <a class="link" href="#/nastaveni">${t('calc.accChange')}</a></p>
       </section>
 
       <section class="field">
@@ -106,13 +106,7 @@ export function mount(el, ctx) {
   const s = current(ctx);
   if (!s) return;
   if (ctx.params.get('s')) D.saveCalc({ signalId: s.id });
-  const acc = el.querySelector('#acc');
-  acc?.addEventListener('input', () => {
-    const v = F.parseNum(acc.value);
-    if (v > 0) { D.saveCalc({ account: v }); refresh(ctx); }
-  });
-  acc?.addEventListener('blur', () => { acc.value = F.num(D.calcState().account, 0); });
-  acc?.addEventListener('focus', () => { acc.value = String(D.calcState().account); acc.select(); });
+  /* 1.13.0: the capital is the wallet (read-only here; Dobít / Vybrat in Nastavení → Můj profil) */
   const lev = el.querySelector('#lev');
   const cap = D.leverageCap(ctx.data, s);
   lev?.addEventListener('input', () => {

@@ -11,22 +11,16 @@ export const init = (e) => { env = { ...env, ...e }; };
 
 /* 1.10.1: retargeted to the 1.10 screens (Můj účet card, signal tile, Zainvestovat, tabs, Sledované grafy, bell) */
 const TAB = (id) => `#tabbar a[href="#/${id}"], #side-nav a[href="#/${id}"]`;
+/* 1.13.0: max 4 steps, all on Dnes + the tab bar: Peněženka · a signal (money line + profiles) · Zainvestovat · Zainvestováno */
 const TOUR = [
   { route: 'dnes', sel: '#acc-card', k: 'tour.n1' },
-  { route: 'signaly', sel: '.sc.is-tile .sc-head', k: 'tour.n2' },
-  { route: 'signaly', sel: '.sc.is-tile .sc-money', k: 'tour.n3' },
-  { route: 'signaly', sel: '.sc.is-tile .sc-go', k: 'tour.n4' },
-  { route: 'signaly', sel: TAB('zainvestovano'), k: 'tour.n5' },
-  { route: 'terminal', sel: '#big-acc', k: 'tour.n6' },
-  { route: 'terminal', sel: '[data-seg-name="tview"][data-id="watch"]', k: 'tour.n7' },
-  { route: 'terminal', sel: '.topbar [data-slot="bell"] .bell, .side-top [data-slot="bell"] .bell', k: 'tour.s7' },
-  /* 1.11.0: how do you know the signals work -> the robot's learning line on Dnes (skipped without health.json) */
-  { route: 'dnes', sel: '.d-learn', k: 'tour.learn' },
+  { route: 'dnes', sel: '.cc .cc-money', k: 'tour.n3' },
+  { route: 'dnes', sel: '.cc .cc-go', k: 'tour.n4' },
+  { route: 'dnes', sel: TAB('zainvestovano'), k: 'tour.n5' },
 ];
 const HINT = [
-  { route: 'signaly', sel: '.sc.is-tile .sc-head', k: 'tour.n2' },
-  { route: 'signaly', sel: '.sc.is-tile .sc-why', k: 'hint.n2' },
-  { route: 'signaly', sel: '.sc.is-tile .sc-money', k: 'tour.n3' },
+  { route: 'signaly', sel: '.cc .cc-head', k: 'tour.n2' },
+  { route: 'signaly', sel: '.cc .cc-money', k: 'tour.n3' },
 ];
 
 let root = null, steps = [], i = 0, onEnd = null;
@@ -136,7 +130,7 @@ export function start() {
 /* one-time hint on Signály (called after Signály rendered) */
 export function maybeHint() {
   if (root || store.get('hint3', 0) || document.querySelector('.onb')) return;
-  if (!find('.sc.is-tile .sc-money')) return;
+  if (!find('.cc .cc-money')) return;
   store.set('hint3', 1);
   open(HINT, null);
 }

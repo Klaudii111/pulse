@@ -8,31 +8,22 @@ import { icon, seg, segMove, toast, openSheet, closeTopSheet } from '../ui.js';
 import { t, L, lang, setLang, LOCALES } from '../i18n/index.js';
 import * as Live from '../live.js';
 import * as Mkt from '../market.js';
+import * as B from '../brief.js';
 
+/* 1.13.0: Nastavení on top, ONE Robot page (tabs), ONE "Jak to funguje" (with the tour button), Liga / Úrovně hidden until data */
 export const MORE_ITEMS = [
-  /* 1.9.0: how it works first (guided tour + page), and why it is not made up */
-  /* 1.9.1: the robot's results and account live here (5 tabs: Dnes · Signály · Zainvestováno · Obchodovat · Více) */
-  { group: 'more.g.robot', items: [
-    { id: 'vysledky', icon: 'results', sub: () => t('more.vysledky.s') },
-    { id: 'robot', icon: 'shield', sub: (c) => (c.data?.paper?.account ? F.money(+c.data.paper.account.equity, 'USD', 0) : t('more.robot.s')) },
-    /* 1.11.0: the watchdog – which strategies work in practice too */
-    { id: 'uceni', icon: 'levels', sub: () => t('more.uceni.s') },
-  ] },
-  { group: 'more.g.help', items: [
-    { id: 'jak', icon: 'help', sub: () => t('more.jak.s') },
-    { id: 'tour', action: true, icon: 'spark', sub: () => t('more.tour.s') },
-    { id: 'duvera', icon: 'shield', sub: () => t('more.duvera.s') },
-  ] },
   { group: 'more.g.you', items: [
-    /* 1.10.0: my play-money account – load, withdraw, start again */
-    /* 1.12.0 Peněženka (was Můj účet) + Historie (Moje merged into Zainvestováno) */
+    { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
     { id: 'penezenka', icon: 'wallet', sub: () => { const w = store.get('wallet', null); return w ? `${F.money(w.balance, w.ccy, 0)} · ${t('d.fict')}` : t('d.fict'); } },
     { id: 'historie', icon: 'history', sub: () => { const w = store.get('wallet', null); const n = w?.closed?.length || 0; return n ? t('more.historie.s', { n }) : t('more.historie.s0'); } },
-    { id: 'auto', action: true, icon: 'spark', sub: () => t(store.get('autoCopy', null)?.on ? 'auto.sOn' : 'auto.sOff') },
+    { id: 'auto', action: true, icon: 'robot', sub: () => t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off') },
     { id: 'denik', icon: 'journal', sub: () => { const n = Object.keys(D.journal()).length; return n ? `${n} ${F.unit('entry', n)}` : t('more.denik.s0'); } },
     { id: 'akademie', icon: 'book', sub: () => t('more.akademie.s', { d: D.lessonsDone().size, n: LESSONS.length }) },
-    { id: 'urovne', icon: 'levels', sub: (c) => D.levelName(D.levelInfo(c.data).level) },
-    { id: 'liga', icon: 'trophy', sub: (c) => L(c.data?.league?.season?.name) || t('more.liga.s') },
+  ] },
+  { group: 'more.g.robot', items: [
+    { id: 'robot', icon: 'shield', sub: () => t('more.robot.s2') },
+    { id: 'jak', icon: 'help', sub: () => t('more.jak.s2') },
+    { id: 'duvera', icon: 'check', sub: () => t('more.duvera.s') },
   ] },
   { group: 'more.g.tools', items: [
     { id: 'kalkulacka', icon: 'calc', sub: () => t('more.kalkulacka.s') },
@@ -43,9 +34,6 @@ export const MORE_ITEMS = [
   { group: 'more.g.app', items: [
     { id: 'stahnout', icon: 'share', sub: () => t('more.stahnout.s') },
     { id: 'predplatne', icon: 'gift', sub: () => t('more.predplatne.s') },
-    { id: 'onboarding', action: true, icon: 'spark', sub: () => t('more.onboarding.s') },
-    { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
-    { id: 'info', icon: 'info', sub: () => t('more.info.s') },
   ] },
 ];
 
@@ -112,7 +100,8 @@ export function renderSettings(ctx) {
   const sup = P.pushSupport();
   const pushMsg = { elsewhere: 'push.elsewhere', 'no-key': 'push.nokey', 'ios-install': 'push.ios', unsupported: 'push.unsupported', denied: 'push.denied' }[sup.reason] || 'push.ok';
   const instMsg = inst === 'installed' ? 'set.installed' : inst === 'ios' ? 'set.installIos' : inst === 'prompt' ? 'set.installPrompt' : 'set.installOther';
-  return `<header class="page-head"><div><h1 class="page-title">${t('set.title')}</h1></div></header>
+  return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('set.title')}</h1></div></header>
+  ${myProfile()}
   <div class="info-layout"><div>
     ${Live.usesProxy() ? `<h2 class="section-title">${t('live.key.t')}</h2>
     <div class="card"><div class="card-row"><div><p class="card-t">${t('live.key.t')}</p><p class="card-s up">${t('live.proxy.on')}</p></div></div></div>` : ''}
@@ -137,6 +126,26 @@ export function renderSettings(ctx) {
     ${CONFIG.ACCESS_GATE_ENABLED ? `<div class="card"><div class="card-row"><div><p class="card-t">${t('set.code')}</p><p class="card-s">${t('set.codeS')}</p></div><button class="btn btn-secondary btn-small" type="button" data-action="lock">${t('set.lock')}</button></div></div>` : ''}
     <p class="meta-foot"><span>${F.esc(CONFIG.APP_NAME)} ${CONFIG.APP_VERSION}</span></p>
   </div></div>`;
+}
+
+/* 1.13.0 "Můj profil" – the three settings every money number in the app starts from:
+   kapitál (= Peněženka), riziko (Opatrně 1 % / Odvážně 3 %), páka-profil (Konzervativně / Vyváženě / Agresivněji) */
+function myProfile() {
+  const w = store.get('wallet', null);
+  const c = w?.ccy || D.calcState().ccy;
+  const rp = D.riskProf();
+  const lp = B.levProfile();
+  const stake = D.stakeFor(null);
+  const radio = (items, act, key, cur) => `<div class="mp-seg" role="radiogroup">${items.map((x) => `<button type="button" class="mp-opt" role="radio" aria-checked="${x.id === cur}" data-action="${act}" ${key}="${x.id}"><b>${x.t}</b><small>${x.s}</small></button>`).join('')}</div>`;
+  return `<section class="mp card" aria-labelledby="mp-h"><h2 class="mp-h" id="mp-h">${t('mp.title')}</h2>
+    <div class="mp-row"><div><p class="mp-l">${t('mp.cap')}</p><p class="mp-v num">${F.money(w ? w.balance : D.calcState().account, c, 0)}</p><p class="mp-s">${t('mp.capS')}</p></div>
+      <div class="mp-btns"><button type="button" class="btn btn-primary btn-small" data-action="w-load">${t('wl.topup')}</button><button type="button" class="btn btn-ghost btn-small" data-action="w-withdraw">${t('wl.wd')}</button></div></div>
+    <p class="mp-l">${t('mp.risk')}</p>
+    ${radio(CONFIG.CALC.RISK_PROFILES.map((p) => ({ id: p.id, t: `${t(`profile.${p.id}`)} · ${F.num(p.pct, 0)} %`, s: t(`mp.risk.${p.id}`) })), 'risk-prof', 'data-id', rp.id)}
+    <p class="mp-l">${t('mp.lev')}</p>
+    ${radio(B.LEV_PROFILES.map((p) => ({ id: p.id, t: t(`mb.p.${p.id}`), s: t(`mp.lev.${p.id}`) })), 'lev-prof', 'data-prof', lp.id)}
+    <p class="mp-sum">${icon('info', 'icon-xs')}<span>${t('mp.sum', { a: F.money(stake, c, 0), p: F.num(rp.pct, 0) })}</span></p>
+  </section>`;
 }
 
 export async function mountSettings(el) {

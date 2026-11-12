@@ -174,10 +174,10 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
   const cs = D.cardState(s, ctx.data, now);
   const bot = B.robotLine(s, ctx.data);
   const brief = `<div class="d-brief">
-      <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
-      <p class="d-ctitle">${B.sigTitle(s)}<small>${t(`c.type.${s.horizon}`)}</small></p>
-      ${B.facts(s, D.sigPhase(s, now), now)}
-      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const { n, html } = B.moneyFor(s, ctx.data, now); return `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${B.testLine(s, ctx.data)}`; })() : ''}
+      ${['mine', 'order', 'late', 'done'].includes(cs.code) || s.preview ? `<p class="bc-tags">${['mine', 'order', 'late', 'done'].includes(cs.code) ? `<span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>` : ''}
+      <p class="d-ctitle"><span class="cc-dir ${s.action === 'SELL' ? 'down' : 'up'}">${s.action === 'SELL' ? '↓' : '↑'} ${t(`c.side.${s.action === 'SELL' ? 'SELL' : 'BUY'}`)}</span><span>${t(`c.type.${s.horizon}`)}</span>${s.exit_date ? `<span class="num">${F.esc(B.lenText(s, now))}</span>` : ''}<span class="sc-no num">#${D.sigNo(s)}</span></p>
+      ${(() => { const w = B.whyBullets(s, 1)[0]; return w && D.sigPhase(s, now) !== 'closed' ? `<p class="cc-why"><b>${t('c.why')}</b> ${F.esc(w)}</p>` : ''; })()}
+      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : ''}
       ${(() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`; })()}
       ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
@@ -189,6 +189,15 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       <p class="bc-pub">${icon('clock', 'icon-xs')}<span>${F.esc(B.published(s))}</span></p>
       </div>
     </div>`;
+  /* 1.13.0 "Kolik můžeš vydělat a ztratit": the full profile table (the CHOSEN profile highlighted – the same numbers as the card),
+     Příklady pák, the legal cap of this market, the robot's test line */
+  const moneySec = D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => {
+    const { n, html } = B.moneyFor(s, ctx.data, now);
+    const ex = B.levExamples({ s, data: ctx.data, sym: s.symbol, side: s.action === 'SELL' ? 'SELL' : 'BUY', amount: n.amount, ccy: n.ccy, base: n.base, sl: s.stop, tp: s.target, sel: B.selLev(s.symbol) });
+    return `<section class="d-sec" aria-labelledby="d-money"><h3 class="sheet-label" id="d-money">${t('det.moneyH')}</h3>
+      <div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${ex}
+      <p class="mb-cap">${icon('shield', 'icon-xs')}<span>${F.esc(B.levWhy(s.symbol, M.maxLev(s.symbol)))}</span></p>${B.testLine(s, ctx.data)}</section>`;
+  })() : '';
   const mk = new Set(chartMarks(ctx, s).map((m) => m.kind));
   const legend = mk.size ? `<p class="pc-legend">${mk.has('robot') ? `<span class="lg-robot">▲ ${t('mark.robot')}</span>` : ''}${mk.has('me') ? `<span class="lg-me">▲ ${t('mark.me')}</span>` : ''}${mk.has('exit') ? `<span class="lg-exit">▼ ${t('mark.exit')}</span>` : ''}</p>` : '';
   /* 1.11.1: the market chart in candles (/api/bars) is the default; the signal's own line stays as a choice */
@@ -207,7 +216,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         <div class="d-bars" id="dbars">${Bars.controls('db')}</div>
         <a class="link verify-link" href="${verifyUrl(s.symbol)}" target="_blank" rel="noopener">${t('u.verify')}${icon('external', 'icon-xs')}</a>
         ${isOpen && state === 'open' ? `<p class="pchart-note">${left > 0 ? t('det.left', { n: left }) : left === 0 ? t('det.exitToday') : t('det.exitPassed')}</p>` : ''}</div>` : '';
-  status = brief + `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + chartHtml + status;
+  status = brief + moneySec + `<div data-status>${statusLine(s, { now, big: true, money: false })}</div>` + chartHtml + status;
   const j = D.journal()[s.id];
   const html = `
     <div class="sheet-head">
@@ -228,24 +237,6 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         <ol class="howto-l num">${lines.map((l) => `<li>${F.esc(l)}</li>`).join('')}</ol>
         ${est && (est.code === 'late' || est.code === 'expired') ? `<p class="howto-warn">${t('det.howto.warn')}</p>` : ''}
       </section>` : ''}
-      ${isOpen && state === 'open' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
-      <div class="kv">
-        ${(() => { /* 1.10.1: the same per-deposit numbers as the card and the investment sheet (D.offerNums) */
-          const n = D.offerNums(s, ctx.data, { now });
-          const sg = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.money(Math.abs(v), n.ccy, 0);
-          return `<div class="kv-item" data-kvnums="${F.esc(JSON.stringify({ a: n.amount, l: Math.round(n.maxLoss ?? 0), p: Math.round(n.potential ?? 0) }))}"><p class="kv-l">${t('c.maxLoss')}${B.qh('MAXLOSS')}</p><p class="kv-v num down">${n.maxLoss != null ? sg(n.maxLoss) : '–'}</p><p class="kv-s">${t('c.profitS', { a: F.money(n.amount, n.ccy, 0) })}</p></div>
-        ${(() => { /* 1.11.1: average of the strategy in the test (no leverage); without health.json the target as before */
-          const bt = H.strat(ctx.data, s.horizon)?.backtest;
-          const v = bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0 ? B.levNums({ side: s.action === 'SELL' ? 'SELL' : 'BUY', entry: n.base, amount: n.amount, sl: s.stop, tp: s.target, lev: 1, bt }).avg : null;
-          return v != null ? `<div class="kv-item"><p class="kv-l">${t('c.pot')}${B.qh('POT')}</p><p class="kv-v num up">≈ ${sg(v)}</p><p class="kv-s">${t('mb.kvS', { d: t(`mb.dur.${s.horizon}`) })}</p></div>`
-            : `<div class="kv-item"><p class="kv-l">${t('c.potOld')}${B.qh('POTOLD')}</p><p class="kv-v num up">${n.potential != null ? sg(n.potential) : '–'}</p><p class="kv-s">${n.potentialPct != null ? `${F.spct(n.potentialPct, 1)} · ` : ''}${t('det.targetHit')}</p></div>`;
-        })()}`;
-        })()}
-        <div class="kv-item"><p class="kv-l">${t('det.rr')}</p><p class="kv-v num">${F.rr(s.rr)}</p><p class="kv-s">${t('det.rrS', { v: F.num(s.rr, 1) })}</p></div>
-        <div class="kv-item"><p class="kv-l">${t('det.lev')}</p><p class="kv-v num">${t('det.levMax', { v: lev.effective })}</p><p class="kv-s">${t('lev.text', { legal: lev.legal, level: lev.level })}</p></div>
-      </div>
-      <p class="acct-note">${icon('info', 'icon-xs')}<span>${t('c.potNote')}</span></p>
-      ${levTable(s, lev, ctx.data)}
       ${isOpen && state === 'open' ? `<div class="exit-ring">
         ${ring(elapsed / 100, left > 0 ? `<b class="num">${left}</b><small>${F.unit('day', left)}</small>` : `<b>${t('det.todayShort')}</b>`, { size: 72, stroke: 5, cls: 'gold' })}
         <div class="timeline-row"><div>${t('det.exitLatest')}<b class="num">${F.dm(s.exit_date)} ${F.weekday(s.exit_date)}</b></div><div>${t('det.created')}<b class="num">${F.dmTime(s.created_at)}</b></div></div>
@@ -275,6 +266,7 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
         ${isOpen && state === 'open' ? brokerButton() : ''}
         ${isOpen && state === 'open' ? `<div class="mt5-links"><a class="link" href="${CONFIG.MT5.DOWNLOAD_URL}" target="_blank" rel="noopener">${icon('external', 'icon-xs')}${t('mt5.open')}</a><a class="link" href="#/mt5" data-close-nav>${t('mt5.help')}</a></div>` : ''}
       </div>
+      ${isOpen && state === 'open' ? `<div class="sheet-cta" id="cta">${ctaHtml(ctx, s)}</div>` : ''}
     </div>`;
 
   const mount = (el) => {
@@ -391,8 +383,8 @@ function ctaHtml(ctx, s) {
   const cs = D.cardState(s, ctx.data, ctx.now());
   if (!cs.cta) return `<p class="inv-note">${F.esc(cs.text)}</p>`;
   const lim = cs.cta === 'limit';
-  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${lim ? t('inv.btnLim', { v: F.price(s.entry) }) : t('sc.invest')}</button>
-    <p class="inv-note">${t('inv.fict')}</p>`;
+  return `<button type="button" class="btn btn-primary btn-block btn-invest" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}${t('sc.invest')}</button>
+    <p class="risk-line">${t('risk.line')}</p>`;
 }
 
 function journalForm(s, j) {

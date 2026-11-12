@@ -71,9 +71,8 @@ function slideB() {
     </div>
     <p class="onb-line" id="onb-line">${riskLine(cs)}</p>
     <p class="onb-l">${t('onb.b.lev')}</p>
-    <div class="onb-ccy onb-levp" role="radiogroup" aria-label="${t('onb.b.lev')}">${[['cons', 1], ['bal', 2], ['aggr', 5]].map(([id, v]) => `<button type="button" role="radio" class="chip" data-levp="${id}" aria-checked="${id === (store.get('levProfile', 'cons') || 'cons')}"><b>${t(`mb.p.${id}`)}</b><small>${v === 1 ? t('mb.noLev') : id === 'aggr' ? t('mb.levCap') : t('mb.lev', { v })}</small></button>`).join('')}</div>
+    <div class="onb-ccy onb-levp" role="radiogroup" aria-label="${t('onb.b.lev')}">${[['cons', 1], ['bal', 2], ['aggr', 5]].map(([id, v]) => `<button type="button" role="radio" class="chip" data-levp="${id}" aria-checked="${id === (store.get('levProfile', 'cons') || 'cons')}"><b>${t(`mb.p.${id}`)}</b><small>${v === 1 ? t('mb.noLev') : id === 'aggr' ? t('onb.levAggr') : t('mb.lev', { v })}</small></button>`).join('')}</div>
     <p class="onb-note">${t('onb.b.levS')}</p>
-    <div class="onb-dd">${B.ddNote()}</div>
     <p class="onb-note onb-wal">${icon('wallet', 'icon-sm')}<span>${t('onb.b.wallet')}</span></p>
   </section>`;
 }
@@ -106,7 +105,7 @@ function slideC() {
     <div class="onb-box onb-auto"><div class="onb-box-h"><span class="onb-ic">${icon('spark')}</span><div><p class="onb-bt">${t('onb.c.autoT')}</p><p class="onb-bs">${t('onb.c.autoS')}</p></div></div>
       <div class="onb-yn" role="radiogroup" aria-label="${t('onb.c.autoT')}"><button type="button" class="chip" role="radio" data-onb="auto-yes" aria-checked="${!!store.get('autoCopy', null)?.on}">${t('onb.c.autoYes')}</button><button type="button" class="chip" role="radio" data-onb="auto-no" aria-checked="${store.get('autoCopy', null)?.on === false}">${t('onb.c.autoNo')}</button></div></div>
     <button type="button" class="btn btn-ghost btn-block onb-how" data-onb="how">${icon('help', 'icon-sm')}${t('onb.c.how')}</button>
-    <p class="onb-fine">${F.esc(t('disclaimer'))}</p>
+    <p class="onb-fine">${t('risk.line')}<br>${F.esc(t('disclaimer'))}</p>
   </section>`;
 }
 
@@ -152,7 +151,8 @@ export function open(onDone) {
     el.querySelector('#onb-line').textContent = riskLine(cs);
     /* the play-money platform account follows the currency while it is still unused */
     /* 1.9.0: the same amount is loaded as fictional money on the platform (while the account is still unused) */
-    if (W.untouched()) W.resetWith(cs.ccy, cs.account);
+    /* 1.13.0: the capital typed here (raw, not the wallet it is about to become) */
+    if (W.untouched()) W.resetWith(cs.ccy, +(store.get('calc', {}) || {}).account || cs.account);
   };
   acc.addEventListener('input', () => {
     typed = true;
@@ -204,7 +204,8 @@ export function open(onDone) {
     if (a === 'skip') finish('skipped');
     else if (a === 'next') { const i = idx(); if (i >= 2) finish('done'); else go(i + 1); }
     else if (a === 'auto-yes' || a === 'auto-no') {
-      store.set('autoCopy', { on: a === 'auto-yes', at: Date.now() });
+      /* 1.13.0: from the first-run guide the robot takes only NEW signals (never the running ones at once) */
+      store.set('autoCopy', { on: a === 'auto-yes', at: Date.now(), skip: [] });
       el.querySelectorAll('[data-onb^="auto-"]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
     }
     else if (a === 'how') { finish('how'); setTimeout(() => window.__pulseGo && window.__pulseGo('#/jak'), 350); }

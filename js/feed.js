@@ -90,7 +90,7 @@ export function update(data) {
     if (snap.wal) {
       const pp = new Set(snap.wal.pos), pc = new Set(snap.wal.cl);
       /* a position from a filled limit order is told by the order's own "vyplněn" event below */
-      wpos.forEach((x, i) => { if (!pp.has(wp[i]) && !x.order) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt }); });
+      wpos.forEach((x, i) => { if (!pp.has(wp[i]) && !x.order && !x.auto) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt }); });
       wcl.forEach((x, i) => { if (!pc.has(wc[i])) ev.push({ k: 'my-close', sym: x.sym, side: x.side, v: x.pnl, ccy: w.ccy, why: x.why, sid: x.sigId || null, t: x.closedAt }); });
     }
     const nw = { pos: wp, cl: wc.slice(0, 200) };

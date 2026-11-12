@@ -40,6 +40,14 @@ export function price(v, dec = null) {
   return a >= 5000 ? num(v, 0) : a >= 1000 ? num(v, 1, 1) : a >= 10 ? num(v, 2) : a >= 2 ? num(v, 3) : num(v, 5);
 }
 
+/* 1.13.0: a price with its currency, always 2 decimals (4 under 2): "164,47 $" */
+const SIGN = { USD: '$', EUR: '€', GBP: '£', CZK: 'Kč', JPY: '¥', CHF: 'CHF' };
+export const ccySign = (c) => SIGN[c] || c || '$';
+export function pxc(v, ccy = 'USD') {
+  if (v == null || !Number.isFinite(+v)) return '–';
+  return `${num(+v, Math.abs(v) < 2 ? 4 : 2)} ${ccySign(ccy)}`;
+}
+
 export function money(v, ccy = 'CZK', dec) {
   if (v == null || !Number.isFinite(v)) return '–';
   const d = dec ?? (ccy === 'CZK' ? 0 : Math.abs(v) >= 1000 ? 0 : 2);

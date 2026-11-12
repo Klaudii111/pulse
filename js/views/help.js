@@ -28,7 +28,7 @@ export function renderHow() {
   <ul class="how-cols card">${col}</ul>
   <h2 class="section-title">${t('jak.faq')}</h2>
   <div class="faq-list">${faq}</div>
-  <p class="honest">${icon('shield', 'icon-xs')} <a class="link" href="#/duvera">${t('trust.title')}</a></p>
+  <p class="honest">${icon('shield', 'icon-xs')} <a class="link" href="#/duvera">${t('trust.title')}</a> · <a class="link" href="#/info">${t('title.info')}</a></p>
   <p class="disclaimer">${icon('info')}${F.esc(t('disclaimer'))}</p>`;
 }
 

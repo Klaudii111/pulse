@@ -13,6 +13,7 @@ import { icon, monogram, track } from './ui.js';
 import { nextUsOpen } from './views/signals.js';
 import { pricePoints } from './charts.js';
 import * as W from './wallet.js';
+import { nyCloseAfter as nyCloseAfterMs } from './wallet.js';
 import * as H from './health.js';
 import * as M from './market.js';
 
@@ -400,18 +401,18 @@ export function moneyBlock(m) {
     const n = levNums({ ...arg, lev });
     const on = lev === m.sel;
     const nums = F.esc(JSON.stringify({ a: m.amount, lev, l: Math.round(n.worst ?? 0), p: Math.round(n.best ?? 0), v: n.avg == null ? null : Math.round(n.avg) }));
-    const wl = `<p class="mb-wipe${lev >= 10 ? ' is-hot' : ''}"><span>${F.esc(wipeLine(lev, m.side))}</span>${qh('STOPOUT')}</p>`;
+    /* 1.13.0: no per-tile leverage warning – one risk line under the button, the details in Příklady pák */
     if (!ok) {
       const pp = n.best != null && m.amount > 0 ? (n.best / m.amount) * 100 : null;
       return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
         <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
-        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p>${wl}</div>`;
+        <p class="sc-m"><span>${t('c.potOld')}${qh('POTOLD')}</span><b class="num up">${n.best != null ? `${sm(n.best)} <small>(${F.spct(pp, 1)})</small>` : '–'}</b></p></div>`;
     }
     return `<div class="mb-main${on ? ' is-on' : ''}" data-l="${lev}" data-nums="${nums}">
       <p class="sc-m mb-avg"><span>${t('c.pot')}${qh('POT')}</span><b class="num up">${n.avg != null ? `≈ ${sm(n.avg)}<small>${t(`mb.dur.${m.s.horizon}`)}</small>` : `<span class="mb-na">–</span><small>${t('mb.naS')}</small>`}</b></p>
       ${wf ? `<p class="mb-win">${t('mb.win', { k: wf.k, z: t(wf.n <= 4 ? 'mb.ze' : 'mb.z'), n: wf.n })}</p>` : ''}
       <p class="sc-m"><span>${t('c.maxLoss')}${qh('MAXLOSS')}</span><b class="num down">${worstTxt(n)}</b></p>
-      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p>${wl}</div>`;
+      <p class="mb-range">${t('mb.best')}: ${n.best != null ? sm(n.best) : '–'} · ${t('mb.worst')}: ${n.worst != null ? sm(n.worst) : '–'}</p></div>`;
   };
   const cell = (c) => `<button type="button" class="mb-col${c.lev === m.sel ? ' is-on' : ''}" role="radio" aria-checked="${c.lev === m.sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">
       <span class="mb-ph"><span class="mb-pn">${t(`mb.p.${c.id}`)}</span><span class="mb-pl">${c.lev === 1 ? t('mb.noLev') : t('mb.lev', { v: c.lev })}</span></span>
@@ -423,7 +424,7 @@ export function moneyBlock(m) {
     <div class="mb-own"${m.open ? '' : ' hidden'}>${levChips(m.sym, m.sel)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>`;
   const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>${ddNote(cols)}`;
+      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>${m.s && m.dd !== false ? ddNote(cols) : ''}`;
   return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${levs.map(main).join('')}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
 }
@@ -491,6 +492,13 @@ export function setLevOwn(v, sym) {
   if (c) setLevProfile(c.id); else setLevProfile('own', v);
 }
 export function syncLev() {
+  /* 1.13.0 compact cards: one money line per profile, the chosen one is shown */
+  document.querySelectorAll('.cc-money').forEach((box) => {
+    const lev = selLev(box.dataset.sym);
+    const has = [...box.querySelectorAll('[data-l]')].some((x) => +x.dataset.l === lev);
+    box.querySelectorAll('[data-l]').forEach((x) => { x.hidden = has ? +x.dataset.l !== lev : x !== box.querySelector('[data-l]'); });
+    box.closest('.cc')?.querySelectorAll('.cc-chip').forEach((x) => { const on = +x.dataset.lev === lev; x.setAttribute('aria-checked', String(on)); });
+  });
   document.querySelectorAll('.mb').forEach((mb) => {
     if (mb.closest('.tk-out')) return; /* the invest sheet re-renders itself from its own state */
     const lev = selLev(mb.dataset.sym);
@@ -597,10 +605,83 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
   </article>`;
 }
 
+/* ---------- 1.13.0 THE compact signal card (Dnes, Signály, Zainvestováno, "Nový signál" sheet) ----------
+   ~150 px: logo + "ExxonMobil ↑ Koupit" + horizon pill + "do 17. 11." pill · one "Proč" line · the exact entry (short)
+   · ONE money line for the chosen leverage profile · 3 profile chips · [Zainvestovat] + small "Teď ne".
+   Everything else (profile table, Příklady pák, warnings, test line, full reasoning) lives in the detail. */
+export function ccMoneyLines(s, data, now = D.clock()) {
+  const n = D.offerNums(s, data, { now });
+  const bt = H.strat(data, s.horizon)?.backtest || null;
+  const ok = !!(bt && Number.isFinite(+bt.avg_r) && bt.win_rate > 0);
+  const sel = selLev(s.symbol);
+  const cols = profCols(s.symbol);
+  const levs = cols.map((c) => c.lev);
+  if (!levs.includes(sel)) levs.push(sel);
+  const side = s.action === 'SELL' ? 'SELL' : 'BUY';
+  const sm = (v) => sMoney(v, n.ccy);
+  const line = (lev) => {
+    const x = levNums({ side, entry: n.base, amount: n.amount, sl: s.stop, tp: s.target, lev, bt: ok ? bt : null });
+    const gain = ok ? (x.avg != null ? t('cc.avg', { v: `≈ ${sm(x.avg)}` }) : t('cc.avgNa')) : t('cc.tp', { v: x.best != null ? sm(x.best) : '–' });
+    const loss = x.worst != null ? t(x.capped ? 'cc.maxAll' : 'cc.max', { v: sm(x.worst) }) : '';
+    return `<p class="cc-ml num" data-l="${lev}"${lev === sel ? '' : ' hidden'}><b>${F.money(n.amount, n.ccy, 0)}</b> → <span class="up">${gain}</span>${loss ? ` · <span class="down">${loss}</span>` : ''}</p>`;
+  };
+  const chips = `<div class="cc-chips" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">${cols.map((c) => `<button type="button" class="cc-chip" role="radio" aria-checked="${c.lev === sel}" data-action="lev-prof" data-prof="${c.id}" data-lev="${c.lev}">${t(`mb.p.${c.id}`)}<small class="num">1:${c.lev}</small></button>`).join('')}</div>`;
+  return { html: `<div class="cc-money" data-sym="${F.esc(s.symbol)}">${levs.map(line).join('')}</div>`, chips, n };
+}
+function enShort(s, en, now) {
+  if (en.code === 'now') return t('cp.now', { c: F.time(new Date(nyCloseAfterMs(+now))) });
+  if (en.code === 'soon') { const o = nextUsOpen(now); const days = o ? F.daysUntil(o, now) : 1; return t('cp.soon', { day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o), time: o ? F.time(o) : '15:30' }); }
+  if (en.code === 'wait') return t('cp.wait', { v: D.spx(s, s.entry) });
+  if (en.code === 'order') return t('cp.order');
+  return '';
+}
+export function compact(s, { data, now = D.clock(), notNow = false, i = 0, isNew = false } = {}) {
+  const cs = D.cardState(s, data, now);
+  const ph = D.sigPhase(s, now);
+  const w = whatIs(s.symbol, s.name);
+  const sell = s.action === 'SELL';
+  const why = ph === 'closed' ? '' : whyBullets(s, 1)[0] || '';
+  const en = cs.code === 'mine' || ph === 'closed' ? null : D.entryLine(s, data, now, cs, true);
+  /* the exact entry rides in one small pill ("Vstup teď do 22:00" / "Vstup zítra od 15:30") – the long line is in the detail */
+  const enPill = en && en.code !== 'late' ? `<span class="cc-pill is-${en.code} num">${F.esc(enShort(s, en, now))}</span>` : '';
+  const pills = `<span class="cc-pill">${t(`c.typeS.${s.horizon}`)}</span>${s.exit_date && ph !== 'closed' ? `<span class="cc-pill num">${t('cc.until', { d: F.dm(s.exit_date) })}</span>` : ''}${enPill}${['order', 'late', 'done'].includes(cs.code) && !cs.my ? `<span class="cc-pill tone-${cs.tone}">${F.esc(cs.badge)}</span>` : ''}${s.preview ? `<span class="cc-pill is-preview">${t('sig.preview')}</span>` : ''}`;
+  let mid = '', foot = '';
+  if (ph === 'closed') {
+    const r = D.closedNums(s);
+    const mt = D.moneyTone(r.money, r.ccy, r.pct);
+    mid = `<p class="cc-ml num">${t('cc.closed', { a: F.money(r.amount, r.ccy, 0) })} <b class="${mt.tone}">${F.esc(mt.zero ? F.money(0, r.ccy, 0) : mt.text)}</b>${r.pct != null ? ` <small class="${mt.tone}">(${F.spct(r.pct, 1)})</small>` : ''}</p>`;
+  } else if (cs.code === 'mine' || (cs.code === 'done' && cs.my)) {
+    const mt = cs.my ? D.moneyTone(cs.my.money, cs.my.ccy, cs.my.pct) : null;
+    foot = `<button type="button" class="sc-mine" data-action="open-signal" data-id="${F.esc(s.id)}"><span>${t(cs.code === 'done' ? 'sc.mineDone' : 'sc.mine')}</span>${mt ? `<b class="num ${mt.tone}">${F.esc(mt.text)}</b>` : ''}${icon('chev-right', 'icon-xs')}</button>`;
+  } else if (ph === 'open' && cs.code !== 'order') {
+    const m = ccMoneyLines(s, data, now);
+    mid = m.html + m.chips;
+  } else if (ph === 'running') {
+    const mv = D.priceMove(s);
+    mid = `<p class="cc-ml">${t('u.do.late')}${mv != null ? ` · <span class="num">${t('cc.move', { v: F.spct(mv, 1) })}</span>` : ''}</p>`;
+  }
+  if (!foot && cs.cta) {
+    const lim = cs.cta === 'limit';
+    foot = `<div class="cc-act"><button type="button" class="btn btn-primary cc-go sc-go" data-action="invest" data-id="${F.esc(s.id)}" data-mode="${lim ? 'limit' : 'now'}">${icon(lim ? 'clock' : 'spark', 'icon-sm')}<span>${t('sc.invest')}</span></button>${notNow ? `<button type="button" class="link cc-no" data-action="not-now" data-id="${F.esc(s.id)}">${t('sc.notNow')}</button>` : ''}</div>`;
+  }
+  return `<article class="cc sc is-${cs.code} ph-${ph}${isNew ? ' is-new' : ''}" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
+    <div class="cc-head sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">
+      ${monogram(s.symbol, s.name)}
+      <span class="cc-id"><span class="cc-t"><b class="cc-name">${F.esc(w.name)}</b><span class="cc-dir ${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(`c.side.${sell ? 'SELL' : 'BUY'}`)}</span></span>
+        <span class="cc-pills">${pills}</span></span>
+      ${icon('chev-right', 'icon-xs cc-chev')}
+    </div>
+    ${why ? `<p class="cc-why"><b>${t('c.why')}</b> ${F.esc(why)}</p>` : ''}
+    ${mid}
+    ${foot}
+  </article>`;
+}
+
 /* ---------- 1.10.0 headline numbers (Dnes: one compact row; Výsledky: big) – only real closed signals ---------- */
 export function statsRow(data, now = D.clock()) {
   const h = D.headStats(data, now);
-  const txt = h.n ? t('hs.row', { n: h.n, w: F.pct(h.winRate, 0), a: F.spct(h.avg, 1) }) : t('hs.row0');
+  if (!h.n) return ''; // 1.13.0: shown only once a first result exists
+  const txt = t('hs.row', { n: h.n, w: F.pct(h.winRate, 0), a: F.spct(h.avg, 1) });
   return `<a class="hs-row" href="#/vysledky">${icon('results', 'icon-xs')}<span>${F.esc(txt)}${h.since ? ` · ${F.esc(t('hs.since', { d: F.dmy(h.since) }))}` : ''}</span>${icon('chev-right', 'icon-xs')}</a>`;
 }
 export function statsBig(data, now = D.clock()) {

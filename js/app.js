@@ -3,7 +3,8 @@ import * as F from './format.js';
 import * as D from './domain.js';
 import * as store from './store.js';
 import * as P from './pwa.js';
-import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet } from './ui.js';
+import { icon, closeAllSheets, closeTopSheet, sheetOpen, toast, openSheet, seg } from './ui.js';
+import { linkLine } from './views/learn.js';
 import { gloss } from './explain.js';
 import { sha256Hex } from './sha256.js';
 import * as Home from './views/home.js';
@@ -31,6 +32,7 @@ import * as Help from './views/help.js';
 import * as Learn from './views/learn.js';
 import * as Wal from './views/penezenka.js';
 import * as Comm from './community.js';
+import * as H from './health.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -66,7 +68,9 @@ const VIEWS = {
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
   terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
-  robot: { title: 'title.robot', render: Paper.render },
+  /* 1.13.0 ONE "Robot" page with tabs: Výsledky · Účet nanečisto · Jak se učí (old #/vysledky and #/uceni keep working) */
+  robot: { title: 'rb.title', render: robotView, mount: (el, c) => { if (rbTab() === 'vysledky') Results.mount(el, c); }, unmount: () => Results.unmount && Results.unmount(),
+    actions: { ...Results.actions, seg(el, ev, c) { if (el.dataset.segName !== 'rbtab') return Results.actions?.seg ? Results.actions.seg(el, ev, c) : false; store.set('rbTab', el.dataset.id); Results.unmount && Results.unmount(); rerender(); return true; } } },
   /* 1.12.0: Moje merged into Zainvestováno (open trades + followed signals); old links land there */
   moje: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
   udalosti: { title: 'ev.title', render: Events.render, mount: Events.mount, enter: Events.beforeRender },
@@ -86,6 +90,17 @@ const VIEWS = {
   urovne: { title: 'title.urovne', render: X.renderLevels, actions: X.actions },
   predplatne: { title: 'title.predplatne', render: X.renderPlans, actions: X.actions },
 };
+
+const RB_TABS = ['vysledky', 'ucet', 'uceni'];
+const rbTab = () => { const x = store.get('rbTab', 'vysledky'); return RB_TABS.includes(x) ? x : 'vysledky'; };
+function robotView(c) {
+  const tab = rbTab();
+  const inner = tab === 'ucet' ? Paper.render(c) : tab === 'uceni' ? Learn.render(c) : Results.render(c);
+  return `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('rb.title')}</h1><p class="page-sub">${t('rb.sub')}</p></div></header>
+  <div class="rb-top">${Home.robotLine1(c)}${linkLine(c.data, c.now(), 'd-robot d-learn')}</div>
+  <div class="seg-wrap rb-tabs">${seg({ name: 'rbtab', label: t('rb.title'), items: RB_TABS.map((id) => ({ id, label: t(`rb.tab.${id}`) })), active: tab })}</div>
+  <div class="rb-in">${inner}</div>`;
+}
 
 function parseRoute() {
   const h = (window.__pulseHash ?? location.hash).replace(/^#\/?/, '');
@@ -140,7 +155,9 @@ function renderChrome() {
   const bell = `<a class="bell ${n ? 'has-new' : ''}" href="#/udalosti" aria-label="${F.esc(t('ev.bell', { n }))}" ${route.name === 'udalosti' ? 'aria-current="page"' : ''}>${icon('bell')}${n ? `<span class="bell-n num">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
   document.querySelectorAll('[data-slot="bell"]').forEach((el) => { if (el.innerHTML !== bell) el.innerHTML = bell; });
   const meta = document.getElementById('side-meta');
-  if (meta) meta.textContent = data.signals ? t('chrome.data', { time: F.dmTime(data.signals.generated_at) }) : '';
+  /* 1.13.0: the freshest moment we have (live prices, signals.json, the last fetch) – never a stale run time */
+  const fresh = Math.max(Date.parse(data.signals?.generated_at || 0) || 0, lt || 0, state.lastFetch || 0);
+  if (meta) meta.textContent = fresh ? t('chrome.data', { time: F.dmTime(new Date(fresh)) }) : '';
 }
 
 function rerender(opts = {}) {
@@ -222,7 +239,7 @@ function newSignalOffer() {
   if (!s) return;
   openSheet({ small: true, label: t('nsig.t'), html: `<div class="sheet-head"><div><p class="sheet-title">${t('nsig.t')}</p><p class="sheet-sub">${t('nsig.s')}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-    <div class="sheet-body">${B.offer(s, { data, now: now(), notNow: true })}</div>`,
+    <div class="sheet-body">${B.compact(s, { data, now: now(), notNow: true })}</div>`,
     onMount(el) { el.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); } });
 }
 
@@ -279,11 +296,22 @@ async function pollHealth() {
 
 /* fictional positions of the Obchodní platforma: auto close on stop-loss / take-profit / signal close */
 /* 1.9.0 "Robot obchoduje za mě": every buyable signal is copied once into my fictional account */
+const twinBase = (id) => String(id || '').replace(/-\d+$/, '');
+/* signals the robot-for-me could take right now (buyable, allowed, not copied yet). all=false: only those published after
+   the switch was turned on ("Jen nové signály", the default) */
+function autoCandidates(ac = store.get('autoCopy', null) || {}) {
+  const now = D.clock();
+  const copied = new Set(store.get('wallet', null)?.copied || []);
+  const skip = new Set(ac.skip || []);
+  return D.allOpen(data).filter((s) => D.horizonAllowed(data, s.horizon) && (CONFIG.HIDDEN_HORIZONS || []).indexOf(s.horizon) < 0 && H.offerable(s, data)
+    && !copied.has(s.id) && B.userState(s, now).code === 'buy'
+    && (ac.all || !(skip.has(twinBase(s.id)) || Date.parse(s.created_at || 0) < (ac.at || 0))));
+}
 function autoCopy() {
   if (!store.get('autoCopy', null)?.on || !data.signals) return false;
   const now = D.clock();
   let any = false;
-  D.allOpen(data).filter((s) => D.horizonAllowed(data, s.horizon) && (CONFIG.HIDDEN_HORIZONS || []).indexOf(s.horizon) < 0).forEach((s) => {
+  autoCandidates().forEach((s) => {
     const us = B.userState(s, now);
     if (us.code !== 'buy') return;
     const td = B.todo(s, us, now);
@@ -402,19 +430,33 @@ const GLOBAL = {
   /* "Robot obchoduje za mě (nanečisto)" switch (Dnes account card, platform) */
   'auto-toggle'() {
     const on = !store.get('autoCopy', null)?.on;
-    store.set('autoCopy', { on, at: Date.now() });
-    toast(t(on ? 'auto.on' : 'auto.off'), { timeout: 6000 });
-    walletCheck();
-    rerender({ soft: true });
+    if (!on) { setAuto({ on: false, at: Date.now() }); return; }
+    /* 1.13.0: never take the running signals silently – ask once; default = only new signals */
+    const run = data.signals ? autoCandidates({ all: true }) : [];
+    if (!run.length) { setAuto({ on: true, at: Date.now(), skip: [] }); return; }
+    const sm = W.summary(data);
+    let free = Math.max(0, sm.free), sum = 0;
+    run.forEach((s) => { const a = Math.min(W.autoAmount(data, s, { ...sm, free }), free); free -= a; sum += a; });
+    autoAsk(run.length, sum, sm.w.ccy, run.map((s) => twinBase(s.id)));
   },
   auto() { GLOBAL['auto-toggle'](); },
+  /* 1.13.0 [Ukončit] on the shared trade row (Dnes, Zainvestováno, Obchodovat) */
+  'pos-close'(el) {
+    const rec = W.close(data, el.dataset.id);
+    if (rec) toast(t('term.closed', { sym: B.whatIs(rec.sym, rec.name).name, v: (rec.pnl > 0.5 ? '+' : '') + F.money(rec.pnl, W.get().ccy, 0) }));
+    document.dispatchEvent(new CustomEvent('pulse:wallet'));
+    rerender({ soft: true });
+  },
+  /* Můj profil (Nastavení) + the 3 profile chips on a compact signal card */
+  'risk-prof'(el) { D.saveCalc({ profile: el.dataset.id }); toast(t('mp.riskDone', { p: t(`profile.${el.dataset.id}`) })); rerender({ soft: true }); },
   'faq3-close'() { store.set('faq3off', 1); document.querySelectorAll('#faq3').forEach((n) => n.remove()); },
   /* "?" next to a trading word: one sentence + an example */
   'term-help'(el) { termHelp(el.dataset.k); },
   /* 1.11.1: leverage profile column on a money block (card, detail; the invest sheet also sets its own leverage) */
-  'lev-prof'(el) { B.setLevProfile(el.dataset.prof); },
+  /* 1.13.0: inside the invest sheet a leverage tap is a one-off for that ticket – the global profile stays */
+  'lev-prof'(el) { if (!el.isConnected || el.closest('#tk')) return; B.setLevProfile(el.dataset.prof); if (el.closest('.mp')) rerender({ soft: true }); },
   /* 1.11.2 broker chips 1:1 … 1:100 ("Vlastní páka ▾", Příklady pák), a disabled chip explains the cap, Profesionální klient */
-  'lev-own'(el) { B.setLevOwn(+el.dataset.lev, el.dataset.sym || null); },
+  'lev-own'(el) { if (!el.isConnected || el.closest('#tk')) return; B.setLevOwn(+el.dataset.lev, el.dataset.sym || null); },
   'lev-own-open'(el) { B.toggleOwn(el); },
   'lev-why'(el) { if (!B.showWhy(el)) toast(B.levWhy(el.dataset.sym, +el.dataset.v), { timeout: 9000 }); },
   'pro-toggle'(el) {
@@ -457,6 +499,30 @@ const GLOBAL = {
     toast(t(on ? 'fol.added' : 'fol.removed', { sym: F.esc(el.dataset.sym || '') }), on ? { action: { label: t('fol.see'), fn: () => window.__pulseGo('#/moje') } } : {});
   },
 };
+
+function setAuto(v) {
+  store.set('autoCopy', v);
+  toast(t(v.on ? (v.all ? 'auto.onAll' : 'auto.on') : 'auto.off'), { timeout: 6000 });
+  walletCheck();
+  rerender({ soft: true });
+}
+/* "Robot teď může vzít i 5 běžících signálů za 35 000 Kč. Vzít i tyto, nebo jen nové?" */
+function autoAsk(n, sum, ccy, bases) {
+  openSheet({
+    small: true, label: t('auto.askT'),
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t('auto.askT')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="ask-q">${t('auto.ask', { n, u: F.unit('signal', n), a: F.money(sum, ccy, 0) })}</p>
+      <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-new>${t('auto.onlyNew')}</button>
+      <button type="button" class="btn btn-secondary btn-block" data-all>${t('auto.takeAll', { n })}</button></div>
+      <p class="risk-line">${t('risk.line')}</p></div>`,
+    onMount(sh) {
+      sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-new]').addEventListener('click', () => { closeTopSheet(); setAuto({ on: true, at: Date.now(), skip: bases }); });
+      sh.querySelector('[data-all]').addEventListener('click', () => { closeTopSheet(); setAuto({ on: true, at: Date.now(), all: true }); });
+    },
+  });
+}
 
 /* a span with role="button" inside a card (star) reacts to Enter / Space like a button */
 document.addEventListener('keydown', (ev) => {
@@ -579,6 +645,7 @@ async function boot() {
   await gate();
   /* first-run guide: only after the access gate, only once */
   B.setInstrLookup(Mkt.get);
+  W.setAutoLev((sym) => B.selLev(sym));
   Onb.maybeShow((fresh) => { rerender({ soft: true }); if (fresh === 'done') setTimeout(() => Tour.start({ auto: true }), 600); });
   Tour.init({ go: (h) => window.__pulseGo(h), route: () => route.name });
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
