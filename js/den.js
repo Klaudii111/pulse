@@ -183,6 +183,28 @@ export function sigState(j, s, now = D.clock()) {
 }
 /* one plain sentence about a signal of TODAY */
 const todayText = (x) => t(`den.t.${x.code}`, { m: x.m, until: x.until, out: x.out });
+const TODAY_CAP = 4;
+/* a market name in a today line (escaped HTML) */
+const nameHtml = (o) => F.esc(o.x.m);
+/* today's non-actionable signals as short grey lines: one signal -> the usual sentence; more -> one line per state,
+   identical states grouped ("3 signály přišly pozdě: Nasdaq 100, Ropa WTI, DAX – nepočítají se.") */
+function todayLines(list, afterGo = false) {
+  if (!list.length) return '';
+  if (list.length === 1) {
+    const o = list[0];
+    return `<p class="den-note" data-den-state="${o.x.code}">${F.esc(todayText(o.x)).replace(F.esc(o.x.m), nameHtml(o))}</p>`;
+  }
+  const groups = [];
+  list.forEach((o) => { const g = groups.find((y) => y.code === o.x.code); if (g) g.l.push(o); else groups.push({ code: o.x.code, l: [o] }); });
+  const lines = groups.map((g) => {
+    const one = (o) => (g.code === 'held' && o.x.out !== '–' ? t('den.li.held', { m: nameHtml(o), out: F.esc(o.x.out) }) : nameHtml(o));
+    const txt = g.l.length === 1
+      ? t(`den.l1.${g.code}`, { m: nameHtml(g.l[0]), until: F.esc(g.l[0].x.until), out: F.esc(g.l[0].x.out) })
+      : tp(`den.lg.${g.code}`, g.l.length, { list: g.l.map(one).join(', ') });
+    return `<p class="den-note den-line" data-den-state="${g.code}">${txt}</p>`;
+  }).join('');
+  return `<p class="den-note den-lead">${t(afterGo ? 'den.todayLead2' : 'den.todayLead')}</p>${lines}`;
+}
 /* "Poslední: čt 12. 11. · DAX · přišel pozdě" */
 const lastText = (x) => t('den.last', { d: dayLabel(x.at), m: x.m, o: t(`den.o.${x.code}`) });
 /* the newest signal that is NOT from today (signaly first, else the history) */
@@ -251,9 +273,14 @@ function todayBody(j, now) {
   }
   const xs = arr(j.signaly).map((s) => ({ s, x: sigState(j, s, now) }));
   const go = xs.filter((o) => o.x.code === 'go');
-  const rest = xs.filter((o) => o.x.code !== 'go' && o.x.today);
-  let html = go.map((o) => sigBlock(j, o.s)).join('');
-  html += rest.slice(0, 2).map((o) => `<p class="den-note" data-den-state="${o.x.code}">${F.esc(todayText(o.x))}</p>`).join('');
+  const rest = xs.filter((o) => o.x.code !== 'go' && o.x.today).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
+  /* 1.15.3: up to four of today's signals (the playbook can give four a day), the rest behind "a další N" -> #/den */
+  const goShown = go.slice(0, TODAY_CAP);
+  const restShown = rest.slice(0, Math.max(0, TODAY_CAP - goShown.length));
+  const more = go.length + rest.length - goShown.length - restShown.length;
+  let html = goShown.map((o) => sigBlock(j, o.s)).join('');
+  html += todayLines(restShown, goShown.length > 0);
+  if (more > 0) html += `<p class="den-note den-more-n"><a href="#/den">${F.esc(tp('den.moreN', more))}${icon('chev-right', 'icon-xs')}</a></p>`;
   if (!go.length && !rest.length) {
     const last = lastOld(j, now);
     html = `<p class="den-note" data-den-state="none">${t('den.none')}</p>${last ? `<p class="den-note den-note-2">${F.esc(lastText(last))}</p>` : ''}`;

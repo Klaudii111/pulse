@@ -40,3 +40,7 @@
 /* 1.15.3 den.json v3 (E): the broker sentence of a delayed-data signal; the grey line when the demo has no price */
 .den-brk { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); }
 .den-nodemo { font-size: 14px; color: var(--ink-3); }
+/* 1.15.3 (E): today's signals as short lines */
+.den-lead { font-size: 14px; font-weight: 650; color: var(--ink-3); margin-bottom: -4px; }
+.den-line { font-size: 15px; line-height: 1.4; }
+.den-more-n a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--ink-2); font-weight: 600; text-decoration: none; }
