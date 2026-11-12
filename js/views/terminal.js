@@ -108,14 +108,14 @@ export function tradeRow(p, c, extra = '') {
   const w = B.whatIs(p.sym, p.name);
   const toT = p.tp > 0 && p.px > 0 ? Math.abs(p.tp - p.px) / p.px * 100 : null;
   return `<div class="tr-row tone-${tone(p.pnl)}">
-    <button type="button" class="tr-main" ${p.sigId ? `data-action="open-signal" data-id="${F.esc(p.sigId)}"` : `data-action="t-sym" data-sym="${F.esc(p.sym)}"`}>
+    <a class="tr-main" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}">
       ${monogram(p.sym, w.name)}
       <span class="tr-id"><b class="tr-n">${F.esc(w.name)}</b>
         <span class="tr-meta num">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</span>
         <span class="tr-st tone-${st.tone}">${F.esc(st.text)}${toT != null && st.near !== 'target' ? ` · ${t('d.toTarget', { v: F.pct(toT, 1) })}` : ''}</span></span>
       <span class="tr-v num ${tone(p.pnl)}">${smoney(p.pnl, c, 0)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>
       ${extra}
-    </button>
+    </a>
     <button type="button" class="btn btn-secondary btn-small tr-x" data-action="pos-close" data-id="${p.id}">${t('tr.close')}</button>
   </div>`;
 }
@@ -356,6 +356,7 @@ export function render(ctx) {
       </div>
       <div class="term-btnrow"><button type="button" class="btn btn-secondary btn-small term-change" data-action="t-pick">${icon('search', 'icon-sm')}${t('term.change')}</button>${watchStar(sym)}</div>
       ${sig && D.entryOpen(sig) ? `<button type="button" class="term-sig" data-action="open-signal" data-id="${F.esc(sig.id)}">${icon('signals', 'icon-xs')}${t(sig.action === 'SELL' ? 'term.fromSigSell' : 'term.fromSig', { side: F.SIDE[sig.action], e: F.price(D.maxEntry(sig)), s: F.price(sig.stop), t: F.price(sig.target) })}</button>` : ''}
+      <div id="t-mine">${mineChips(sym, sm)}</div>
       <div class="t-bars" id="t-bars" ${cmode === 'bars' ? '' : 'hidden'}>${Bars.controls('tb')}</div>
       <div class="pchart-box term-chart" id="t-chart" ${cmode === 'live' ? '' : 'hidden'}></div>
       <div class="pchart-box term-chart cndl-box" id="t-c1" ${cmode === 'c1' ? '' : 'hidden'}></div>
@@ -382,6 +383,32 @@ export function render(ctx) {
   <p class="disclaimer">${icon('info')}${F.esc(t('term.disc'))}</p>`;
 }
 
+/* 1.15.0 my trades / waiting buys on this market: a chip that opens the trade detail (Portfolio), the line on the chart */
+function mineChips(sym, sm) {
+  const c = sm.w.ccy;
+  const rows = sm.rows.filter((p) => p.sym === sym);
+  const ords = (sm.w.orders || []).filter((o) => o.sym === sym);
+  if (!rows.length && !ords.length) return '';
+  return `<div class="pd-chips">${rows.map((p) => `<a class="pd-chip tone-${tone(p.pnl)}" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}">${icon('wallet', 'icon-xs')}<span>${t('pd.chip', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), a: money(p.margin, c) })}</span><b class="num ${tone(p.pnl)}">${smoney(p.pnl, c)}</b>${icon('chev-right', 'icon-xs')}</a>`).join('')}${ords.map((o) => `<a class="pd-chip is-ord" href="#/obchod/${F.esc(o.id)}">${icon('clock', 'icon-xs')}<span>${t('pd.chipOrd', { v: pxC(o.sym, o.limit) })}</span>${icon('chev-right', 'icon-xs')}</a>`).join('')}</div>`;
+}
+function mineLevels(sym, data) {
+  const sm = W.summary(data);
+  const p = sm.rows.find((x) => x.sym === sym);
+  const lv = [];
+  if (p) {
+    if (p.tp > 0) lv.push({ v: p.tp, label: t('pd.lv.myTp'), cls: 'up' });
+    lv.push({ v: p.entry, label: t('pd.lv.mine'), cls: 'ent' });
+    if (p.sl > 0) lv.push({ v: p.sl, label: t('pd.lv.mySl'), cls: 'down' });
+  }
+  (sm.w.orders || []).filter((o) => o.sym === sym).slice(0, 1).forEach((o) => lv.push({ v: o.limit, label: t('pd.lv.limit'), cls: 'ent' }));
+  return lv;
+}
+/* 1.15.0 Přikoupit (trade detail): the order ticket of the same market and direction, prefilled */
+export function buyMore(ctx, p) {
+  const sig = p.sigId ? D.findSignal(ctx.data, p.sigId) : null;
+  ticket(ctx, p.side === 'SELL' ? 'SELL' : 'BUY', p.sym, sig && D.entryOpen(sig) ? sig : null);
+}
+
 function refresh(el, ctx) {
   if (!el.isConnected) return;
   const { sym } = currentSym(ctx);
@@ -406,6 +433,7 @@ function refresh(el, ctx) {
   if (cmode === 'c1') drawCandles(el.querySelector('#t-c1'), sym);
   if (cmode === 'bars') barsRef && barsRef.refresh();
   if (termView() === 'watch') refreshWatch(el, ctx);
+  const mi = el.querySelector('#t-mine'); if (mi) { const h = mineChips(sym, sm); if (mi.innerHTML !== h) mi.innerHTML = h; }
   const ba = el.querySelector('#big-acc');
   if (ba) { const tmp = document.createElement('div'); tmp.innerHTML = bigAcc(sm); ['.big-acc-v', '.big-acc-row'].forEach((q) => { const a = ba.querySelector(q), b = tmp.querySelector(q); if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML; }); }
 }
@@ -427,7 +455,7 @@ export function mount(el, ctx) {
   if (tbars && !barsDead) {
     /* 1.11.1: candles stay the chart even when /api/bars fails – Bars.mount falls back to saved bars / the signal's
        price_path / prices collected on the device, shows the last price and retries every 30 s */
-    barsRef = Bars.mount(tbars, 'tb', sym, { fmt: (v) => pxOf(sym, v), path: () => (D.allOpen(ctx.data).find((x) => x.symbol === sym)?.price_path || []) });
+    barsRef = Bars.mount(tbars, 'tb', sym, { fmt: (v) => pxOf(sym, v), levels: () => mineLevels(sym, ctx.data), marks: () => W.summary(ctx.data).rows.filter((p) => p.sym === sym).map((p) => ({ t: p.entryT || p.openedAt, v: p.entry, cls: 'me', label: t(p.side === 'SELL' ? 'pd.mk.sold' : 'pd.mk.bought') })), path: () => (D.allOpen(ctx.data).find((x) => x.symbol === sym)?.price_path || []) });
   }
   liveOff && liveOff();
   const fn = () => refresh(el, ctx);
@@ -683,7 +711,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
-          toast(t(side === 'SELL' ? 'inv.placedAtOpenSell' : 'inv.placedAtOpen', { d: sess().o ? openWhen(sess().o) : '' }), { timeout: 7000 });
+          toast(t(side === 'SELL' ? 'inv.placedAtOpenSell' : 'inv.placedAtOpen', { d: sess().o ? openWhen(sess().o) : '' }), { timeout: 7000, action: { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${res.order.id}`) } });
           document.dispatchEvent(new CustomEvent('pulse:wallet'));
           tab = 'ord';
           setTimeout(() => ctx.rerender({ soft: true }), 380);
@@ -694,7 +722,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
           if (!res.ok) { toast(t(`term.err.${res.reason}`)); return; }
           haptic(20);
           closeTopSheet();
-          toast(t(atOpen() ? 'inv.placedOpen' : 'inv.placedOk', { v: pxC(sym, st.limit) }), { timeout: 7000 });
+          toast(t(atOpen() ? 'inv.placedOpen' : 'inv.placedOk', { v: pxC(sym, st.limit) }), { timeout: 7000, action: { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${res.order.id}`) } });
           document.dispatchEvent(new CustomEvent('pulse:wallet'));
           tab = 'ord';
           setTimeout(() => ctx.rerender({ soft: true }), 380);
@@ -707,7 +735,7 @@ function ticket(ctx, side, sym, sig, opt = {}) {
         if (!res.ok) { toast(t(`term.err.${res.reason}`, { h: M.hours(sym) })); return; }
         haptic(20);
         closeTopSheet();
-        toast(t('inv.done'), { timeout: 7000 });
+        toast(t('inv.done'), { timeout: 7000, action: { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${res.pos.id}`) } });
         document.dispatchEvent(new CustomEvent('pulse:wallet'));
         tab = 'pos';
         setTimeout(() => ctx.rerender({ soft: true }), 380);

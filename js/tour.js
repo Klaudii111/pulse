@@ -16,7 +16,7 @@ const TOUR = [
   { route: 'dnes', sel: '#acc-card', k: 'tour.n1' },
   { route: 'dnes', sel: '.cc .cc-money', k: 'tour.n3' },
   { route: 'dnes', sel: '.cc .cc-go', k: 'tour.n4' },
-  { route: 'dnes', sel: TAB('zainvestovano'), k: 'tour.n5' },
+  { route: 'dnes', sel: TAB('portfolio'), k: 'tour.n5' },
 ];
 const HINT = [
   { route: 'signaly', sel: '.cc .cc-head', k: 'tour.n2' },

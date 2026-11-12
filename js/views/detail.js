@@ -186,7 +186,15 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
       ${cs.my && !(cs.my.closed && cs.cta) ? B.myLine(cs) : ''}
-      ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}
+      ${(() => {
+        /* 1.15.0 "Máš v portfoliu: +X Kč → Zobrazit" – the trade (or the waiting buy) of this signal opens in Portfolio */
+        const sm = W.summary(ctx.data);
+        const c = sm.w.ccy;
+        const mineP = sm.rows.filter((p) => p.sigId === s.id);
+        const mineO = (sm.w.orders || []).filter((o) => o.sigId === s.id);
+        return mineP.map((p) => `<a class="pd-held tone-${p.pnl > 0.5 ? 'up' : p.pnl < -0.5 ? 'down' : 'flat'}" href="#/obchod/${F.esc(p.id)}" data-close-nav data-pid="${F.esc(p.id)}">${icon('wallet', 'icon-xs')}<span>${t('pd.held', { v: (p.pnl > 0.5 ? '+' : Math.abs(p.pnl) < 0.5 ? '±' : '') + F.money(Math.abs(p.pnl) < 0.5 ? 0 : p.pnl, c, 0) })}<small>${F.esc(B.myOpenText(p, c))}</small></span><b>${t('pd.show')}</b>${icon('chev-right', 'icon-xs')}</a>`).join('')
+          + mineO.map((o) => `<a class="pd-held is-ord" href="#/obchod/${F.esc(o.id)}" data-close-nav>${icon('clock', 'icon-xs')}<span>${t('pd.heldOrd', { a: F.money(o.amount, c, 0) })}</span><b>${t('pd.show')}</b>${icon('chev-right', 'icon-xs')}</a>`).join('');
+      })()}
       ${events.length ? `<div class="callout warn">${icon('calendar')}<div>${t('det.events', { list: events.map((e) => `${F.esc(L(e.title))} (${F.dm(e.date)}${e.time ? ` ${e.time}` : ''})`).join(', ') })}</div></div>` : ''}
     </div>`;
   const robotD = `<div class="bc-quiet">

@@ -41,8 +41,10 @@ function ledgerRow(r, c) {
   else if (r.k === 'swap') title = t('term.cash.swap', { sym: r.sym || '' });
   else title = t(`wl.l.${r.k}`);
   const tn = r.k === 'ret' ? tone(r.p.pnl) : r.amount > 0 ? 'up' : 'flat';
-  return `<div class="wl-row"><span class="wl-ic tone-${tn}">${icon(ic, 'icon-xs')}</span><span class="wl-m"><b>${F.esc(title)}</b><small class="num">${F.esc(sub)}</small></span>
-    <span class="wl-v num ${r.amount > 0.5 ? 'up' : ''}">${sm(r.amount, c, r.k === 'swap' ? 2 : 0)}</span></div>`;
+  /* 1.15.0: a money row of a trade (put in / came back) opens that trade */
+  const tag = r.p ? 'a' : 'div';
+  return `<${tag} class="wl-row${r.p ? ' is-link' : ''}"${r.p ? ` href="#/obchod/${F.esc(r.p.id)}"` : ''}><span class="wl-ic tone-${tn}">${icon(ic, 'icon-xs')}</span><span class="wl-m"><b>${F.esc(title)}</b><small class="num">${F.esc(sub)}</small></span>
+    <span class="wl-v num ${r.amount > 0.5 ? 'up' : ''}">${sm(r.amount, c, r.k === 'swap' ? 2 : 0)}</span></${tag}>`;
 }
 export function renderWallet(ctx) {
   const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('wl.title')}</h1><p class="page-sub">${t('wl.sub')}</p></div></header>`;
@@ -124,9 +126,10 @@ function curveSvg(pts, c, minSpan = 0) {
 }
 function closedRow(p, c) {
   const h = hzOf(p);
-  return `<div class="hi-row">${p.sigId ? `<button type="button" class="hi-main" data-action="open-signal" data-id="${F.esc(p.sigId)}">` : '<div class="hi-main">'}
+  /* 1.15.0: a closed trade opens its own page (read-only: entry + exit on the chart, the final result) */
+  return `<div class="hi-row"><a class="hi-main" href="#/obchod/${F.esc(p.id)}" data-pid="${F.esc(p.id)}">
     <span class="hi-bar ${tone(p.pnl)}"></span><span class="hi-m"><b>${F.esc(nameOf(p))}</b><small>${F.esc(h === 'own' ? t('hi.own') : t(`c.typeS.${h}`))} · ${F.dm(p.closedAt)} · ${F.esc(B.levTxt(p.lev))} · ${F.esc(t(`hi.why.${['tp', 'sl', 'slgap', 'out', 'stopout', 'manual'].includes(p.why) ? p.why : 'signal'}`))}</small></span>
-    <span class="hi-v num ${tone(p.pnl)}">${sm(p.pnl, c)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span>${p.sigId ? '</button>' : '</div>'}</div>`;
+    <span class="hi-v num ${tone(p.pnl)}">${sm(p.pnl, c)}<small>${F.mpct(p.pnlPct, p.pnl)}</small></span></a></div>`;
 }
 function mine(ctx) {
   const s = W.summary(ctx.data);
@@ -193,7 +196,7 @@ function shareBox() {
   </section>`;
 }
 export function renderHistory(ctx) {
-  const head = `<header class="page-head"><div><a class="back" href="#/zainvestovano">${icon('chev-left', 'icon-xs')}${t('nav.zainvestovano')}</a><h1 class="page-title">${t('hi.title')}</h1><p class="page-sub">${t('hi.sub')}</p></div></header>`;
+  const head = `<header class="page-head"><div><a class="back" href="#/portfolio">${icon('chev-left', 'icon-xs')}${t('nav.portfolio')}</a><h1 class="page-title">${t('hi.title')}</h1><p class="page-sub">${t('hi.sub')}</p></div></header>`;
   if (!ctx.data?.signals) return head + skBlock(220);
   return head + `
   <h2 class="d-h hi-h">${t('hi.mine')}</h2>

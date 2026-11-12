@@ -17,6 +17,8 @@ import * as Live from '../live.js';
 import * as H from '../health.js';
 import { offLine, linkLine } from './learn.js';
 import { myStats } from './penezenka.js';
+import * as P from '../portfolio.js';
+import { dnesBlock } from './portfolio.js';
 
 /* 1.9.0: live market strip with the main markets (instruments.json keys, plain names); tap = trade it on the platform.
    Before the server knows the keys, the old ETF proxies are shown (labelled honestly). */
@@ -105,12 +107,12 @@ const smoney = (v, c) => (v > 0.5 ? '+' : '') + F.money(v, c, 0);
 export function accountCard(ctx) {
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
-  const td = D.moneyTone(sm.today, c, sm.equity > 0 ? (sm.today / sm.equity) * 100 : null);
+  const td = D.moneyTone(sm.today, c, P.head(sm).todayPct);
   /* 1.13.0 ONE hero: balance, today's change in colour, small Volné / Ve hře (= in trades + waiting buys) */
   return `<section class="d-hero" id="acc-card" aria-label="${t('wl.title')}">
     <a class="d-hero-l" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
       <p class="d-hero-v num" data-eq="${W.parts(sm).eq}">${F.money(W.parts(sm).eq, c, 0)}</p>
-      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: (() => { const v = sm.today / Math.max(1, sm.equity - sm.today) * 100; return F.mpct(v, sm.today); })() })}${sm.rows.length ? `<small class="d-hero-incl">${t('dh.inclOpen')}</small>` : ''}</p>
+      <p class="d-hero-ch num tone-${td.tone}">${td.zero ? t('dh.today0', { v: `±${F.money(0, c, 0)}` }) : t('dh.today', { v: F.esc(td.text), p: F.mpct(P.head(sm).todayPct, sm.today) })}${sm.rows.length ? `<small class="d-hero-incl">${t('dh.inclOpen')}</small>` : ''}</p>
       ${(() => { const p = W.parts(sm); return `<p class="d-hero-s num" data-free="${p.free}" data-inplay="${p.inPlay}" data-open="${p.open}">${t(p.open !== 0 ? 'dh.split3' : 'dh.split', { f: F.money(p.free, c, 0), u: F.money(p.inPlay, c, 0), o: (p.open > 0 ? '+' : '') + F.money(p.open, c, 0) })}</p>`; })()}</a>
     <button type="button" class="btn btn-secondary btn-small d-hero-b" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
   </section>`;
@@ -165,7 +167,7 @@ function liveLine(p, data) {
 function myInvest(ctx) {
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
-  const ords = sm.w.orders.map((o) => `<a class="mi-row is-ord" href="#/zainvestovano"><span class="mi-id"><b class="mi-n">${F.esc(B.whatIs(o.sym, o.name).name)}</b>
+  const ords = sm.w.orders.map((o) => `<a class="mi-row is-ord" href="#/obchod/${F.esc(o.id)}"><span class="mi-id"><b class="mi-n">${F.esc(B.whatIs(o.sym, o.name).name)}</b>
       <span class="mi-s num">${t('d.order', { v: `<span class="nw">${pxC(o.sym, o.limit)}</span>`, a: `<span class="nw">${F.money(o.amount, c, 0)}</span>` })}</span></span></a>`).join('');
   const rows = myInvestRows(ctx, sm, true);
   return rows + ords ? `<div class="mi-list">${rows}${ords}</div>` : `<p class="d-empty">${t('d.mine0')}</p>`;
@@ -207,7 +209,7 @@ export function renderInvested(ctx) {
 
 
 /* 1.13.3 Zainvestováno: robot-for-me ON -> one line what it is doing (waiting for a new signal / how many it opened) */
-function ziRobot(sm) {
+export function ziRobot(sm) {
   const ac = store.get('autoCopy', null);
   if (!ac?.on) return '';
   const copied = new Set(Array.isArray(sm.w.copied) ? sm.w.copied : []);
@@ -258,7 +260,8 @@ export function render(ctx) {
   /* 1.13.7: with an open trade or a waiting buy, "Zainvestováno" sits right under Peněženka (before the signal cards) */
   const smH = W.summary(ctx.data);
   const hasTrades = smH.rows.length > 0 || (smH.w.orders || []).length > 0;
-  const mineSec = (cls) => `<section class="d-block ${cls}" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>`;
+  /* 1.15.0: Portfolio summary (opens Portfolio) + the trade rows (each opens its detail) */
+  const mineSec = (cls) => `<section class="d-block ${cls}" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/portfolio">${t('nav.portfolio')}${icon('chev-right', 'icon-xs')}</a></h2>${dnesBlock(ctx)}</section>`;
   return head + `<div class="d-grid${hasTrades ? ' has-trades' : ''}">
   <div class="d-c1">${accountCard(ctx)}
   ${hasTrades ? mineSec('d-mine-top') : ''}

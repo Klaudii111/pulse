@@ -113,7 +113,8 @@ function withLive(d) {
 const tLabel = (ms, d) => (d.ms >= 86400000 ? F.dm(new Date(ms)) : d.range === '1d' ? F.time(new Date(ms)) : `${F.dm(new Date(ms))} ${F.time(new Date(ms))}`);
 
 /* SVG chart. levels = [{ v, label, cls }] (signal detail: entry / stop / target) */
-export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.price(v) } = {}) {
+/* 1.15.0 marks = [{ t, v, cls, label }] (Portfolio: where I bought / sold) – drawn on the candle of that time when it is on screen */
+export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.price(v), marks = [] } = {}) {
   if (!box) return;
   const w = box.clientWidth || 340, h = box.clientHeight || 220;
   /* 1.13.6: a flat zero-volume bar (a filler for a closed hour) is no candle – dropped (the newest bar stays) */
@@ -121,7 +122,9 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   /* 1.11.2: small charts (Sledované grafy) get fewer, wider candles */
   const ks = all.slice(-(type === 'candle' ? (w < 280 ? Math.max(16, Math.floor((w - 70) / 6)) : Math.max(30, Math.min(120, Math.floor(w / 4)))) : 400));
   const lv = levels.filter((x) => x.v > 0);
-  let lo = Math.min(...ks.map((k) => k.l), ...lv.map((x) => x.v)), hi = Math.max(...ks.map((k) => k.h), ...lv.map((x) => x.v));
+  /* a mark is on screen when its time falls inside the drawn candles (from the first candle's start to now) */
+  const mk = (marks || []).filter((m) => m && m.v > 0 && m.t >= ks[0].t && m.t <= Date.now() + 60000);
+  let lo = Math.min(...ks.map((k) => k.l), ...lv.map((x) => x.v), ...mk.map((m) => m.v)), hi = Math.max(...ks.map((k) => k.h), ...lv.map((x) => x.v), ...mk.map((m) => m.v));
   const span = (hi - lo) || hi * 0.001 || 1; lo -= span * 0.06; hi += span * 0.06;
   const pad = { l: 4, r: 70, t: 10, b: 20 };
   const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
@@ -161,8 +164,10 @@ export function draw(box, d, { type = curType(), levels = [], fmt = (v) => F.pri
   const free = (yc) => taken.every((y) => Math.abs(y - yc) >= GAP + 1);
   const hiY = pad.t + 4, loY = h - pad.b - 6;
   const grid = [0.25, 0.5, 0.75].map((f) => `<line x1="${pad.l}" x2="${w - pad.r}" y1="${(pad.t + f * (h - pad.t - pad.b)).toFixed(1)}" y2="${(pad.t + f * (h - pad.t - pad.b)).toFixed(1)}" class="br-grid"/>`).join('');
+  const mki = (m) => { let i = 0; for (let j = 0; j < ks.length; j++) if (ks[j].t <= m.t) i = j; return i; };
+  const marksSvg = mk.map((m) => { const x = X(mki(m)), y = Y(m.v); const lx = x > w - pad.r - 40 ? x - 6 : x + 8; return `<g class="br-mk ${m.cls || ''}" data-mark="${F.esc(m.cls || '')}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5" class="br-mk-o"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" class="br-mk-i"/>${m.label ? `<text x="${lx.toFixed(1)}" y="${(y - 8).toFixed(1)}" class="br-mk-t"${x > w - pad.r - 40 ? ' text-anchor="end"' : ''}>${F.esc(m.label)}</text>` : ''}</g>`; }).join('');
   box.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${F.esc(t('bars.aria', { k: d.key }))}">
-    ${grid}${lab}${body}
+    ${grid}${lab}${body}${marksSvg}
     <line x1="${pad.l}" x2="${w - pad.r + 4}" y1="${Y(last.c).toFixed(1)}" y2="${Y(last.c).toFixed(1)}" class="ck-last"/>
     <rect x="${w - pad.r + 4}" y="${(Y(last.c) - 9).toFixed(1)}" width="${pad.r - 6}" height="18" rx="5" class="br-now ${up ? 'up' : 'down'}"/>
     <text x="${w - pad.r + 9}" y="${(Y(last.c) + 4).toFixed(1)}" class="ck-lab br-nowt">${F.esc(fmt(last.c))}</text>
@@ -225,7 +230,7 @@ function fbHtml(key, d, fmt, reason, compact) {
    the chart never goes blank: candles from the last bars saved on this device, else built from the signal's price_path
    and the prices collected since the app opened, plus the last-price block; a new try every 30 s.
    Returns { refresh() – live tick, reload(), destroy(), ok() }. onFail() is called once on the first failure. */
-export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v), onFail, tfKey = 'barsTf', type = null, path = null } = {}) {
+export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v), onFail, tfKey = 'barsTf', type = null, path = null, marks = [] } = {}) {
   let d = null, gone = false, seq = 0, fb = false, retryT = null, failed = false;
   const box = () => root.querySelector(`#${prefix}-box`);
   const fbEl = () => root.querySelector(`#${prefix}-fb`);
@@ -242,12 +247,12 @@ export function mount(root, prefix, key, { levels = [], fmt = (v) => F.price(v),
     if (gone || !box()) return;
     if (fb) {
       const fd = fbData();
-      if (fd) { box().hidden = false; draw(box(), fd, { type: type || curType(), levels, fmt }); } else box().hidden = true;
+      if (fd) { box().hidden = false; draw(box(), fd, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks }); } else box().hidden = true;
       const f = fbEl(); if (f) { f.hidden = false; f.innerHTML = fbHtml(key, fd, fmt, failReason(key), compact()); }
       const s = srcEl(); if (s) s.textContent = fd ? (fd.built ? t('bars.fb.built') : t('bars.fb.saved', { t: F.dmTime(new Date(fd.saved)) })) : '';
       return;
     }
-    if (d) draw(box(), d, { type: type || curType(), levels, fmt });
+    if (d) draw(box(), d, { type: type || curType(), levels: typeof levels === 'function' ? levels() : levels, fmt, marks: typeof marks === 'function' ? marks() : marks });
   };
   const load = async () => {
     const my = ++seq;

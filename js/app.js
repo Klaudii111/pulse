@@ -24,6 +24,7 @@ import * as Live from './live.js';
 import * as Feed from './feed.js';
 import * as Events from './views/events.js';
 import * as Moje from './views/moje.js';
+import * as Pf from './views/portfolio.js';
 import * as Onb from './onboarding.js';
 import * as Mkt from './market.js';
 import * as B from './brief.js';
@@ -39,6 +40,8 @@ import * as Sync from './sync.js';
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
 const data = { signals: null, history: null, performance: null, calendar: null, league: null, paper: null, health: null };
 let route = { name: 'dnes', params: new URLSearchParams(), sub: null };
+/* 1.15.0: the screen the user came from (the trade detail's "← Portfolio / Dnes / Obchodovat …" and its back) */
+let fromRoute = null;
 let currentView = null;
 
 // Clock override (?now=ISO) – used for demos/screenshots of the sample data.
@@ -50,17 +53,21 @@ D.setClock(now);
 const TABS = [
   { id: 'dnes', icon: 'home' },
   { id: 'signaly', icon: 'signals' },
-  { id: 'zainvestovano', icon: 'wallet' },
+  { id: 'portfolio', icon: 'wallet' },
   { id: 'terminal', icon: 'chart' },
   { id: 'vice', icon: 'more' },
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'zainvestovano', uceni: 'vice' };
+/* 1.15.0: Portfolio is the tab (old #/zainvestovano and #/moje stay as aliases); a trade detail belongs to it */
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
 
 const VIEWS = {
-  dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
-  zainvestovano: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
+  dnes: { title: 'nav.dnes', render: Home.render, mount: Pf.dnesMount, actions: Home.actions },
+  /* 1.15.0 Portfolio (#/portfolio = #/moje = #/zainvestovano) + the trade detail #/obchod/<id> */
+  portfolio: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
+  zainvestovano: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
+  obchod: { title: 'pd.title', render: Pf.renderTrade, mount: Pf.mountTrade, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
   /* 1.12.0 Peněženka (old #/ucet keeps working) + Historie */
   penezenka: { title: 'wl.title', render: Wal.renderWallet },
   ucet: { title: 'wl.title', render: Wal.renderWallet },
@@ -73,7 +80,7 @@ const VIEWS = {
   robot: { title: 'rb.title', render: robotView, mount: (el, c) => { if (rbTab() === 'vysledky') Results.mount(el, c); }, unmount: () => Results.unmount && Results.unmount(),
     actions: { ...Results.actions, seg(el, ev, c) { if (el.dataset.segName !== 'rbtab') return Results.actions?.seg ? Results.actions.seg(el, ev, c) : false; store.set('rbTab', el.dataset.id); Results.unmount && Results.unmount(); rerender(); return true; } } },
   /* 1.12.0: Moje merged into Zainvestováno (open trades + followed signals); old links land there */
-  moje: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
+  moje: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
   udalosti: { title: 'ev.title', render: Events.render, mount: Events.mount, enter: Events.beforeRender },
   stahnout: { title: 'title.stahnout', render: Pages.renderInstall },
   mt5: { title: 'title.mt5', render: Pages.renderMt5 },
@@ -113,7 +120,7 @@ function parseRoute() {
 /* ---------- Context passed to views ---------- */
 function ctx(extra = {}) {
   return {
-    data, state, route, params: route.params, now,
+    data, state, route, params: route.params, now, from: fromRoute,
     nudge: nudgeHtml(),
     rerender, applyTheme, onLangChange, afterRender, renderChrome,
     ...extra,
@@ -196,9 +203,14 @@ function onLangChange() {
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
 }
 
-function onRoute() {
+let curHash = null;
+function onRoute(opt = {}) {
   const prev = route.name;
+  const prevHash = curHash;
   route = parseRoute();
+  curHash = window.__pulseHash ?? location.hash;
+  /* a replaced route (the desktop side list) keeps the original "from" */
+  if (!opt.replace && prevHash !== curHash) fromRoute = prevHash != null ? { name: prev, hash: prevHash || '#/dnes' } : null;
   if (route.name !== prev) { VIEWS[route.name].enter?.(); clearToasts(); }
   closeAllSheets();
   M.withTransition(() => { renderNav(); rerender(); });
@@ -320,7 +332,8 @@ function autoCopy() {
     const r = W.autoOpen(data, s, td.code === 'now' ? 'now' : 'lim', store.get('autoCopy', null)?.at || 0);
     if (!r.ok) return;
     any = true;
-    toast(t(r.pos ? (r.reopen ? 'auto.boughtReopen' : 'auto.bought') : 'auto.waiting', { sym: s.symbol, v: F.price(r.pos ? r.pos.entry : D.maxEntry(s)), a: F.money(r.amount, W.get().ccy, 0) }), { timeout: 7000 });
+    const pid = (r.pos || r.order)?.id;
+    toast(t(r.pos ? (r.reopen ? 'auto.boughtReopen' : 'auto.bought') : 'auto.waiting', { sym: s.symbol, v: F.price(r.pos ? r.pos.entry : D.maxEntry(s)), a: F.money(r.amount, W.get().ccy, 0) }), { timeout: 7000, action: pid ? { label: t('po.see'), fn: () => window.__pulseGo(`#/obchod/${pid}`) } : null });
   });
   return any;
 }
@@ -500,7 +513,7 @@ const GLOBAL = {
   follow(el) {
     const on = D.toggleFollow(el.dataset.id);
     document.querySelectorAll(`[data-action="follow"][data-id="${CSS.escape(el.dataset.id)}"]`).forEach((b) => { b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', t(on ? 'fol.off' : 'fol.on')); });
-    toast(t(on ? 'fol.added' : 'fol.removed', { sym: F.esc(el.dataset.sym || '') }), on ? { action: { label: t('fol.see'), fn: () => window.__pulseGo('#/moje') } } : {});
+    toast(t(on ? 'fol.added' : 'fol.removed', { sym: F.esc(el.dataset.sym || '') }), on ? { action: { label: t('fol.see'), fn: () => window.__pulseGo('#/portfolio') } } : {});
   },
 };
 
@@ -654,6 +667,7 @@ async function boot() {
   D.setLevOf((sym) => B.selLev(sym));
   W.setAutoLev((sym) => B.selLev(sym));
   route = parseRoute();
+  curHash = window.__pulseHash ?? location.hash;
   VIEWS[route.name].enter?.();
   renderNav();
   rerender();
@@ -669,16 +683,17 @@ async function boot() {
   Tour.init({ go: (h) => window.__pulseGo(h), route: () => route.name });
   window.addEventListener('hashchange', () => { window.__pulseHash = null; onRoute(); });
   // In-app navigation that also works inside sandboxed previews (iframes that block hash links).
-  window.__pulseGo = (href) => {
+  window.__pulseGo = (href, opt = {}) => {
     window.__pulseHash = href;
-    try { if (location.hash !== href) history.pushState(null, '', href); } catch (e) { /* sandboxed: keep virtual route */ }
-    onRoute();
+    try { if (location.hash !== href) history[opt.replace ? 'replaceState' : 'pushState'](null, '', href); } catch (e) { /* sandboxed: keep virtual route */ }
+    onRoute(opt);
   };
   document.addEventListener('click', (ev) => {
     const a = ev.target.closest && ev.target.closest('a[href^="#/"], a[href="#"]');
     if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
     const href = a.getAttribute('href'); if (href === '#') return;
-    ev.preventDefault(); window.__pulseGo(href);
+    /* 1.15.0: picking another trade in the desktop side list replaces the detail (Back still returns to where I came from) */
+    ev.preventDefault(); window.__pulseGo(href, { replace: !!a.closest('.pd-side') && route.name === 'obchod' });
   });
   window.addEventListener('popstate', () => { window.__pulseHash = null; onRoute(); });
   Live.setExtraSymbols(W.watched);
@@ -688,12 +703,12 @@ async function boot() {
     const closed = walletCheck();
     if (closed && route.name === 'terminal' && !sheetOpen()) rerender({ soft: true });
     checkAlerts();
-    if (!sheetOpen() && ['dnes', 'signaly', 'zainvestovano'].includes(route.name)) rerender({ soft: true });
+    if (!sheetOpen() && ['dnes', 'signaly'].includes(route.name)) rerender({ soft: true });
     else renderChrome();
     document.dispatchEvent(new CustomEvent('pulse:live'));
   });
   setInterval(() => renderChrome(), 30000);
-  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'signaly', 'penezenka', 'historie'].includes(route.name)) rerender({ soft: true }); });
+  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'portfolio', 'moje', 'obchod', 'signaly', 'penezenka', 'historie'].includes(route.name)) rerender({ soft: true }); });
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {

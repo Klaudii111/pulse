@@ -90,8 +90,8 @@ export function update(data) {
     if (snap.wal) {
       const pp = new Set(snap.wal.pos), pc = new Set(snap.wal.cl);
       /* a position from a filled limit order is told by the order's own "vyplněn" event below */
-      wpos.forEach((x, i) => { if (!pp.has(wp[i]) && !x.order && !x.auto) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt }); });
-      wcl.forEach((x, i) => { if (!pc.has(wc[i])) ev.push({ k: 'my-close', sym: x.sym, side: x.side, v: x.pnl, ccy: w.ccy, why: x.why, sid: x.sigId || null, t: x.closedAt }); });
+      wpos.forEach((x, i) => { if (!pp.has(wp[i]) && !x.order && !x.auto) ev.push({ k: 'my-open', sym: x.sym, side: x.side, v: x.margin, ccy: w.ccy, sid: x.sigId || null, t: x.openedAt, pid: x.id }); });
+      wcl.forEach((x, i) => { if (!pc.has(wc[i])) ev.push({ k: 'my-close', sym: x.sym, side: x.side, v: x.pnl, ccy: w.ccy, why: x.why, sid: x.sigId || null, t: x.closedAt, pid: x.id }); });
     }
     const nw = { pos: wp, cl: wc.slice(0, 200) };
     if (JSON.stringify(nw) !== JSON.stringify(snap.wal || null)) { snap.wal = nw; dirty = true; }
@@ -102,7 +102,7 @@ export function update(data) {
     /* the order log is new in 1.8.0: everything in it is new for a device that already had a wallet snapshot */
     if (snap.ol || snap.wal) {
       const seen = new Set(snap.ol || []);
-      olog.filter((x) => !seen.has(x.id)).reverse().forEach((x) => ev.push({ k: `ord-${x.k}`, sym: x.sym, side: x.side, lim: x.limit, v: x.amount, ccy: w.ccy, sid: x.sigId || null, reopen: !!x.reopen, why: x.why || null, t: x.k === 'filled' ? x.fillT || x.at : x.at }));
+      olog.filter((x) => !seen.has(x.id)).reverse().forEach((x) => ev.push({ k: `ord-${x.k}`, sym: x.sym, side: x.side, lim: x.limit, v: x.amount, ccy: w.ccy, sid: x.sigId || null, reopen: !!x.reopen, why: x.why || null, t: x.k === 'filled' ? x.fillT || x.at : x.at, pid: x.pos || x.oid || null }));
     }
     if (JSON.stringify(oids) !== JSON.stringify(snap.ol || null)) { snap.ol = oids; dirty = true; }
 

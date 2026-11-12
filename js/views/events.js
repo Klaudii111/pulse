@@ -3,6 +3,7 @@ import * as F from '../format.js';
 import * as Feed from '../feed.js';
 import { t } from '../i18n/index.js';
 import { icon } from '../ui.js';
+import * as store from '../store.js';
 
 let seenBefore = 0; // read marker before this visit: items newer than it are highlighted
 
@@ -10,10 +11,30 @@ const sm = (v, ccy) => (v > 0.005 ? '+' : '') + F.money(v, ccy, ccy === 'CZK' ? 
 const tone = (v) => (v > 0.005 ? 'up' : v < -0.005 ? 'down' : 'gold');
 const side = (s) => t(s === 'SELL' ? 'ev.sell' : 'ev.buy');
 
+/* 1.15.0: an event about my trade / order opens THAT trade (#/obchod/<id>); events stored before 1.15 (no id) are matched
+   by market + time; nothing found -> Portfolio (never the whole Obchodovat) */
+export function tradeHref(e) {
+  const w = store.get('wallet', null) || {};
+  const all = (w.positions || []).concat(w.closed || [], w.orders || [], w.ordEnded || []);
+  const has = (id) => id && all.some((x) => x.id === id);
+  let id = e.pid;
+  if (id && !has(id)) id = null;
+  if (id) { const f = (w.ordEnded || []).find((o) => o.id === id && o.end === 'filled' && o.pos); if (f && has(f.pos)) id = f.pos; }
+  if (!id && e.sym) {
+    const near = (a, b) => a && b && Math.abs(a - b) < 3 * 60000;
+    const tt = Date.parse(e.t || 0) || e.t || e.at;
+    const x = (w.positions || []).concat(w.closed || []).find((p) => p.sym === e.sym && (near(p.openedAt, tt) || near(p.closedAt, tt) || near(p.entryT, tt)))
+      || (w.orders || []).concat(w.ordEnded || []).find((o) => o.sym === e.sym && (near(o.placedAt, tt) || near(o.endAt, tt)) && (e.lim == null || o.limit === e.lim));
+    if (x) id = x.end === 'filled' && x.pos && has(x.pos) ? x.pos : x.end && x.end !== 'filled' ? null : x.id;
+  }
+  return id ? `#/obchod/${encodeURIComponent(id)}` : '#/portfolio';
+}
+
 /* What one event says: icon, tone, title, detail, value, and where it leads */
 export function describe(e) {
   const sym = F.esc(e.sym || '');
   const sig = e.sid ? { action: 'open-signal', id: e.sid } : null;
+  const mine = { href: tradeHref(e) };
   switch (e.k) {
     case 'new': return { ic: 'signals', tn: 'gold', title: t('ev.new', { sym, side: side(e.side) }), sub: t('ev.new.s'), go: sig };
     case 'target': return { ic: 'check', tn: 'up', title: t('ev.target', { sym }), sub: t('ev.target.s'), val: e.v != null ? F.spct(e.v, 1) : '', go: sig };
@@ -22,15 +43,15 @@ export function describe(e) {
     case 'robot-order': return { ic: 'shield', tn: 'gold', title: t('ev.rOrder', { sym, side: side(e.side) }), sub: t('ev.robot.s'), go: { href: '#/robot' } };
     case 'robot-open': return { ic: 'shield', tn: 'up', title: t('ev.rOpen', { sym, side: side(e.side) }), sub: t('ev.robot.s'), go: { href: '#/robot' } };
     case 'robot-close': return { ic: 'shield', tn: tone(e.v), title: t('ev.rClose', { sym }), sub: t('ev.robot.s'), val: Number.isFinite(e.v) ? sm(e.v, 'USD') : '', go: { href: '#/robot' } };
-    case 'my-open': return { ic: 'spark', tn: 'gold', title: t('ev.myOpen', { sym, side: side(e.side) }), sub: t('ev.myOpen.s', { a: F.money(e.v, e.ccy, 0) }), go: { href: '#/terminal' } };
-    case 'my-close': return { ic: 'spark', tn: tone(e.v), title: t('ev.myClose', { sym }), sub: t(`term.why.${['tp', 'sl', 'out', 'signal', 'manual'].includes(e.why) ? e.why : 'manual'}`), val: Number.isFinite(e.v) ? sm(e.v, e.ccy) : '', go: { href: '#/terminal' } };
+    case 'my-open': return { ic: 'spark', tn: 'gold', title: t('ev.myOpen', { sym, side: side(e.side) }), sub: t('ev.myOpen.s', { a: F.money(e.v, e.ccy, 0) }), go: mine };
+    case 'my-close': return { ic: 'spark', tn: tone(e.v), title: t('ev.myClose', { sym }), sub: t(`term.why.${['tp', 'sl', 'out', 'signal', 'manual'].includes(e.why) ? e.why : 'manual'}`), val: Number.isFinite(e.v) ? sm(e.v, e.ccy) : '', go: mine };
     /* 1.8.0: my limit orders */
-    case 'ord-auto': return { ic: 'spark', tn: 'up', title: t('ev.auto', { sym, side: side(e.side), v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t(e.reopen ? 'ev.auto.reopen' : 'ev.auto.s'), go: { href: '#/terminal' } };
-    case 'ord-autoLim': return { ic: 'clock', tn: 'gold', title: t('ev.autoLim', { sym, v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t('ev.auto.s'), go: { href: '#/terminal' } };
-    case 'ord-placed': return { ic: 'clock', tn: 'gold', title: t('ev.ordPlaced', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t('ev.ordPlaced.s', { side: side(e.side), a: F.money(e.v, e.ccy, 0) }), go: { href: '#/terminal' } };
-    case 'ord-filled': return { ic: 'check', tn: 'up', title: t('ev.ordFilled', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t(e.reopen ? 'ev.ordFilled.reopen' : 'ev.ordFilled.s', { side: side(e.side).charAt(0).toUpperCase() + side(e.side).slice(1) }), go: { href: '#/terminal' } };
-    case 'ord-cancelled': return { ic: 'close', tn: 'gold', title: t('ev.ordCancelled', { sym, v: F.price(e.lim) }), sub: t('ev.ordCancelled.s'), go: { href: '#/terminal' } };
-    case 'ord-expired': return { ic: 'clock', tn: 'gold', title: t('ev.ordExpired', { sym, v: F.price(e.lim) }), sub: t(`ev.ordExpired.${['day', 'sig'].includes(e.why) ? e.why : 'gtc'}`), go: { href: '#/terminal' } };
+    case 'ord-auto': return { ic: 'spark', tn: 'up', title: t('ev.auto', { sym, side: side(e.side), v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t(e.reopen ? 'ev.auto.reopen' : 'ev.auto.s'), go: mine };
+    case 'ord-autoLim': return { ic: 'clock', tn: 'gold', title: t('ev.autoLim', { sym, v: F.price(e.lim), a: F.money(e.v, e.ccy, 0) }), sub: t('ev.auto.s'), go: mine };
+    case 'ord-placed': return { ic: 'clock', tn: 'gold', title: t('ev.ordPlaced', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t('ev.ordPlaced.s', { side: side(e.side), a: F.money(e.v, e.ccy, 0) }), go: mine };
+    case 'ord-filled': return { ic: 'check', tn: 'up', title: t('ev.ordFilled', { sym, side: side(e.side), v: F.price(e.lim) }), sub: t(e.reopen ? 'ev.ordFilled.reopen' : 'ev.ordFilled.s', { side: side(e.side).charAt(0).toUpperCase() + side(e.side).slice(1) }), go: mine };
+    case 'ord-cancelled': return { ic: 'close', tn: 'gold', title: t('ev.ordCancelled', { sym, v: F.price(e.lim) }), sub: t('ev.ordCancelled.s'), go: { href: '#/portfolio' } };
+    case 'ord-expired': return { ic: 'clock', tn: 'gold', title: t('ev.ordExpired', { sym, v: F.price(e.lim) }), sub: t(`ev.ordExpired.${['day', 'sig'].includes(e.why) ? e.why : 'gtc'}`), go: { href: '#/portfolio' } };
     default: return null;
   }
 }

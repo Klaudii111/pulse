@@ -249,7 +249,7 @@ function askAdopt(id) {
         try { r = await adopt(id); } catch { r = { ok: false, reason: 'net' }; }
         if (!r.ok) { adopting = false; yes.disabled = false; yes.textContent = t('sync.askYes'); toast(t(r.reason === 'notFound' ? 'sync.notFound' : 'sync.netFail'), { timeout: 6000 }); return; }
         try { sessionStorage.setItem('pulse.syncAdopted', '1'); } catch { /* ignore */ }
-        try { history.replaceState(null, '', `${location.pathname}${location.search}#/zainvestovano`); } catch { /* ignore */ }
+        try { history.replaceState(null, '', `${location.pathname}${location.search}#/portfolio`); } catch { /* ignore */ }
         location.reload();
       });
     },

@@ -122,16 +122,22 @@ export function summary(data) {
   const t0 = dayStart();
   const today0 = new Date(t0).toDateString();
   let dirty = false;
-  if (w.day !== today0) { w.day = today0; w.dayEquity = equity; w.dayOpen = {}; rows.forEach((r) => { w.dayOpen[r.id] = r.pnl; }); dirty = true; }
+  /* 1.15.0: a trade without a known price yet (fresh device, prices still loading) is not "looked at" – its start-of-day
+     value waits for the first real price (else yesterday's move would count as today's) */
+  if (w.day !== today0) { w.day = today0; w.dayEquity = equity; w.dayOpen = {}; rows.forEach((r) => { if (r.live) w.dayOpen[r.id] = r.pnl; }); dirty = true; }
   if (!w.dayOpen || typeof w.dayOpen !== 'object') { w.dayOpen = {}; dirty = true; }
   let openChg = 0;
+  /* 1.15.0: each row carries its own "dnes" (the same numbers that add up to the wallet's "Dnes") */
   rows.forEach((r) => {
-    if (r.openedAt >= t0) { openChg += r.pnl; return; }
-    if (w.dayOpen[r.id] == null) { w.dayOpen[r.id] = r.pnl; dirty = true; }
-    openChg += r.pnl - w.dayOpen[r.id];
+    if (r.openedAt >= t0) { r.today = r.pnl; openChg += r.pnl; return; }
+    if (w.dayOpen[r.id] == null) { if (!r.live) { r.today = 0; return; } w.dayOpen[r.id] = r.pnl; dirty = true; }
+    r.today = r.pnl - w.dayOpen[r.id];
+    openChg += r.today;
   });
   const realized = w.closed.filter((c) => c.closedAt >= t0).reduce((a, c) => a + c.pnl - (c.openedAt < t0 ? (w.dayOpen[c.id] ?? 0) : 0), 0);
   const fees = w.cash.filter((c) => c.k === 'swap' && c.at >= t0).reduce((a, c) => a + c.amount, 0);
+  /* 1.15.0: one equity snapshot per day (refreshed at most every 30 min) – the Portfolio chart's real history from now on */
+  if (snapDue(w, equity)) dirty = true;
   if (dirty) save(w);
   const today = realized + openChg + fees;
   const putIn = w.start + w.cash.filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
@@ -140,6 +146,49 @@ export function summary(data) {
   return { w, rows, balance: w.balance, equity, open, used, reserved, cash: w.balance - used - reserved, free: equity - used - reserved, today, todayClosed: realized, todayOpen: openChg, total: equity - putIn, putIn,
     totalPct: putIn > 0 ? (equity - putIn) / putIn * 100 : 0, level, call: level != null && level < 100 };
 }
+/* ---------- 1.15.0 Portfolio: daily equity snapshots (w.eqd = { 'YYYY-MM-DD': { eq, at, putIn } }) ----------
+   Written by summary() at most every 30 min; merged per day by the newest `at` (merge below). Old wallets have none. */
+export const dayKey = (ms = Date.now()) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const SNAP_MS = 30 * 60000;
+function snapDue(w, equity) {
+  if (!Number.isFinite(equity)) return false;
+  const k = dayKey();
+  const cur = w.eqd && typeof w.eqd === 'object' && !Array.isArray(w.eqd) ? w.eqd[k] : null;
+  if (cur && Date.now() - (cur.at || 0) < SNAP_MS) return false;
+  if (!w.eqd || typeof w.eqd !== 'object' || Array.isArray(w.eqd)) w.eqd = {};
+  const putIn = w.start + (w.cash || []).filter((c) => c.k === 'dep' || c.k === 'wd').reduce((a, c) => a + c.amount, 0);
+  w.eqd[k] = { eq: Math.round(equity * 100) / 100, at: Date.now(), putIn };
+  const ks = Object.keys(w.eqd).sort();
+  if (ks.length > 400) ks.slice(0, ks.length - 400).forEach((x) => delete w.eqd[x]);
+  return true;
+}
+export function mergeEqd(a, b) {
+  const out = {};
+  [a, b].forEach((m) => { if (m && typeof m === 'object' && !Array.isArray(m)) Object.entries(m).forEach(([k, v]) => { if (v && Number.isFinite(+v.eq) && (!out[k] || (v.at || 0) > (out[k].at || 0))) out[k] = v; }); });
+  return out;
+}
+
+/* ---------- 1.15.0 Upravit stop / cíl of an open trade (the same side rules as when opening) ----------
+   Every change is kept in pos.log (the trade's timeline); editedAt decides which device's levels win in merge. */
+export function editLevels(data, id, { sl = null, tp = null }) {
+  const w = get();
+  const pos = w.positions.find((x) => x.id === id);
+  if (!pos) return { ok: false, reason: 'gone' };
+  const q = priceOf(pos.sym, data);
+  const px = q ? q.p : pos.entry;
+  const bad = levelsBad(pos.side, px, sl, tp);
+  if (bad) return { ok: false, reason: bad };
+  const nsl = sl > 0 ? +sl : null, ntp = tp > 0 ? +tp : null;
+  if (nsl === pos.sl && ntp === pos.tp) return { ok: true, pos, same: true };
+  const at = Date.now();
+  pos.log = Array.isArray(pos.log) ? pos.log : [];
+  pos.log.push({ id: `${pos.id}:e${at}${store.devTag()}`, k: 'edit', at, sl: nsl, tp: ntp, psl: pos.sl ?? null, ptp: pos.tp ?? null });
+  pos.log = pos.log.slice(-40);
+  pos.sl = nsl; pos.tp = ntp; pos.editedAt = at;
+  save(w);
+  return { ok: true, pos };
+}
+
 /* 1.13.5 the displayed split that always adds up: Peněženka (equity, rounded once from the unrounded parts) =
    Volné + Ve hře + Otevřené obchody; the rounding remainder goes to "Otevřené" (header, Dnes, Peněženka, Obchodovat) */
 export function parts(sm) {
@@ -572,6 +621,17 @@ export function merge(older, newer) {
     if (p.auto && p.sigId) { if (autoSig.has(p.sigId)) return false; autoSig.add(p.sigId); }
     return true;
   });
+  /* 1.15.0: stop / cíl changed on either device -> the later change wins; the trade's timeline (pos.log) is joined by id */
+  const oPos = new Map(o.positions.map((p) => [p.id, p]));
+  w.positions = w.positions.map((p) => {
+    const op = oPos.get(p.id);
+    if (!op || op === p) return p;
+    const q = { ...p };
+    if ((op.editedAt || 0) > (p.editedAt || 0)) { q.sl = op.sl ?? null; q.tp = op.tp ?? null; q.editedAt = op.editedAt; }
+    if (Array.isArray(op.log) || Array.isArray(p.log)) q.log = join(p.log, op.log).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-40);
+    return q;
+  });
+  if (n.eqd || o.eqd) w.eqd = mergeEqd(o.eqd, n.eqd);
   w.ordEnded = join(n.ordEnded, o.ordEnded).sort((a, b) => (b.endAt || 0) - (a.endAt || 0)).slice(0, 100);
   const ended = ids(w.ordEnded);
   w.orders = join(n.orders, o.orders).filter((x) => !ended.has(x.id));
