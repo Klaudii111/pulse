@@ -198,6 +198,8 @@ let pickAt = 0;             // a select / input in the view got the focus; 0 = n
 let autoFor = null;         // the route a postponed repaint is meant for
 let autoTimer = null;
 let paintedHtml = null;     // what the view shows now, as rendered
+let selfScrollAt = 0;       // the app itself moved the page (anchor correction, top of a new screen) – that is not the user scrolling
+const selfScroll = (fn) => { selfScrollAt = Date.now(); fn(); };
 /* a finger (or the mouse button) is down, or the page is still gliding */
 const pageMoving = () => {
   const n = Date.now();
@@ -250,10 +252,15 @@ function perfStart() {
   const p = perf = { t0: performance.now(), last: 0, f: 0, a: 0, b: 0, c: 0, w: 0, p0: paintN, l0: liveN, y0: window.scrollY, far: 0 };
   const frame = (now) => {
     if (perf !== p) return;
-    if (p.last) { const g = now - p.last; p.f++; if (g > 34) p.a++; if (g > 50) p.b++; if (g > 100) p.c++; if (g > p.w) p.w = g; }
+    if (p.last) {
+      const g = now - p.last;
+      if (g > 2000) { perf = null; return; }   // the app was put away in the middle: not a scrolling measurement
+      p.f++; if (g > 34) p.a++; if (g > 50) p.b++; if (g > 100) p.c++; if (g > p.w) p.w = g;
+    }
     p.last = now;
     const y = Math.abs(window.scrollY - p.y0); if (y > p.far) p.far = y;
-    if (!(pressAt > 0) && Date.now() - movedAt > 1000) { perfEnd(p, now); return; }
+    const held = pressAt > 0 && Date.now() - pressAt < PRESS_MAX_MS;   // a lost touchend must not keep the loop alive
+    if (!held && Date.now() - movedAt > 1000) { perfEnd(p, now); return; }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -291,7 +298,7 @@ function watchMoving() {
     movingOn = true; document.documentElement.classList.add('is-moving'); setTimeout(still, 250); perfStart();
   };
   const field = (ev) => !!ev.target && /^(SELECT|INPUT|TEXTAREA)$/.test(ev.target.tagName || '') && !!ev.target.closest('#view');
-  window.addEventListener('scroll', moved, o);   // capture: rows that scroll sideways too
+  window.addEventListener('scroll', () => { if (Date.now() - selfScrollAt > 200) moved(); }, o);   // capture: rows that scroll sideways too
   document.addEventListener('touchstart', press, o);
   document.addEventListener('touchmove', () => { pressAt = Date.now(); moved(); }, o);
   document.addEventListener('touchend', lift, o);
@@ -339,10 +346,10 @@ function keepPlace(root, a, scrollY) {
   const n = a ? root.querySelectorAll(a.sel)[a.idx] : null;
   if (n) {
     const d = n.getBoundingClientRect().top - a.top;
-    if (Math.abs(d) >= 1) window.scrollBy(0, d);
+    if (Math.abs(d) >= 1) selfScroll(() => window.scrollBy(0, d));
     return;
   }
-  if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+  if (Math.abs(window.scrollY - scrollY) > 1) selfScroll(() => window.scrollTo(0, scrollY));
 }
 
 function rerender(opts = {}) {
@@ -364,7 +371,7 @@ function rerender(opts = {}) {
   if (!opts.soft || firstData) {
     el.classList.remove('is-enter'); void el.offsetWidth; el.classList.add('is-enter');
   }
-  if (opts.soft && !auto && Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+  if (opts.soft && !auto && Math.abs(window.scrollY - scrollY) > 1) selfScroll(() => window.scrollTo(0, scrollY));
   v.mount && v.mount(el, c);
   if (auto) keepPlace(el, anchor, scrollY);
   currentView = v;
@@ -404,7 +411,7 @@ function onRoute(opt = {}) {
   closeAllSheets();
   M.withTransition(() => { renderNav(); rerender(); });
   document.title = `${t(VIEWS[route.name].title)} – ${CONFIG.APP_NAME}`;
-  if (prev !== route.name || !route.sub) window.scrollTo(0, 0);
+  if (prev !== route.name || !route.sub) selfScroll(() => window.scrollTo(0, 0));
   maybeOpenDeepLink();
 }
 
