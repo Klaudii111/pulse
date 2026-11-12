@@ -40,4 +40,6 @@ export default {
   /* lead, after the fix round: one word for the main action (Koupit) also in the Portfolio texts */
   'po.open0': 'Zatím nemáš žádný obchod. Začni u signálu tlačítkem Koupit, nebo si vyber trh sám.',
   'pd.rs': 'Proč koupit',
+  /* fixer D */
+  'cf.fee': 'po poplatku za převod měny {v} (0,5 % z výsledku)',
 };

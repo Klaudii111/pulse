@@ -990,14 +990,18 @@ export function closeConfirm(ctx, id) {
   if (!p) return;
   const c = sm.w.ccy;
   const nm = B.whatIs(p.sym, p.name).name;
-  const tn = p.pnl > 0.5 ? 'up' : p.pnl < -0.5 ? 'down' : '';
+  /* P2-03: the numbers the wallet will really book (after the 0.5 % conversion fee), the same math as closeIn */
+  const cr = W.closeResult(sm.w, p, p.px);
+  const net = cr.net;
+  const tn = net > 0.5 ? 'up' : net < -0.5 ? 'down' : '';
   openSheet({
     small: true, label: t('cf.title', { n: nm }),
     html: `<div class="sheet-head"><div><p class="sheet-title">${t('cf.title', { n: F.esc(nm) })}</p><p class="sheet-sub">${t('tr.meta', { side: t(p.side === 'SELL' ? 'tr.sell' : 'tr.buy'), lev: p.lev || 1, a: money(p.margin, c) })}</p></div>
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
-      <div class="sheet-body"><p class="cf-res">${t('cf.now')} <b class="num ${tn}">${smoney(p.pnl, c)}</b> <small class="num ${tn}">(${F.mpct(p.pnlPct, p.pnl)})</small></p>
-      <p class="ex-s">${t('cf.s', { a: money(Math.max(0, p.margin + p.pnl), c) })}</p>
-      <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-yes>${t('cf.yes', { v: smoney(p.pnl, c) })}</button><button type="button" class="btn btn-ghost" data-no>${t('cf.no')}</button></div></div>`,
+      <div class="sheet-body"><p class="cf-res">${t('cf.now')} <b class="num ${tn}">${smoney(net, c)}</b> <small class="num ${tn}">(${F.mpct((net / p.margin) * 100, net)})</small></p>
+      ${cr.fee >= 0.5 ? `<p class="ex-s cf-fee">${t('cf.fee', { v: money(cr.fee, c) })}</p>` : ''}
+      <p class="ex-s">${t('cf.s', { a: money(Math.max(0, p.margin + net), c) })}</p>
+      <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-yes>${t('cf.yes', { v: smoney(net, c) })}</button><button type="button" class="btn btn-ghost" data-no>${t('cf.no')}</button></div></div>`,
     onMount(sh) {
       sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
       sh.querySelector('[data-no]').addEventListener('click', () => closeTopSheet());

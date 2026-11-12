@@ -50,4 +50,6 @@ export default {
   'po.open0': 'No trade yet. Start with Buy on a signal, or pick a market yourself.',
   'pd.rs': 'Why buy',
   'ev.myOpen': 'You opened a trade: {sym} ({side})',
+  /* fixer D */
+  'cf.fee': 'after the currency conversion fee {v} (0.5% of the result)',
 };

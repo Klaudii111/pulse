@@ -462,15 +462,21 @@ export function checkOrders(data) {
   return { filled, expired };
 }
 
-function closeIn(w, pos, px, why) {
+/* P2-03: what closing at px books – the one place of this math (closeIn and the close confirmation both use it) */
+export function closeResult(w, pos, px) {
   const pnl = pnlAt(pos, px);
   /* 0.5 % conversion fee on the result when the instrument trades in another currency than the account */
   const fee = pos.ccy && pos.ccy !== w.ccy ? Math.abs(pnl) * M.CONV_FEE : 0;
   const loss = Math.max(-pos.margin, pnl - fee); // never lose more than the money put in (fees included)
   const net = Math.max(-w.balance, loss);       // negative-balance protection
+  return { net, fee: Math.max(0, Math.min(fee, pnl - net)) };
+}
+
+function closeIn(w, pos, px, why) {
+  const { net, fee } = closeResult(w, pos, px);
   w.balance += net;
   w.positions = w.positions.filter((x) => x.id !== pos.id);
-  const rec = { ...pos, exit: exitPx(pos, px), mid: px, pnl: net, fee: Math.max(0, Math.min(fee, pnl - net)), pnlPct: (net / pos.margin) * 100, closedAt: Date.now(), why };
+  const rec = { ...pos, exit: exitPx(pos, px), mid: px, pnl: net, fee, pnlPct: (net / pos.margin) * 100, closedAt: Date.now(), why };
   w.closed.unshift(rec);
   w.closed = w.closed.slice(0, 200);
   const j = pos.sigId ? D.journal()[pos.sigId] : null;
