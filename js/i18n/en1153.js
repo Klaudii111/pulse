@@ -36,4 +36,6 @@ export default {
   'd.mine0': 'Nothing yet. Start with the Buy button on a signal.',
   'jak.q3': 'What if I don’t buy in time?',
   'jak.a3': 'Each signal says what applies now: 1) the price is almost the same as at the signal – you can still buy; 2) the price has moved a bit – place a buy at the original price and it buys by itself when the price comes back (valid until the signal ends); 3) the price moved too far – too late, skip it, another one will come. Tip: switch on “The robot trades for me” (in Trade) and you will not miss anything.',
+  /* A12 onboarding */
+  'onb.back': 'Back',
 };

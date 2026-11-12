@@ -36,4 +36,6 @@ export default {
   'd.mine0': 'Zatím nic. Začni tlačítkem Koupit u signálu.',
   'jak.q3': 'Co když nestihnu koupit?',
   'jak.a3': 'U každého signálu je napsané, co platí teď: 1) cena je skoro stejná jako u signálu – ještě můžeš koupit; 2) cena už trochu utekla – zadáš nákup za původní cenu a koupí se sám, až cena klesne (platí do konce signálu); 3) cena utekla moc – na signál je pozdě, vynech ho, další přijde. Tip: zapni „Robot obchoduje za mě“ (v Obchodovat) a nic nezmeškáš.',
+  /* A12 onboarding */
+  'onb.back': 'Zpět',
 };
