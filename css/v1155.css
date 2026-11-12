@@ -1,1 +1,20 @@
 /* 1.15.0 release round (C): the experimental daily robot – fixes after the client's-eyes review. Skin tokens only (no hard colours). */
+.den-card.is-quiet { gap: 8px; padding: 14px 16px; }
+.den-note { margin: 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+.den-note-2 { font-size: 14px; color: var(--ink-3); }
+.den-h2 { margin: 6px 0 0; font-size: 16px; font-weight: 680; color: var(--ink); }
+.den-p { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); }
+.den-adv { margin-top: 16px; padding: 14px 16px; }
+.den-adv > summary, .den-cz > summary, .den-more > summary { cursor: pointer; font-weight: 650; font-size: 16px; color: var(--ink); min-height: 44px; display: flex; align-items: center; }
+.den-adv h3 { margin: 14px 0 6px; font-size: 16px; font-weight: 680; }
+.den-adv .den-kv { font-size: 15px; }
+.den-cz { margin-top: 10px; }
+.den-more { margin-top: 6px; }
+.den-ul { margin: 4px 0 8px; padding-left: 18px; }
+.den-ul li { font-size: 15px; line-height: 1.45; margin: 2px 0; overflow-wrap: anywhere; }
+.den-sub { margin: 8px 0 2px; font-weight: 650; }
+.den-sub2 { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.den-adv > summary, .den-cz > summary, .den-more > summary { list-style: none; gap: 10px; }
+.den-adv > summary::-webkit-details-marker, .den-cz > summary::-webkit-details-marker, .den-more > summary::-webkit-details-marker { display: none; }
+.den-adv > summary::after, .den-cz > summary::after, .den-more > summary::after { content: ''; flex: none; width: 8px; height: 8px; margin-left: auto; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg); transition: transform .2s; }
+.den-adv[open] > summary::after, .den-cz[open] > summary::after, .den-more[open] > summary::after { transform: rotate(-135deg); }
