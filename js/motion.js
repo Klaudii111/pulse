@@ -164,3 +164,24 @@ export function withTransition(update) {
     return vt;
   } catch { update(); return null; }
 }
+
+/* ---------- 1.12.0 confetti-lite: a trade reached its target (once, ~1.4 s, gold + green; nothing under reduced motion) ---------- */
+export function confetti() {
+  if (reduced() || typeof document === 'undefined' || document.querySelector('.confetti')) return;
+  const layer = document.createElement('div');
+  layer.className = 'confetti';
+  layer.setAttribute('aria-hidden', 'true');
+  document.body.append(layer);
+  const W0 = window.innerWidth, cols = ['#eed6a7', '#d9b779', '#52c58b', '#a78bfa', '#f5f1e8'];
+  for (let i = 0; i < 34; i++) {
+    const p = document.createElement('i');
+    const x = W0 * (0.2 + Math.random() * 0.6);
+    const w = 5 + Math.random() * 5;
+    p.style.cssText = `left:${x}px;top:-12px;width:${w}px;height:${w * (0.4 + Math.random() * 0.5)}px;background:${cols[i % cols.length]}`;
+    layer.append(p);
+    const dx = (Math.random() - 0.5) * 220, dy = window.innerHeight * (0.45 + Math.random() * 0.4), rot = (Math.random() - 0.5) * 720;
+    p.animate([{ transform: 'translate(0,0) rotate(0)', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 }],
+      { duration: 1100 + Math.random() * 600, delay: Math.random() * 180, easing: 'cubic-bezier(.2,.6,.35,1)', fill: 'both' });
+  }
+  setTimeout(() => layer.remove(), 2100);
+}

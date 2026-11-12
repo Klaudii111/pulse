@@ -378,6 +378,11 @@ export function levChips(sym, sel) {
     : `<button type="button" class="lev-chip is-off" aria-disabled="true" data-action="lev-why" data-sym="${F.esc(sym)}" data-v="${v}">1:${v}</button>`)).join('')}</div>
     <p class="lev-why" hidden></p>`;
 }
+/* 1.12.0: the worst period of the whole account in the test 2023–26 (all three horizons): 1:2 -26 %, 1:5 -58 % – one muted line each */
+export function ddNote(cols = null) {
+  const ids = cols ? cols.map((c) => c.id) : ['bal', 'aggr'];
+  return ['bal', 'aggr'].filter((id) => ids.includes(id)).map((id) => `<p class="mb-dd"><b>${t(`mb.p.${id}`)}:</b> ${t(`dd.${id}`)}</p>`).join('');
+}
 /* m = { s, data, sym, side, amount, ccy, base, sl, tp, sel, open } – open: the chip list shown (invest sheet) */
 export function moneyBlock(m) {
   const bt = m.s ? H.strat(m.data, m.s.horizon)?.backtest || null : null;
@@ -418,7 +423,7 @@ export function moneyBlock(m) {
     <div class="mb-own"${m.open ? '' : ' hidden'}>${levChips(m.sym, m.sel)}${M.isPro() ? `<p class="mb-pro">${t('lv.proOn')}</p>` : ''}</div></div>`;
   const table = `<div class="mb-lev" style="--n:${cols.length}" role="radiogroup" aria-label="${F.esc(t('mb.levAria'))}">
       <div class="mb-rl" aria-hidden="true"><span class="mb-rl-h">${t('mb.rHead')}</span><span>${t(ok ? 'mb.rAvg' : 'mb.rBest')}</span><span>${t('mb.rWorst')}</span></div>
-      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>`;
+      ${cols.map(cell).join('')}</div>${own}<p class="mb-note">${t('mb.levNote')}</p>${ddNote(cols)}`;
   return `<div class="mb" data-max="${mx}" data-sym="${F.esc(m.sym)}">${levs.map(main).join('')}${table}
     <p class="sc-note">${t(ok ? 'c.potNote' : 'c.potNoteOld')}</p></div>`;
 }
@@ -534,16 +539,19 @@ export function closedLines(s, now = D.clock()) {
   </div>`;
 }
 /* 1.11.0 "Síla signálu" 1–3 dots from reward:risk of entering now (H.rrNow) – only on signals you can still enter */
-export function strength(s, data, now = D.clock()) {
-  const n = H.dots(H.rrNow(s, data, now));
-  if (!n) return '';
-  return `<p class="sc-str"><span>${t('str.l')}${qh('SILA')}</span><span class="str-dots" role="img" aria-label="${F.esc(t('str.aria', { n }))}">${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span></p>`;
-}
+/* 1.12.0: "Síla signálu" removed – a per-signal quality score did not hold out-of-sample (research 12. 11.).
+   The honest per-horizon line (vydělá 1 ze 2 in the test) lives in the money block. */
+export function strength() { return ''; }
 /* 1.11.0: the watchdog's word on this signal's strategy (sleduj = neutral note, vypnuto = no new entries) */
 export function healthNote(s, data) {
   const st = H.status(data, s.horizon);
   if (st !== 'sleduj' && st !== 'vypnuto') return '';
   return `<a class="le-note is-${st === 'vypnuto' ? 'off' : 'watch'}" href="#/uceni">${icon('shield', 'icon-xs')}<span>${t(st === 'vypnuto' ? 'le.det.off' : 'le.det.watch')}</span>${icon('chev-right', 'icon-xs')}</a>`;
+}
+
+/* 1.12.0 "Vstup: teď (burza otevřená do 22:00), nejvýš za 164,47" */
+export function entryHtml(en, big = false) {
+  return `<p class="sc-when sc-entry is-${en.code}${big ? ' is-big' : ''}">${icon(en.code === 'now' ? 'spark' : en.code === 'late' ? 'close' : 'clock', 'icon-xs')}<span>${F.esc(en.text)}</span></p>`;
 }
 
 export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = null, isNew = false } = {}) {
@@ -566,12 +574,14 @@ export function offer(s, { data, now = D.clock(), notNow = false, i = 0, seen = 
     /* the robot's whole-account test result: once per strategy in a list (seen), always on a single card */
     const tl = !seen || !seen.has(s.horizon) ? testLine(s, data) : '';
     if (seen) seen.add(s.horizon);
-    money = `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}${strength(s, data, now)}</div>${tl}`;
+    money = `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${tl}`;
   } else if (ph === 'running') {
     const mv = D.priceMove(s);
     if (mv != null) money = `<p class="sc-mv"><span>${t('c.move')}</span><b class="num">${F.spct(mv, 1)}</b></p>`;
   }
-  const when = cs.code === 'mine' || ph === 'closed' ? '' : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`;
+  /* 1.12.0: the exact entry line (when + at what price) instead of the general sentence; same cardState */
+  const en = cs.code === 'mine' || ph === 'closed' ? null : D.entryLine(s, data, now, cs);
+  const when = cs.code === 'mine' || ph === 'closed' ? '' : en ? entryHtml(en) : `<p class="sc-when is-${cs.code}">${F.esc(cs.text)}</p>`;
   /* 1.10.0: the whole card is one tappable tile -> the detail (inner buttons keep their own action) */
   return `<article class="sc is-${cs.code} ph-${ph} hz-${F.esc(s.horizon || '')}${isNew ? ' is-new' : ''} is-tile" style="--i:${Math.min(i, 8)}" data-live-id="${F.esc(s.id)}" data-sig="${F.esc(s.id)}" data-action="open-signal" data-id="${F.esc(s.id)}">
     <div class="sc-head" role="button" tabindex="0" data-action="open-signal" data-id="${F.esc(s.id)}" aria-label="${F.esc(sigTitleText(s))}">

@@ -11,6 +11,7 @@ import { rTip, entryChip, nextUsOpen } from './signals.js';
 import { vtSupported } from '../motion.js';
 import { shareSignal } from '../share.js';
 import * as B from '../brief.js';
+import * as Comm from '../community.js';
 import * as M from '../market.js';
 import * as H from '../health.js';
 import * as store from '../store.js';
@@ -176,8 +177,9 @@ export function openDetail(ctx, id, sourceEl = null, { focus = null } = {}) {
       <p class="bc-tags"><span class="u-chip tone-${cs.tone}">${F.esc(cs.badge)}</span><span class="hz-tag">${F.esc(F.HZ_LABEL[s.horizon] || '')}</span>${s.preview ? `<span class="hz-tag is-preview">${t('sig.preview')}</span>` : ''}</p>
       <p class="d-ctitle">${B.sigTitle(s)}<small>${t(`c.type.${s.horizon}`)}</small></p>
       ${B.facts(s, D.sigPhase(s, now), now)}
-      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const { n, html } = B.moneyFor(s, ctx.data, now); return `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}${B.strength(s, ctx.data, now)}</div>${B.testLine(s, ctx.data)}`; })() : ''}
-      <p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>
+      ${D.sigPhase(s, now) === 'closed' ? B.closedLines(s, now) : D.sigPhase(s, now) === 'open' && !['mine', 'order'].includes(cs.code) ? (() => { const { n, html } = B.moneyFor(s, ctx.data, now); return `<div class="sc-money"><p class="sc-dep">${t('c.dep', { a: F.money(n.amount, n.ccy, 0) })}</p>${html}</div>${B.testLine(s, ctx.data)}`; })() : ''}
+      ${(() => { const en = cs.code === 'mine' ? null : D.entryLine(s, ctx.data, now, cs); return en ? B.entryHtml(en, true) : `<p class="bc-todo is-big b-todo tone-${cs.tone}">${F.esc(cs.text)}</p>`; })()}
+      ${(() => { const c = Comm.forSignal(s.id); return c ? `<p class="d-people">${icon('users', 'icon-xs')}<span>${F.esc(c.wins != null ? t('cm.sig', { n: c.takers, w: c.wins }) : t('cm.sig0', { n: c.takers }))}</span></p>` : ''; })()}
       ${D.sigPhase(s, now) !== 'closed' ? B.healthNote(s, ctx.data) : ''}
       ${cs.my ? B.myLine(cs) : ''}
       ${(store.get('wallet', null)?.positions || []).filter((p) => p.sigId === s.id).map((p) => `<p class="bc-lv d-open is-mine">${F.esc(B.myOpenText(p, store.get('wallet', null).ccy))}</p>`).join('')}

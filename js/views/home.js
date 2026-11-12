@@ -16,6 +16,7 @@ import { pushCta } from './more.js';
 import * as Live from '../live.js';
 import * as H from '../health.js';
 import { offLine, linkLine } from './learn.js';
+import { myStats } from './penezenka.js';
 
 /* 1.9.0: live market strip with the main markets (instruments.json keys, plain names); tap = trade it on the platform.
    Before the server knows the keys, the old ETF proxies are shown (labelled honestly). */
@@ -104,12 +105,41 @@ const smoney = (v, c) => (v > 0.5 ? '+' : '') + F.money(v, c, 0);
 export function accountCard(ctx) {
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
-  const td = D.moneyTone(sm.today, c, sm.equity > 0 ? (sm.today / sm.equity) * 100 : null);
-  return `<section class="d-acc" id="acc-card" aria-label="${t('d.acc')}">
-    <div class="d-acc-l"><p class="d-k">${t('d.acc')}</p>
+  const tot = D.moneyTone(sm.total, c, sm.totalPct);
+  /* 1.12.0 Peněženka: the whole left part opens #/penezenka, the gold button tops up */
+  return `<section class="d-acc d-wal" id="acc-card" aria-label="${t('wl.title')}">
+    <a class="d-acc-l d-wal-link" href="#/penezenka"><p class="d-k">${icon('wallet', 'icon-xs')}${t('wl.title')}${icon('chev-right', 'icon-xs')}</p>
       <p class="d-acc-v"><b class="num">${F.money(sm.equity, c, 0)}</b><span>${t('d.fict')}</span></p>
-      <p class="d-acc-s num ${td.tone}">${t('d.today', { v: td.text })}</p></div>
-    <a class="btn btn-primary d-trade" href="#/terminal">${icon('chart', 'icon-sm')}<span>${t('u.acc.trade')}</span></a>
+      <p class="d-acc-s num">${t('wl.cardS', { f: F.money(Math.max(0, sm.free), c, 0) })}${tot.zero ? '' : ` · <span class="${tot.tone}">${t('wl.cardTot', { v: F.esc(tot.text) })}</span>`}</p></a>
+    <button type="button" class="btn btn-primary d-trade" data-action="w-load">${icon('plus-square', 'icon-sm')}<span>${t('wl.topupShort')}</span></button>
+  </section>`;
+}
+
+/* 1.12.0 one calm line on top: "Tvoje peněženka dnes +120 Kč · 2 obchody běží" */
+function todayLine(ctx) {
+  const sm = W.summary(ctx.data);
+  const c = sm.w.ccy;
+  const td = D.moneyTone(sm.today, c, sm.equity > 0 ? (sm.today / sm.equity) * 100 : null);
+  const n = sm.rows.length;
+  const run = n ? t('dt.run', { n }) : sm.w.orders.length ? t('dt.wait', { n: sm.w.orders.length }) : t('dt.none');
+  const v = td.zero ? `±${F.money(0, c, 0)}` : td.text;
+  return `<p class="d-today">${t('dt.l')} <b class="num ${td.tone}">${F.esc(v)}</b><span> · ${F.esc(run)}</span></p>`;
+}
+
+/* 1.12.0 three ways to use PULSE – big clear tiles right under Peněženka */
+function profLine(on) {
+  const cs = D.calcState();
+  const p = CONFIG.CALC.RISK_PROFILES.find((x) => x.id === cs.profile) || CONFIG.CALC.RISK_PROFILES[0];
+  return t('pt.prof', { s: t(on ? 'pt.on' : 'pt.off'), p: t(`profile.${p.id}`).toLowerCase(), r: F.num(p.pct, 0) });
+}
+function paths() {
+  const on = !!store.get('autoCopy', null)?.on;
+  return `<section class="paths" aria-label="${t('pt.aria')}">
+    <a class="path" href="#/terminal"><span class="path-ic">${icon('chart')}</span><span class="path-tx"><b>${t('pt.self')}</b><small>${t('pt.selfS')}</small></span>${icon('chev-right', 'icon-xs path-go')}</a>
+    <a class="path" href="#/signaly"><span class="path-ic">${icon('signals')}</span><span class="path-tx"><b>${t('pt.sig')}</b><small>${t('pt.sigS')}</small></span>${icon('chev-right', 'icon-xs path-go')}</a>
+    <button type="button" class="path path-auto ${on ? 'is-on' : ''}" id="auto-copy" role="switch" aria-checked="${on}" data-action="auto-toggle">
+      <span class="path-ic">${icon('robot')}</span><span class="path-tx"><b>${t('pt.auto')}</b><small>${t('pt.autoS')}</small><small class="path-prof">${F.esc(profLine(on))}</small></span>
+      <span class="auto-sw" aria-hidden="true"><i></i></span></button>
   </section>`;
 }
 
@@ -171,47 +201,28 @@ function myInvestRows(ctx, sm, bare = false) {
 
 /* 1.9.1 tab "Zainvestováno": everything I put money into – open trades, waiting buys, history (former Moje + platform lists) */
 export function renderInvested(ctx) {
-  const head = `<header class="page-head"><div><h1 class="page-title">${t('nav.zainvestovano')}</h1><p class="page-sub">${t('zi.sub')}</p></div></header>`;
+  const head = `<header class="page-head"><div><h1 class="page-title">${t('nav.zainvestovano')}</h1><p class="page-sub">${t('zi.sub')}</p></div>
+    <a class="btn btn-secondary btn-small zi-hist" href="#/historie">${icon('history', 'icon-sm')}<span>${t('hi.title')}</span></a></header>`;
   if (!ctx.data?.signals) return head + skBlock(220);
   const sm = W.summary(ctx.data);
   const c = sm.w.ccy;
+  const now = ctx.now();
   const open = D.moneyTone(sm.open, c, sm.used > 0 ? (sm.open / sm.used) * 100 : null);
   const ords = sm.w.orders.map((o) => orderRow(o, ctx.data)).join('');
+  const hs = myStats(sm.w);
+  /* followed signals (former Moje): only when there are some */
+  const fol = D.followed().map((id) => D.findSignal(ctx.data, id)).filter(Boolean);
   return head + `
   <section class="d-acc"><div class="d-acc-l"><p class="d-k">${t('zi.inTrades')}</p>
     <p class="d-acc-v"><b class="num">${F.money(sm.used, c, 0)}</b><span>${t('d.fict')}</span></p>
     <p class="d-acc-s num ${open.tone}">${t('zi.result', { v: open.text })}</p></div>
-    <a class="btn btn-secondary d-trade" href="#/terminal">${t('u.acc.trade')}</a></section>
+    <a class="btn btn-secondary d-trade" href="#/penezenka">${icon('wallet', 'icon-sm')}<span>${t('wl.title')}</span></a></section>
   <section class="d-block"><h2 class="d-h">${t('zi.open')}<span class="num"> · ${sm.rows.length}</span></h2>${sm.rows.length ? myInvestRows(ctx, sm) : `<p class="d-empty">${t('d.mine0')}</p>`}</section>
   <section class="d-block"><h2 class="d-h">${t('zi.orders')}<span class="num"> · ${sm.w.orders.length}</span></h2>${ords ? `<div class="tp-list">${ords}</div>` : `<p class="d-empty">${t('zi.orders0')}</p>`}</section>
-  <section class="d-block"><h2 class="d-h">${t('zi.hist')}</h2>${histList(sm)}</section>`;
+  <a class="hs-row zi-hrow" href="#/historie">${icon('history', 'icon-xs')}<span>${hs.n ? t('zi.histLine', { n: hs.n, u: F.unit('trade', hs.n), r: F.pct(hs.rate, 0), v: (hs.total > 0.5 ? '+' : '') + F.money(hs.total, c, 0) }) : t('zi.histLine0')}</span>${icon('chev-right', 'icon-xs')}</a>
+  ${fol.length ? `<section class="d-block"><h2 class="d-h">${t('moje.fol')}<span class="num"> · ${fol.length}</span></h2><div class="sc-list">${fol.map((x, i) => B.offer(x, { data: ctx.data, now, i })).join('')}</div></section>` : ''}`;
 }
 
-/* 1.10.0 Více -> Můj účet: where my (fictional) money is + Nabít / Vybrat / Začít znovu */
-export function renderAccount(ctx) {
-  const head = `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('acc.title')}</h1><p class="page-sub">${t('acc.sub')}</p></div></header>`;
-  if (!ctx.data?.signals) return head + skBlock(220);
-  const sm = W.summary(ctx.data);
-  const c = sm.w.ccy;
-  const tot = D.moneyTone(sm.total, c, sm.totalPct);
-  const row = (k, v, cls = '') => `<div class="acc-r"><span>${k}</span><b class="num ${cls}">${v}</b></div>`;
-  return head + `
-  <section class="big-acc is-page"><p class="big-acc-k">${icon('wallet', 'icon-xs')}${t('acc.big')}</p>
-    <p class="big-acc-v num">${F.money(sm.equity, c, 0)}</p>
-    <div class="big-acc-row num"><span>${t('acc.free')} <b>${F.money(Math.max(0, sm.free), c, 0)}</b></span><span>${t('acc.inPlay')} <b>${F.money(sm.used + sm.reserved, c, 0)}</b></span></div></section>
-  <section class="card acc-rows">
-    ${row(t('acc.putIn'), F.money(sm.putIn, c, 0))}
-    ${row(t('acc.result'), `${F.esc(tot.text)}${tot.zero ? '' : ` (${F.spct(sm.totalPct, 1)})`}`, tot.tone)}
-    ${row(t('acc.open'), String(sm.rows.length))}
-    ${row(t('acc.orders'), String(sm.w.orders.length))}
-  </section>
-  <div class="acc-page-btns">
-    <button type="button" class="btn btn-primary btn-block" data-action="w-load">${icon('plus-square', 'icon-sm')}${t('acc.load')}</button>
-    <button type="button" class="btn btn-secondary btn-block" data-action="w-withdraw">${t('acc.wd')}</button>
-    <button type="button" class="btn btn-ghost btn-block" data-action="w-reset">${t('acc.reset')}</button>
-  </div>
-  <p class="honest">${icon('shield', 'icon-xs')} ${t('acc.note')}</p>`;
-}
 
 /* 4 ROBOT: one line -> the robot page */
 function robotLine1(ctx) {
@@ -246,7 +257,9 @@ export function render(ctx) {
   const sigs = fresh.slice(0, 3);
   const more = fresh.length > 3 ? `<a class="d-more" href="#/signaly">${t('d.moreSigs', { n: fresh.length })}${icon('chev-right', 'icon-xs')}</a>` : '';
   return head + `
+  ${todayLine(ctx)}
   ${accountCard(ctx)}
+  ${paths()}
   ${B.statsRow(ctx.data, now)}
   <section class="d-block" aria-labelledby="d-new"><h2 class="d-h" id="d-new"><a href="#/signaly">${t('d.new')}${icon('chev-right', 'icon-xs')}</a></h2>
     ${offLine(ctx.data)}
@@ -255,6 +268,5 @@ export function render(ctx) {
   <section class="d-block" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/zainvestovano">${t('nav.zainvestovano')}${icon('chev-right', 'icon-xs')}</a></h2>${myInvest(ctx)}</section>
   ${robotLine1(ctx)}
   ${linkLine(ctx.data, now)}
-  ${D.headStats(ctx.data, now).n ? `<section class="d-block" aria-labelledby="d-fresh"><h2 class="d-h" id="d-fresh"><a href="#/vysledky">${t('fr.title')}${icon('chev-right', 'icon-xs')}</a></h2>${B.freshTable(ctx.data, { n: 3, now, more: true })}</section>` : ''}
   ${ctx.state.fromCache ? `<p class="stale">${icon('offline', 'icon-sm')}${t('common.offlineData')}</p>` : ''}`;
 }

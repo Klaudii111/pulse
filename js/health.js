@@ -50,11 +50,8 @@ export function dots(rr) {
   return rr >= 2.5 ? 3 : rr >= 1.8 ? 2 : 1;
 }
 const STATUS_RANK = { ok: 0, sleduj: 1 };
-/* best first: strength (from reward:risk) -> fresher -> strategy ok before sleduj -> exact reward:risk */
-export function sortByQuality(list, data, now = D.clock()) {
-  const k = new Map(list.map((s) => { const rr = rrNow(s, data, now); return [s.id, { rr: rr ?? 0, d: dots(rr), st: STATUS_RANK[status(data, s.horizon)] ?? 0 }]; }));
-  return list.sort((a, b) => {
-    const x = k.get(a.id), y = k.get(b.id);
-    return (y.d - x.d) || String(b.created_at || '').localeCompare(String(a.created_at || '')) || (x.st - y.st) || (y.rr - x.rr);
-  });
+/* 1.12.0: fresher first, then strategy ok before sleduj (the reward:risk dots are gone – they did not hold out-of-sample) */
+export function sortByQuality(list, data) {
+  const st = (s) => STATUS_RANK[status(data, s.horizon)] ?? 0;
+  return list.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')) || (st(a) - st(b)));
 }

@@ -6,7 +6,7 @@ import { LESSONS } from './lessons.js';
 import { t, L } from './i18n/index.js';
 import * as Live from './live.js';
 import { nextUsOpen } from './views/signals.js';
-import { priceOf, pnlAt, outcome, costs } from './wallet.js';
+import { priceOf, pnlAt, outcome, costs, nyCloseAfter } from './wallet.js';
 import * as M from './market.js';
 
 export const HORIZONS = ['DEN', 'DNY', 'TYDEN', 'MESIC'];
@@ -496,6 +496,29 @@ export function cardState(s, data = null, now = clock()) {
       text: t(sell ? 'u.do.soonSell' : 'u.do.soon', { day, time: o ? F.time(o) : '15:30', v: e }), cta: 'limit' };
   }
   return { ...base, code: 'buy', tone: 'up', est, badge: t(sell ? 'u.chip.buySell' : 'u.chip.buy'), text: t(sell ? 'u.do.nowSell' : 'u.do.now', { d: F.spct(mv, 1), v: e }), cta: 'invest' };
+}
+
+/* 1.12.0 "Vstup: …" – one plain line WHEN and AT WHAT PRICE to enter, built from the same cardState (so the line,
+   the badge and the button can never disagree). null for my own / ended signals. */
+export function entryLine(s, data = null, now = clock(), cs = null) {
+  const c = cs || cardState(s, data, now);
+  const sell = s.action === 'SELL';
+  const e = F.price(s.entry);
+  if (c.code === 'buy') {
+    const risk = Math.abs((s.entry || 0) - (s.stop || 0));
+    const lim = risk > 0 ? s.entry + (sell ? -1 : 1) * CONFIG.ENTRY.VALID_R * risk : s.entry;
+    return { code: 'now', text: t(sell ? 'en.nowSell' : 'en.now', { c: F.time(new Date(nyCloseAfter(+now))), v: F.price(lim) }) };
+  }
+  if (c.code === 'soon') {
+    const o = nextUsOpen(now);
+    const days = o ? F.daysUntil(o, now) : 1;
+    const day = days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(o);
+    return { code: 'soon', text: t(sell ? 'en.soonSell' : 'en.soon', { day, time: o ? F.time(o) : '15:30', v: e }) };
+  }
+  if (c.code === 'wait') return { code: 'wait', text: t(sell ? 'en.waitSell' : 'en.wait', { v: e, d: s.exit_date ? F.dm(s.exit_date) : '–' }) };
+  if (c.code === 'late') return { code: 'late', text: t('en.late') };
+  if (c.code === 'order' && c.ord) return { code: 'order', text: t(sell ? 'en.orderSell' : 'en.order', { v: F.price(c.ord.limit) }) };
+  return null;
 }
 
 /* 1.9.1: the example on every signal card – "Vlož např. 10 000 Kč → při cíli +1 880 Kč, při stopu −940 Kč".

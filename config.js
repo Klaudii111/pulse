@@ -8,7 +8,7 @@
 export const CONFIG = {
   APP_NAME: 'PULSE Signals',
   APP_SHORT_NAME: 'PULSE',
-  APP_VERSION: '1.11.3',
+  APP_VERSION: '1.12.0',
   THEME_COLOR: '#08090C',
 
   /* Data files (relative, so the app works from any sub-folder) */
@@ -23,7 +23,9 @@ export const CONFIG = {
       /* 1.9.0: what the Obchodní platforma can trade (indices, currencies, commodities, crypto, shares, ETFs) */
       instruments: remote ? null : './data/instruments.json',
       /* 1.11.0: the robot's watchdog (Jak se robot učí); missing -> the app behaves as before */
-      health: remote ? null : './data/health.json' };
+      health: remote ? null : './data/health.json',
+      /* 1.12.0: Jak se daří lidem (anonymous, opt-in; aggregated hourly on our server, k-anonymity 3) */
+      community: remote ? null : './data/community.json' };
   })(),
   /* Public address of the main app (install page QR code, push on GitHub Pages copies points users here) */
   APP_URL: 'https://pulse.178-105-154-81.sslip.io/',
@@ -99,6 +101,13 @@ export const CONFIG = {
     UNSUBSCRIBE_URL: '/api/push/unsubscribe', // POST JSON {endpoint}
     /* 1.9.1: my open play-money trades, so the server can push "1 % od cíle" / "cíl zasažen" while the app is closed */
     TRADES_URL: '/api/push/trades', // POST JSON {endpoint, trades:[{id,key,side,entry,sl,tp,lev,deposit,ccy}]}
+    ENABLED: typeof location === 'undefined' || !location.hostname.endsWith('github.io'),
+  },
+
+  /* 1.12.0 anonymous sharing of my play-money results (default OFF, Historie). Not on GitHub Pages copies. */
+  COMMUNITY: {
+    TRADES_URL: '/api/community/trades', // POST {cid, nick, profile, ccy, trades[]}
+    ME_URL: '/api/community/me', // DELETE {cid}
     ENABLED: typeof location === 'undefined' || !location.hostname.endsWith('github.io'),
   },
 

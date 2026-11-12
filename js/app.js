@@ -29,6 +29,8 @@ import * as B from './brief.js';
 import * as Tour from './tour.js';
 import * as Help from './views/help.js';
 import * as Learn from './views/learn.js';
+import * as Wal from './views/penezenka.js';
+import * as Comm from './community.js';
 
 /* ---------- State ---------- */
 const state = { loading: true, error: null, fromCache: false, lastFetch: 0 };
@@ -51,18 +53,22 @@ const TABS = [
 ];
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'vice', uceni: 'vice' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'zainvestovano', udalosti: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'zainvestovano', uceni: 'vice' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, actions: Home.actions },
   zainvestovano: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
-  ucet: { title: 'acc.title', render: Home.renderAccount, actions: Home.actions },
+  /* 1.12.0 Peněženka (old #/ucet keeps working) + Historie */
+  penezenka: { title: 'wl.title', render: Wal.renderWallet },
+  ucet: { title: 'wl.title', render: Wal.renderWallet },
+  historie: { title: 'hi.title', render: Wal.renderHistory, mount: Wal.mountHistory, actions: { ...Home.actions, ...Wal.actions } },
   signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions, mount: () => setTimeout(() => Tour.maybeHint(), 900) },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
   terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
   robot: { title: 'title.robot', render: Paper.render },
-  moje: { title: 'moje.title', render: Moje.render },
+  /* 1.12.0: Moje merged into Zainvestováno (open trades + followed signals); old links land there */
+  moje: { title: 'nav.zainvestovano', render: Home.renderInvested, actions: Home.actions },
   udalosti: { title: 'ev.title', render: Events.render, mount: Events.mount, enter: Events.beforeRender },
   stahnout: { title: 'title.stahnout', render: Pages.renderInstall },
   mt5: { title: 'title.mt5', render: Pages.renderMt5 },
@@ -121,7 +127,7 @@ function renderChrome() {
   let pill = badge;
   try {
     const sm = W.summary(data);
-    pill = `<a class="bal-pill" href="#/terminal" aria-label="${F.esc(t('u.pill', { v: F.money(sm.equity, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num">${F.money(sm.equity, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
+    pill = `<a class="bal-pill" href="#/penezenka" aria-label="${F.esc(t('u.pill', { v: F.money(sm.equity, sm.w.ccy, 0) }))}">${icon('wallet', 'icon-sm')}<b class="num">${F.money(sm.equity, sm.w.ccy, 0)}</b><small>${t('badge.paperShort')}</small></a>`;
   } catch { /* storage blocked: keep the badge */ }
   document.querySelectorAll('[data-slot="badge"]').forEach((el) => { if (el.innerHTML !== pill) el.innerHTML = pill; });
   const ls = Live.status();
@@ -203,7 +209,7 @@ function myTrades() {
   return (w?.positions || []).filter((p) => p.sl > 0 || p.tp > 0).slice(0, 50).map((p) => ({ id: String(p.id), key: p.sym, side: p.side === 'SELL' ? 'SELL' : 'BUY', entry: p.entry,
     sl: p.sl > 0 ? p.sl : null, tp: p.tp > 0 ? p.tp : null, lev: p.lev || 1, deposit: Math.round(p.margin * 100) / 100, ccy: w.ccy, name: B.whatIs(p.sym, p.name).name }));
 }
-const syncTrades = () => { P.syncTrades(myTrades()).catch(() => {}); };
+const syncTrades = () => { P.syncTrades(myTrades()).catch(() => {}); Comm.sync(); };
 
 /* a new buyable signal since the last visit -> one calm bottom sheet: "Nový signál: KOUPIT XOM" [Zainvestovat] [Teď ne] */
 function newSignalOffer() {
@@ -241,6 +247,7 @@ async function loadAll() {
   state.lastFetch = Date.now();
   if (results[5].status === 'rejected') data.paper = null; // missing paper.json -> the section hides
   if (results[6].status === 'rejected') data.health = null; // missing health.json -> no watchdog, behaviour as 1.10
+  Comm.load().then((d) => { if (d && route.name === 'historie' && !sheetOpen()) rerender({ soft: true }); });
   D.migratePreviewJournal(data);
   Live.onData();
   walletCheck();
@@ -301,6 +308,8 @@ function walletCheck0() {
   ord.expired.forEach((o) => toast(t('term.auto.expired', { sym: o.sym, v: F.price(o.limit) }), { timeout: 6000 }));
   const done = W.check(data);
   if (store.get('wallet', null)?.positions?.length) W.summary(data); // takes today's starting point as early as possible
+  /* 1.12.0: a trade that reached its target -> a small celebration (skipped under reduced motion) */
+  if (done.some((r) => r.why === 'tp' && r.pnl > 0)) M.confetti();
   done.forEach((r) => toast(t(`term.auto.${['tp', 'sl', 'out', 'slgap', 'stopout'].includes(r.why) ? r.why : 'sig'}`, { sym: r.sym, v: (r.pnl > 0 ? '+' : '') + F.money(r.pnl, W.get().ccy, 0), x: F.price(r.exit), sl: F.price(r.sl) }), { timeout: 7000 }));
   return copied || done.length > 0 || ord.filled.length > 0 || ord.expired.length > 0;
 }
@@ -598,7 +607,7 @@ async function boot() {
     document.dispatchEvent(new CustomEvent('pulse:live'));
   });
   setInterval(() => renderChrome(), 30000);
-  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'signaly'].includes(route.name)) rerender({ soft: true }); });
+  document.addEventListener('pulse:wallet', () => { syncTrades(); renderChrome(); if (!sheetOpen() && ['dnes', 'zainvestovano', 'signaly', 'penezenka', 'historie'].includes(route.name)) rerender({ soft: true }); });
   loadAll();
   setInterval(poll, CONFIG.POLL_MIN * 60000);
   document.addEventListener('visibilitychange', () => {
