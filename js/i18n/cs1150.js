@@ -101,4 +101,13 @@ export default {
   'auto.on': 'Zapnuto: robot za tebe otevře každý nový signál z Peněženky. Uvidíš to v Portfoliu.',
   'auto.onAll': 'Zapnuto: robot vezme i signály, které teď můžeš koupit – otevřené obchody uvidíš v Portfoliu.',
   'fol.added': '{sym} sleduješ – najdeš ho v Portfoliu',
+  /* 1.15.0 (Tom 12. 11.): žádný hlavní výběr ve večer – robot pošle signál, když je správný vstup */
+  "scan.before": "Robot hlídá trh a signál pošle hned, jak je správný vstup. Během burzy v USA ({open}–{close}) kontroluje každých 20 minut · první kontrola dnes v {nextT}.",
+  "scan.after": "Burza v USA už zavřela · {n} · další kontrola {next}.",
+  "sig.none": "Teď není žádný signál ke koupi – robot dává jen to, co projde jeho pravidly, některé dny nic. Další kontrola {when}.",
+  "next.sub": "Robot hlídá trh a signál pošle hned, jak je správný vstup. Když je burza v USA otevřená (15:30–22:00), kontroluje každých 20 minut. Přijde ti upozornění.",
+  "next.open.s": "Burza v USA je otevřená (u nás 15:30–22:00). Každých 20 minut robot prověří trh a signál pošle hned, jak je správný vstup.",
+  "next.session.s": "Od otevření burzy v USA kontroluje trh každých 20 minut (první kontrola v {scan}) a signál pošle hned, jak je správný vstup.",
+  "sig.preview.t": "Signál našel robot během obchodování (data se zpožděním do 15 min). Po zavření burzy ho potvrdí, nebo zruší.",
+  "jak.s1.s": "Během obchodování v USA každých 20 minut prověří stovky akcií a fondů a signál pošle hned, jak je správný vstup.",
 };

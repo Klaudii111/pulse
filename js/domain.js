@@ -439,10 +439,12 @@ export function nextScanAt(now = clock()) {
   }
   return null;
 }
-/* ONE "další kontrola": the next real scan or the main evening batch, whichever comes first -> { at: Date, kind } */
+/* ONE "další kontrola" -> { at: Date, kind }.
+   1.15.0 (owner 12. 11.: "neřešíme čas, řešíme, kdy je správný vstup"): only the real checks during the US session
+   are shown to the user; the evening batch is no longer advertised (fallback only when no session is known). */
 export function nextCheck(data, now = clock()) {
-  const sc = nextScanAt(now), off = nextRun(data, now);
-  return sc && sc < off ? { at: sc, kind: 'scan' } : { at: off, kind: 'official' };
+  const sc = nextScanAt(now);
+  return sc ? { at: sc, kind: 'scan' } : { at: nextRun(data, now), kind: 'official' };
 }
 /* "dnes 15:45" / "zítra 15:45" / "pondělí 15:45" */
 export function whenLabel(d, now = clock()) {

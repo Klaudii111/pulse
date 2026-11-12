@@ -11,12 +11,12 @@ export default {
   'scan.n0': 'dnes zatím žádný nový',
   'scan.n': { one: 'dnes zatím {n} nový', few: 'dnes zatím {n} nové', other: 'dnes zatím {n} nových' },
   'scan.open': 'Robot teď hledá nové příležitosti (burza v USA otevřená do {close}) · {n} · další kontrola v {nextT}.',
-  'scan.before': 'Robot hledá nové příležitosti během burzy v USA {open}–{close}, každých 20 minut · první kontrola dnes v {nextT}, hlavní výběr večer ve {off}.',
-  'scan.after': 'Burza v USA už zavřela · {n} · hlavní výběr dnes ve {off}.',
+  'scan.before': 'Robot hlídá trh a signál pošle hned, jak je správný vstup. Během burzy v USA ({open}–{close}) kontroluje každých 20 minut · první kontrola dnes v {nextT}.',
+  'scan.after': 'Burza v USA už zavřela · {n} · další kontrola {next}.',
   'scan.closed': 'Burza v USA má teď zavřeno · další kontrola {next}.',
   'scan.den': 'Jednodenní signály zatím nedáváme – v testu nevydělávaly. Měříme dál.',
-  'sig.none': 'Teď není žádný signál ke koupi – robot dává jen to, co projde jeho pravidly, některé dny nic. Další kontrola {when}, hlavní výběr večer ve 22:45.',
-  'next.sub': 'Během obchodování v USA robot kontroluje trh každých 20 minut, hlavní výběr je večer ve 22:45 (český čas). Přijde ti upozornění.',
+  'sig.none': 'Teď není žádný signál ke koupi – robot dává jen to, co projde jeho pravidly, některé dny nic. Další kontrola {when}.',
+  'next.sub': 'Robot hlídá trh a signál pošle hned, jak je správný vstup. Když je burza v USA otevřená (15:30–22:00), kontroluje každých 20 minut. Přijde ti upozornění.',
 
   /* okno vstupu */
   'ew.until': 'Vstup platí do {d}',

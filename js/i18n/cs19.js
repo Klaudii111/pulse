@@ -193,7 +193,7 @@ export default {
   /* stránka Jak PULSE funguje */
   'jak.title': 'Jak PULSE funguje',
   'jak.sub': 'Celé v pěti krocích',
-  'jak.s1.t': 'Robot každý den projde trh', 'jak.s1.s': 'Během obchodování v USA každých 20 minut a večer ve 22:45 prověří stovky akcií a fondů.',
+  'jak.s1.t': 'Robot každý den projde trh', 'jak.s1.s': 'Během obchodování v USA každých 20 minut prověří stovky akcií a fondů a signál pošle hned, jak je správný vstup.',
   'jak.s2.t': 'Najde příležitost a pošle signál', 'jak.s2.s': 'Co koupit, za kolik, kde skončit se ztrátou (stop) a kde vybrat zisk (cíl).',
   'jak.s3.t': 'Ty se rozhodneš', 'jak.s3.s': 'Zkusíš to nanečisto tady v aplikaci (fiktivní peníze), nebo u svého brokera. Nemusíš nic.',
   'jak.s4.t': 'Robot hlídá cenu', 'jak.s4.s': 'Dá vědět, když se cena blíží k cíli nebo stopu, a když obchod skončí.',

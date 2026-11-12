@@ -98,4 +98,12 @@ export default {
   'auto.on': 'On: the robot opens every new signal for you from the Wallet. You will see it in Portfolio.',
   'auto.onAll': 'On: the robot also takes signals you can buy now – open trades show in Portfolio.',
   'fol.added': 'You follow {sym} – find it in Portfolio',
+  /* 1.15.0 (owner 12. 11.): no evening main selection – the robot sends a signal when the entry is right */
+  "scan.before": "The robot watches the market and sends a signal the moment the entry is right. During the US session ({open}–{close}) it checks every 20 minutes · first check today at {nextT}.",
+  "scan.after": "The US market has closed · {n} · next check {next}.",
+  "sig.none": "No signal to buy right now – the robot only sends what passes its rules, some days nothing. Next check {when}.",
+  "next.sub": "The robot watches the market and sends a signal the moment the entry is right. While the US market is open (15:30–22:00) it checks every 20 minutes. You’ll get a notification.",
+  "next.open.s": "The US market is open (15:30–22:00 Prague time). Every 20 minutes the robot checks the market and sends a signal the moment the entry is right.",
+  "next.session.s": "From the US open it checks the market every 20 minutes (first check at {scan}) and sends a signal the moment the entry is right.",
+  "sig.preview.t": "Found by the robot during the session (data up to 15 min delayed). Confirmed or cancelled after the close.",
 };

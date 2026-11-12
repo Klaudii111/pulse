@@ -19,13 +19,16 @@ export function regimeLine(r) {
   return `<p class="regime-line ${off ? 'is-off' : ''}" title="${F.esc(L(r.note))}"><i aria-hidden="true"></i>${t(off ? 'regime.off' : 'regime.on')}<span class="num">${t('regime.vs', { v: F.spct(r.spy_vs_sma200_pct ?? 0) })}</span></p>`;
 }
 
-function upcoming(data, now, n) {
-  const out = []; let from = new Date(now);
+/* 1.15.0: the next US sessions (day + open time in the user's clock) – the evening batch is no longer listed */
+function upcoming(now, n) {
+  const out = []; let from = +now;
   for (let i = 0; i < n; i++) {
-    const d = D.nextRun(i === 0 ? data : null, from);
+    const x = D.usSession(from, true);
+    if (!x) break;
+    const d = new Date(x.open);
     const days = F.daysUntil(d, now);
     out.push({ day: days === 0 ? t('fmt.today') : days === 1 ? t('fmt.tomorrow') : F.weekday(d), time: F.time(d) });
-    from = new Date(d.getTime() + 60000);
+    from = x.open + 60000;
   }
   return out;
 }
@@ -57,11 +60,13 @@ const inWords = (d, now) => {
 
 /* Truthful "when do new signals come" card:
    market open  -> the robot is watching now, new signals any time, next check in X min (:05/:25/:45);
-   market closed -> whichever comes first: the official 22:45 run, or the next session start (scans every 20 min). */
+   market closed -> the next session start (scans every 20 min from then on).
+   1.15.0: the evening batch is not shown any more (owner 12. 11.); open / closed from D.usOpenAt, which knows US holidays
+   (Live.marketOpen does not – on a holiday the status line said closed while this card said open). */
 export function nextLine(data, now) {
   const scan = nextScan(now);
   const official = D.nextRun(data, now);
-  if (scan || Live.marketOpen(now)) {
+  if (scan || D.usOpenAt(+now)) {
     /* market open: next scan slot, or (last ~15 min of the session) the last check is done */
     const mins = scan ? Math.max(1, Math.round((scan - now) / 60000)) : 0;
     const plan = scan ? [scan] : [];
@@ -71,25 +76,26 @@ export function nextLine(data, now) {
       <div class="next-body">
         <p class="next-k"><span class="live-dot" aria-hidden="true"></span>${F.esc(t('next.open.k'))}</p>
         <p class="next-when">${F.esc(t('next.open.when'))}</p>
-        <p class="next-s">${F.esc(t('next.open.s', { time: F.time(official) }))}</p>
+        <p class="next-s">${F.esc(t('next.open.s'))}</p>
       </div>
       <div class="next-in num">${F.esc(scan ? t('next.open.in', { m: mins }) : t('next.open.last'))}</div>
-      <ol class="next-plan">${plan.map((x, i) => `<li class="${i === 0 ? 'is-next' : ''}"><span>${F.esc(t('next.scan'))}</span><b class="num">${F.esc(F.time(x))}</b></li>`).join('')}<li><span>${F.esc(t('next.official'))}</span><b class="num">${F.esc(F.time(official))}</b></li></ol>
+      <ol class="next-plan">${plan.map((x, i) => `<li class="${i === 0 ? 'is-next' : ''}"><span>${F.esc(t('next.scan'))}</span><b class="num">${F.esc(F.time(x))}</b></li>`).join('')}</ol>
     </section>`;
   }
-  const open = nextUsOpen(now);
-  const firstScan = open ? new Date(open.getTime() + 15 * 60000) : null;
-  const sessionFirst = open && open < official;
+  const ses = D.usSession(+now, true);
+  const open = ses ? new Date(ses.open) : null;
+  const firstScan = open ? D.nextScanAt(open) : null;
+  const sessionFirst = !!open;
   const target = sessionFirst ? open : official;
   return `<section class="next-card" aria-label="${F.esc(t('next.title'))}">
     <div class="next-ico">${icon('clock')}</div>
     <div class="next-body">
       <p class="next-k">${F.esc(t(sessionFirst ? 'next.session.k' : 'next.title'))}</p>
       <p class="next-when"><span class="next-day">${F.esc(dayWord(target, now))}</span> <span class="num next-time">${F.esc(F.time(target))}</span></p>
-      <p class="next-s">${F.esc(sessionFirst ? t('next.session.s', { scan: firstScan ? F.time(firstScan) : '', time: F.time(official) }) : t('next.sub'))}</p>
+      <p class="next-s">${F.esc(sessionFirst ? t('next.session.s', { scan: firstScan ? F.time(firstScan) : '' }) : t('next.sub'))}</p>
     </div>
     <div class="next-in num">${F.esc(inWords(target, now))}</div>
-    <ol class="next-plan">${upcoming(data, now, 5).map((x, i) => `<li class="${i === 0 && !sessionFirst ? 'is-next' : ''}"><span>${F.esc(x.day)}</span><b class="num">${F.esc(x.time)}</b></li>`).join('')}</ol>
+    <ol class="next-plan">${upcoming(now, 5).map((x, i) => `<li class="${i === 0 && !sessionFirst ? 'is-next' : ''}"><span>${F.esc(x.day)}</span><b class="num">${F.esc(x.time)}</b></li>`).join('')}</ol>
   </section>`;
 }
 
