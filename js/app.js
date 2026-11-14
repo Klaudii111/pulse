@@ -36,6 +36,7 @@ import * as Comm from './community.js';
 import * as H from './health.js';
 import * as Sync from './sync.js';
 import * as Den from './den.js';
+import * as El from './elektrina.js';
 import * as Sty from './styles.js';
 
 /* ---------- State ---------- */
@@ -62,12 +63,14 @@ const TABS = [
 const SECONDARY = new Set(['kalkulacka', 'vice', 'denik', 'kalendar', 'simulator', 'akademie', 'liga', 'urovne', 'predplatne', 'nastaveni', 'info', 'stahnout', 'mt5', 'jak', 'duvera']);
 /* screens that belong under another tab */
 /* 1.15.0: Portfolio is the tab (old #/zainvestovano and #/moje stay as aliases); a trade detail belongs to it */
-const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', den: 'dnes', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
+const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestovano: 'portfolio', obchod: 'portfolio', udalosti: 'dnes', den: 'dnes', elektrina: 'vice', ucet: 'dnes', penezenka: 'dnes', historie: 'portfolio', uceni: 'vice' };
 
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, mount: (el, c) => { Pf.dnesMount(el, c); Den.mount(el, autoRender); }, actions: { ...Home.actions, ...Den.actions } },
   /* 1.15.1 the experimental daily robot (PULSE DEN) – its own page, never mixed with the tested signals */
   den: { title: 'den.h', render: Den.render, mount: Den.mountPage, actions: Den.actions },
+  /* 1.16.0 the experimental quarter-hour electricity robot – its own page, entry only from Více (never on Dnes) */
+  elektrina: { title: 'el.title', render: El.render, mount: (el, c) => El.mount(el, c, autoRender) },
   /* 1.15.0 Portfolio (#/portfolio = #/moje = #/zainvestovano) + the trade detail #/obchod/<id> */
   portfolio: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },
   zainvestovano: { title: 'nav.portfolio', render: Pf.render, mount: Pf.mount, unmount: Pf.unmount, actions: { ...Home.actions, ...Pf.actions } },

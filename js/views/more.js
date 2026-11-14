@@ -24,6 +24,8 @@ export const MORE_ITEMS = [
     { id: 'historie', icon: 'history', sub: () => { const w = store.get('wallet', null); const n = w?.closed?.length || 0; return n ? t('more.historie.s', { n }) : t('more.historie.s0'); } },
     /* 1.13.6: "Robot obchoduje za mě" merged in here (the switch itself lives on Dnes and the Robot page) */
     { id: 'robot', icon: 'shield', sub: () => `${t('more.robot.s2')} · ${t('pt.auto')}: ${t(store.get('autoCopy', null)?.on ? 'pt.on' : 'pt.off').toLowerCase()}` },
+    /* 1.16.0: the experimental electricity robot (paper only) - next to the Robot, not on Dnes */
+    { id: 'elektrina', icon: 'bolt', sub: () => t('more.elektrina.s') },
     { id: 'jak', icon: 'help', sub: () => t('more.jak.s2') },
     { id: 'nastaveni', icon: 'settings', sub: () => t('more.nastaveni.s') },
   ] },
