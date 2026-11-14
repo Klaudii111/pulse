@@ -478,9 +478,18 @@ export function render(ctx) {
     return head + `<p class="den-off">${t('den.noData')}</p>`;
   }
 }
-export function mountPage(el, ctx) {
+/* 1.16.0: fresh data reach #/den through the app's guarded automatic repaint (`repaint` = autoRender: never under a
+   finger or while the page glides, the reading place is kept, the same HTML paints nothing) - it used to call
+   ctx.rerender at once, also under a finger and after #/den was left (#view is always connected). Only the first answer,
+   which replaces "Načítám…" (nothing to read yet), is painted at once. No timer of its own. */
+const onDenPage = () => !!document.querySelector('#view .den-page, #view > .den-off');
+export function mountPage(el, ctx, repaint) {
   if (st.tried && Date.now() - st.at < 120000) return;
-  load(true).then(() => { if (el.isConnected) ctx.rerender({ soft: true }); }).catch(() => {});
+  load(true).then(() => {
+    if (!onDenPage()) return;   // #/den was left meanwhile
+    if (document.querySelector('#view > .den-off') || typeof repaint !== 'function') ctx.rerender({ soft: true });
+    else repaint();
+  }).catch(() => {});
 }
 
 export const actions = {

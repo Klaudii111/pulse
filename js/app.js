@@ -68,7 +68,7 @@ const PARENT = { robot: 'vice', vysledky: 'vice', moje: 'portfolio', zainvestova
 const VIEWS = {
   dnes: { title: 'nav.dnes', render: Home.render, mount: (el, c) => { Pf.dnesMount(el, c); Den.mount(el, autoRender); }, actions: { ...Home.actions, ...Den.actions } },
   /* 1.15.1 the experimental daily robot (PULSE DEN) – its own page, never mixed with the tested signals */
-  den: { title: 'den.h', render: Den.render, mount: Den.mountPage, actions: Den.actions },
+  den: { title: 'den.h', render: Den.render, mount: (el, c) => Den.mountPage(el, c, autoRender), actions: Den.actions },
   /* 1.16.0 the experimental quarter-hour electricity robot – its own page, entry only from Více (never on Dnes) */
   elektrina: { title: 'el.title', render: El.render, mount: (el, c) => El.mount(el, c, autoRender) },
   /* 1.15.0 Portfolio (#/portfolio = #/moje = #/zainvestovano) + the trade detail #/obchod/<id> */
