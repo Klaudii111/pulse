@@ -11,6 +11,7 @@
 .el-badge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 0; }
 .el-badge .den-badge { font-size: 13px; }
 .el-badge-s { font-size: 14px; color: var(--ink-2); }
+.el-zero { margin: -8px 0 0; font-size: 15px; line-height: 1.4; color: var(--ink); }
 
 .el-card { display: grid; gap: 8px; padding: 16px; }
 .el-h { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink-2); letter-spacing: .01em; }
@@ -24,6 +25,9 @@
 .el-now.is-go { border-color: var(--gold-line); }
 .el-big { margin: 0; font-size: 26px; line-height: 1.18; font-weight: 750; color: var(--ink); letter-spacing: -.01em; }
 .el-lim { margin: 2px 0 0; font-size: 18px; font-weight: 650; color: var(--ink); }
+.el-book { margin-top: -4px; }
+.el-cmp { margin-top: 6px; }
+.el-src { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--ink-3); }
 .el-until { margin: 0; font-size: 17px; color: var(--ink-2); }
 .el-until b { color: var(--gold); font-weight: 700; }
 .el-why { margin: 2px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
