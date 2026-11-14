@@ -92,9 +92,13 @@ function tp(base, n, p = {}) {
   const k = `${base}.${cat}`;
   return t(t(k) !== k ? k : `${base}.other`, { n, ...p });
 }
-/* "ještě 12 min" / "ještě 1 h 05 min" */
+/* "ještě 12 min" / "ještě 1 h 05 min" / "méně než minuta"; after the end (until the next tick repaints) "vstup skončil" –
+   never "ještě 0 min" */
 function left(until, now) {
-  const m = Math.max(0, Math.ceil((until - now) / 60000));
+  const d = until - now;
+  if (!(d > 0)) return t('el.leftEnd');
+  if (d < 60000) return t('el.leftLt1');
+  const m = Math.floor(d / 60000);
   if (m < 60) return t('el.leftM', { m });
   return t('el.leftH', { h: Math.floor(m / 60), m: String(m % 60).padStart(2, '0') });
 }
@@ -183,7 +187,9 @@ function nowCard(j, now) {
   } else if (r.stav === 'bez_dat') {
     big = esc(t('el.now.nothing')); body = robotSays('el.now.noDataS');
   } else if (r.stav === 'pozastaveno') {
-    big = esc(t('el.now.paused')); body = robotSays('el.now.pausedS');
+    /* after the review: a plain sentence in the big card; the robot's own raw sentence (profit against loss …) closed */
+    big = esc(t('el.now.paused')); body = sub(esc(t('el.now.pausedS')));
+    if (cs() && pc) body += `<details class="el-more" data-el-k="paused"${isOpen('paused', false) ? ' open' : ''}><summary>${t('el.res.more')}</summary><p class="el-small">${hum(pc)}</p></details>`;
   } else if (r.stav === 'vypnuto') {
     big = esc(t('el.now.off')); body = cs() && pc && pc !== 'Robot je ručně vypnutý.' ? sub(hum(pc)) : '';
   } else if (r.stav !== 'bezi') {
@@ -199,14 +205,15 @@ function nowCard(j, now) {
       body = `<p class="el-lim num">${esc(px.txt)}</p>${px.small ? `<p class="el-small el-book">${esc(px.small)}</p>` : ''}
         <p class="el-until"><b class="num">${esc(t('el.until', { t: hm(pd) }))}</b> · <span class="num" data-el-until="${pd}">${esc(left(pd, now))}</span></p>
         <p class="el-why">${nw(esc(whyLine(s)))}</p>
+        <p class="el-small el-units">${esc(t('el.units'))}</p>
         <p class="el-tagline">${icon('alert', 'icon-xs')}<span>${esc(cs() && s.stitek ? s.stitek : t('el.sigTag'))}</span></p>
         ${priceInfo(s)}
         ${v.slice(1).map((x) => { const p2 = priceLine(j, x); return `<p class="el-also num">${nw(esc(t(p2.has ? 'el.also' : 'el.also0', { what: sigHead(x, now), lim: p2.txt, t: hm(ms(x.plati_do)) })))}</p>`; }).join('')}`;
     } else {
       big = esc(t('el.now.nothing'));
       body = sub(esc(t('el.now.wait')));
-      /* a signal whose entry just ended: say so, so nobody enters late */
-      const late = arr(j.signaly).filter((s) => s && !s.stin && ['dobiha', 'pozde'].includes(sigState(s, now))).sort((a, b) => (ms(a.start) || 0) - (ms(b.start) || 0))[0];
+      /* a signal whose entry just ended: say so, so nobody enters late – about the NEWEST one (the one seen last) */
+      const late = arr(j.signaly).filter((s) => s && !s.stin && ['dobiha', 'pozde'].includes(sigState(s, now))).sort((a, b) => (ms(b.start) || 0) - (ms(a.start) || 0))[0];
       if (late) body += `<p class="el-late">${nw(esc(t('el.now.late', { q: late.ctvrthodina || '–', t: ms(late.plati_do) ? hm(ms(late.plati_do)) : '–' })))}</p>`;
     }
   }
@@ -279,14 +286,16 @@ function resCard(j, now) {
   const shL = +sh.obchodu > 0 ? `<p class="el-small">${esc(t('el.res.shadow', { v: eur(sh.soucet_eur_na_1mw, 0), n: tp('el.trades', +sh.obchodu) }))}</p>` : '';
   const dirL = dir ? `<p class="el-small">${esc(dir)}</p>` : '';
   let main;
+  /* "no result yet – the price comes in 1–3 days" only when a signal was ever given; before the first one: "no signal yet" */
+  const given = fin(R.signalu_celkem) ? +R.signalu_celkem > 0 : arr(j.signaly).length > 0;
   if (!(+H.obchodu > 0)) {
-    main = `<p class="el-p el-wait">${t('el.res.none')}</p>${dirL}`;
+    main = `<p class="el-p el-wait">${t(given ? 'el.res.none' : 'el.res.noSig')}</p>${dirL}`;
   } else {
     const pfx = fin(H.zisk_proti_ztrate) ? `<p class="el-small">${esc(t('el.res.pf', { v: F.num(+H.zisk_proti_ztrate, 2) }))}</p>` : '';
     const src = v4 && (fin(R.hlavni_z_knihy) || fin(R.hlavni_z_pasky)) ? `<p class="el-small">${esc(t('el.res.src', { k: +R.hlavni_z_knihy || 0, p: +R.hlavni_z_pasky || 0 }))}</p>` : '';
     main = `<p class="el-k">${t(v4 ? 'el.res.real' : 'el.res.strict')}</p>
       <p class="el-num num ${tone(H.soucet_eur_na_1mw)}">${esc(eur(H.soucet_eur_na_1mw, 0))}<small>${t('el.res.per1')}</small></p>${src}
-      <p class="el-p num">${esc(statLine(H))}</p>${pfx}${dirL}${shL}`;
+      <p class="el-p num">${esc(statLine(H))}</p><p class="el-small el-unit">${t('el.res.unitS')}</p>${pfx}${dirL}${shL}`;
   }
   /* "Pro srovnání": the two simple rules, priced the same way as the signals (by the tape) – only with trades */
   const L = obj(j.latky_od_startu);
@@ -377,13 +386,18 @@ function sigList(j, now) {
 /* ---------- e) Jak to číst · Na co si dát pozor · data ---------- */
 function infoCard(j, now) {
   const D0 = obj(j.data), so = obj(j.soustava), r = obj(j.robot);
-  const ups = arr(j.upozorneni).filter((x) => x != null && String(x).trim());
-  const own = `<ul class="den-ul">${['q', 'sign', 'unit', 'two', 'shadow'].map((k) => `<li>${t(`el.read.${k}`)}</li>`).join('')}</ul>`;
+  const zt = String(obj(obj(j.vysledek_na_papire).S4).z_testu || '').trim();
+  /* the test sentence is in its own closed block "Z testu na starších datech" – not a second time here */
+  const ups = arr(j.upozorneni).filter((x) => x != null && String(x).trim() && String(x).trim() !== zt);
+  const own = `<ul class="den-ul">${['q', 'sign', 'unit', 'book', 'two', 'shadow', 'src'].map((k) => `<li>${t(`el.read.${k}`)}</li>`).join('')}</ul>`;
   const read = `<details class="el-more" data-el-k="read"${isOpen('read', false) ? ' open' : ''}><summary>${t('el.s.read')}</summary>${own}${cs() && j.jak_cist ? `<p class="el-small">${hum(j.jak_cist)}</p>` : ''}</details>`;
   const warn = `<details class="el-more" data-el-k="warn"${isOpen('warn', false) ? ' open' : ''}><summary>${t('el.s.warn')}</summary>
     ${cs() ? `${ups.length ? `<ul class="den-ul">${ups.map((x) => `<li>${hum(x)}</li>`).join('')}</ul>` : ''}${r.pojistka ? `<p class="el-small">${hum(r.pojistka)}</p>` : ''}` : `<ul class="den-ul">${['paper', 'price', 'risk', 'legal'].map((k) => `<li>${t(`el.warn.${k}`)}</li>`).join('')}</ul>`}</details>`;
   /* English: every sentence the robot wrote (Czech only) behind ONE closed block */
-  const czLines = [j.pro_cloveka, ...validNowCache.map((s) => `${s.veta || ''} ${s.cena_orientacne || ''}`), obj(obj(j.vysledek_na_papire).S4).z_testu, j.jak_cist, ...ups, r.pojistka].filter((x) => x != null && String(x).trim());
+  /* pro_cloveka already carries the sentences of the valid signals: only their orientation price is added; every
+     sentence once */
+  const czLines = [...new Set([j.pro_cloveka, ...validNowCache.map((s) => s.cena_orientacne), zt, j.jak_cist, ...ups, r.pojistka]
+    .filter((x) => x != null && String(x).trim()).map((x) => String(x).trim()))];
   const cz = !cs() && czLines.length ? `<details class="den-cz el-more" data-el-k="cz"${isOpen('cz', false) ? ' open' : ''}><summary>${t('el.czShow')}</summary><div lang="cs">${czLines.map((x) => `<p class="el-small">${hum(x)}</p>`).join('')}</div></details>` : '';
   const lm = ms(so.posledni_minuta), g = ms(j.generated_at);
   const book = typeof D0.ziva_kniha_bezi === 'boolean' ? t('el.data.book', { v: t(D0.ziva_kniha_bezi ? 'el.yes' : 'el.no') }) : '';
@@ -398,11 +412,16 @@ const isOpen = (k, def) => (opened.has(k) ? opened.get(k) : def);
 let validNowCache = [];
 
 /* ---------- the page ---------- */
-const badge = () => `<p class="el-badge"><span class="den-badge">${t('el.badge')}</span><span class="el-badge-s">${t('el.badgeS')}</span></p><p class="el-zero">${t('el.zero')}</p>`;
+/* the test sentence under the label only with a fresh file of a robot that runs or is paused – never next to "not running",
+   old data or no data, and worded as a test result (not as today's result) */
+const badge = (j, now) => {
+  const zero = j && !isStale(j, now) && ['bezi', 'pozastaveno'].includes(obj(j.robot).stav) ? `<p class="el-zero">${t('el.zero')}</p>` : '';
+  return `<p class="el-badge"><span class="den-badge">${t('el.badge')}</span><span class="el-badge-s">${t('el.badgeS')}</span></p>${zero}`;
+};
 export function render(ctx) {
   const now = +ctx.now();
   const head = `<header class="page-head"><div><a class="back" href="#/vice">${icon('chev-left', 'icon-xs')}${t('nav.vice')}</a><h1 class="page-title">${t('el.title')}</h1><p class="page-sub">${t('el.sub')}</p></div></header>`;
-  const wrap = (inner) => `${head}<div class="el-page" id="el-page">${badge()}${inner}<p class="disclaimer">${icon('info')}${t('el.disc')}</p></div>`;
+  const wrap = (inner, j = null) => `${head}<div class="el-page" id="el-page">${badge(j, now)}${inner}<p class="disclaimer">${icon('info')}${t('el.disc')}</p></div>`;
   lastKey = keyOf(now);
   if (!st.tried) return wrap(`<section class="card el-card is-quiet" id="el-now"><p class="el-sub" id="el-loading">${t('common.loading')}</p></section>`);
   const j = st.j;
@@ -412,7 +431,7 @@ export function render(ctx) {
   }
   try {
     validNowCache = validNow(j, now);
-    return wrap(nowCard(j, now) + gridCard(j, now) + resCard(j, now) + sigList(j, now) + infoCard(j, now));
+    return wrap(nowCard(j, now) + gridCard(j, now) + resCard(j, now) + sigList(j, now) + infoCard(j, now), j);
   } catch {
     return wrap(`<section class="card el-card el-now is-quiet" id="el-now"><h2 class="el-h">${t('el.q.now')}</h2><p class="el-big">${t('el.noneErr')}</p><p class="el-sub">${t('el.noneErrS')}</p></section>`);
   }
