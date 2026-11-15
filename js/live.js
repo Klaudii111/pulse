@@ -58,12 +58,20 @@ export function dayChange(sym) {
   if (ch == null || !Number.isFinite(ch) || Math.abs(ch) > 40) return null;
   return ch;
 }
-function take(sym, p, ts, pc) {
+/* 1.16.2: one price for everybody while a market is closed. The same account showed a different total on the phone and
+   on the computer: each device kept its own last price (another source, another last tick, its own stored copy) and the
+   server's price was refused because it was a few seconds older. While the server says "this market is closed", only
+   the server's price counts for that symbol (srvLock) and it replaces whatever the device remembers. With the market
+   open nothing changes: the newest tick wins. The lock is dropped whenever the server's quotes are missing or stale. */
+const srvLock = new Set();
+function take(sym, p, ts, pc, server = false) {
   if (!(p > 0) || !ts) return false;
+  const locked = srvLock.has(sym);
+  if (locked && !server) return false; // closed market: the device's own sources stay out
   const cur = prices.get(sym);
-  if (cur && ts < cur.t) return false; // never let an older price overwrite a newer one
-  if (!cur || ts > cur.t || p !== cur.p) {
-    prices.set(sym, { p, t: Math.max(ts, cur?.t || 0), pc: metaMap.get(sym)?.pcS || pc || cur?.pc });
+  if (!locked && cur && ts < cur.t) return false; // never let an older price overwrite a newer one
+  if (!cur || ts > cur.t || p !== cur.p || (locked && ts !== cur.t)) {
+    prices.set(sym, { p, t: locked ? ts : Math.max(ts, cur?.t || 0), pc: metaMap.get(sym)?.pcS || pc || cur?.pc });
     saveQ();
     const h = hist.get(sym) || []; const last = h[h.length - 1];
     if (!last || Date.parse(last.t) < ts) { h.push({ t: new Date(ts).toISOString(), p }); if (h.length > 1500) h.shift(); hist.set(sym, h); }
@@ -113,7 +121,12 @@ async function pollServer() {
     if (!at || Date.now() - at > (L.QUOTES_STALE_SEC || 120) * 1000) { serverOpen = null; if (source !== 'worker') dataAt = Math.max(dataAt, at); return false; }
     if (typeof j.market_open === 'boolean') serverOpen = j.market_open;
     let any = false;
-    Object.entries(j.q || {}).forEach(([sym, q]) => { takeMeta(sym, q, true); if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close)) any = true; });
+    srvLock.clear(); /* rebuilt from every fresh answer: a symbol the server dropped must not stay locked */
+    Object.entries(j.q || {}).forEach(([sym, q]) => {
+      takeMeta(sym, q, true);
+      if (q && q.open === false && +q.p > 0) srvLock.add(sym);
+      if (q && take(sym, +q.p, toMs(q.t) || at, q.prev_close, true)) any = true;
+    });
     source = 'server'; dataAt = Math.max(at, streamAt);
     if (any) mark();
     return true;
@@ -141,6 +154,7 @@ async function pollProxy() {
   clearTimeout(pollTimer);
   if (document.visibilityState !== 'visible' || !enabled()) return;
   const ok = await pollServer();
+  if (!ok) srvLock.clear(); /* 1.16.2: no fresh server quotes -> the other sources may speak again */
   /* market closed and we already have last prices -> no need to call the worker all night */
   if (!ok && (marketOpen() || !prices.size)) await pollWorker();
   else {
