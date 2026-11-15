@@ -270,6 +270,46 @@ function askAdopt(id) {
   });
 }
 
+/* 1.16.3 iPhone / iPad: the camera opens the QR link in the browser, but the browser and the icon on the home screen keep
+   separate memory - loading the account here would leave the icon (the app the person really uses) on its old wallet.
+   So the browser shows a one-time code for the icon instead; loading the account right here stays one tap away. */
+const iosBrowser = () => {
+  const u = navigator.userAgent || '';
+  const ios = /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1);
+  const alone = navigator.standalone === true || !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  return ios && !alone;
+};
+function askIosCode(id) {
+  id = String(id || '').toLowerCase();
+  if (!ID_RE.test(id)) { toast(t('sync.notFound')); return; }
+  /* no "already linked" shortcut here: a browser that loaded the account earlier is exactly the case where the icon still
+     needs the code */
+  let going = false;
+  openSheet({
+    small: true, label: t('sync.iosT'),
+    onClose() { if (!going && onbHeld && store.get('onb', null) === 'pair') { store.delQuiet('onb'); onbHeld = false; } },
+    html: `<div class="sheet-head"><div><p class="sheet-title">${t('sync.iosT')}</p><p class="sheet-sub">${t('sync.iosS')}</p></div>
+      <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
+      <div class="sheet-body"><p class="big-acc-v num" data-ios-code aria-live="polite">…</p>
+      <p class="inst-s" data-ios-s>${t('sync.iosLeft')}</p>
+      <div class="btn-stack"><button type="button" class="btn btn-primary btn-block" data-copy disabled>${t('sync.iosCopy')}</button><button type="button" class="btn btn-ghost" data-here>${t('sync.iosHere')}</button></div></div>`,
+    onMount(sh) {
+      const codeEl = sh.querySelector('[data-ios-code]'); const sEl = sh.querySelector('[data-ios-s]'); const copy = sh.querySelector('[data-copy]');
+      sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet());
+      sh.querySelector('[data-here]').addEventListener('click', () => { going = true; closeTopSheet(); setTimeout(() => askAdopt(id), 350); });
+      copy.addEventListener('click', () => copyText(codeEl.dataset.code || '').then((ok) => toast(t(ok ? 'sync.iosCopied' : 'sync.iosCopyFail'))));
+      (async () => {
+        let r;
+        try { r = await req('POST', 'pair', { id }); } catch { r = { code: 0 }; }
+        if (!document.body.contains(codeEl)) return;
+        if (r.code !== 200 || !r.j?.code) { codeEl.textContent = '–'; sEl.textContent = t(r.code === 404 ? 'sync.notFound' : 'sync.codeFail'); return; }
+        codeEl.textContent = `${r.j.code.slice(0, 4)} ${r.j.code.slice(4)}`;
+        codeEl.dataset.code = r.j.code; copy.disabled = false;
+      })();
+    },
+  });
+}
+
 /* ---------- QR code (byte mode, ECC M, versions 1-10) – no library ---------- */
 const ECC_M = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26];
 const BLK_M = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
@@ -464,6 +504,7 @@ async function showPair() {
       <button class="icon-btn" type="button" data-close aria-label="${t('common.close')}">${icon('close', 'icon-sm')}</button></div>
       <div class="sheet-body">
         <div class="inst-qr" style="margin:0 auto 12px;width:208px">${qrSvg(link)}</div>
+        <p class="inst-s">${t('sync.qrIos')}</p>
         <p class="inst-k">${t('sync.or')}</p>
         <p class="inst-url" data-sync-link>${F.esc(link)}</p>
         <div class="wl-btns"><button type="button" class="btn btn-secondary btn-small" data-copy>${t('sync.copy')}</button></div>
@@ -561,7 +602,7 @@ function pairFromHash() {
   /* a fresh device opened from the link: the first-run guide must not cover the question
      (after "Načíst" the account brings its own state; after "Zrušit" the guide comes back next start) */
   if (!store.get('onb', null)) { store.setQuiet('onb', 'pair'); onbHeld = true; }
-  setTimeout(() => { if (window.__pulseGo) window.__pulseGo('#/penezenka'); askAdopt(m[1]); }, 400);
+  setTimeout(() => { if (window.__pulseGo) window.__pulseGo('#/penezenka'); (iosBrowser() ? askIosCode : askAdopt)(m[1]); }, 400);
   return true;
 }
 
