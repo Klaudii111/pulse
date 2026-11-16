@@ -396,9 +396,12 @@ export function render(ctx) {
   }
   /* (c) Jak se daří tomu, co mám: the Portfolio summary + the trade rows (each opens its trade page) */
   const mine = `<section class="d-block d-mine-top d2-mine" aria-labelledby="d-mine"><h2 class="d-h" id="d-mine"><a href="#/portfolio">${t('ts.mineH')}${icon('chev-right', 'icon-xs')}</a></h2>${dnesBlock(ctx)}</section>`;
-  return head + `<div class="d2-grid">
+  /* 1.16.4: a daily-robot signal that can be entered right now stands above everything (its entry lasts minutes); for three
+     hours after the entry ended one line says so. The card's usual place below the tested signals stays empty meanwhile. */
+  const denTop = Den.atTop(now);
+  return head + Den.topHtml(now) + `<div class="d2-grid">
   ${heroKolik(ctx)}
-  <div class="d2-sigcol">${robotExitCard(ctx)}${todayBlock(ctx)}${Den.cardHtml(now)}</div>
+  <div class="d2-sigcol">${robotExitCard(ctx)}${todayBlock(ctx)}${denTop ? '' : Den.cardHtml(now)}</div>
   ${mine}
   <div class="d2-more">${paths()}${B.statsRow(ctx.data, now)}</div>
   </div>

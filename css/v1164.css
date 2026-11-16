@@ -1,0 +1,12 @@
+/* 1.16.4 Daily robot: the offered signal at the very top of Dnes, the same card on Signály, the line after the entry ended.
+   Noční tyrkys variables only. */
+.den-top { margin: 0 0 20px; border-style: solid; border-color: var(--den-accent); }
+.den-insig { margin: 0 0 16px; }
+.den-left { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 16px; font-weight: 700; color: var(--den-accent); }
+.den-now { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 600; }
+.den-now.is-ok { color: var(--up); }
+.den-now.is-no { color: var(--down); }
+.den-gone { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 20px; padding: 12px 14px; border-radius: var(--r-card); background: var(--raise); border: 1px dashed var(--den-line); color: var(--ink-2); font-size: 15px; line-height: 1.45; text-decoration: none; }
+.den-gone > span { flex: 1; min-width: 0; }
+.den-gone b { color: var(--ink); font-weight: 680; }
+.den-gone .icon { flex: none; margin-top: 2px; color: var(--den-accent); }

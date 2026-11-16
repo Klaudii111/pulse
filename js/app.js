@@ -79,7 +79,8 @@ const VIEWS = {
   penezenka: { title: 'wl.title', render: Wal.renderWallet },
   ucet: { title: 'wl.title', render: Wal.renderWallet },
   historie: { title: 'hi.title', render: Wal.renderHistory, mount: Wal.mountHistory, actions: { ...Home.actions, ...Wal.actions } },
-  signaly: { title: 'nav.signaly', render: Signals.render, actions: Signals.actions, mount: () => setTimeout(() => Tour.maybeHint(), 900) },
+  /* 1.16.4: today's signals of the experimental daily robot are listed on Signály too (Den.inSignals) */
+  signaly: { title: 'nav.signaly', render: (c) => Den.inSignals(Signals.render(c), c.now()), actions: { ...Signals.actions, ...Den.actions }, mount: (el) => { setTimeout(() => Tour.maybeHint(), 900); Den.mount(el, autoRender); } },
   kalkulacka: { title: 'nav.kalkulacka', render: Calc.render, mount: Calc.mount, actions: Calc.actions },
   vysledky: { title: 'nav.vysledky', render: Results.render, mount: Results.mount, unmount: Results.unmount, actions: Results.actions },
   terminal: { title: 'nav.terminal', render: Term.render, mount: Term.mount, unmount: Term.unmount, actions: Term.actions },
@@ -210,6 +211,37 @@ const pageMoving = () => {
 };
 /* … or a picker in the view is open: the view must not be replaced (its numbers may still be patched in place) */
 const pageBusy = () => pageMoving() || (pickAt > 0 && Date.now() - pickAt < PICK_MAX_MS);
+/* 1.16.4 the screen a tapped notification asked for (see the service worker's notificationclick) */
+const NAV_MAX_MS = 120000;
+/* one at a time (the worker's message and the return to the front come together) and never the same screen twice in a row -
+   a second jump would unwind an open sheet's history twice */
+let navQueue = Promise.resolve();
+let navLast = { h: '', at: 0 };
+function takeNav(hint) {
+  navQueue = navQueue.then(() => takeNav1(hint)).catch(() => {});
+  return navQueue;
+}
+async function takeNav1(hint) {
+  let url = hint || null;
+  try {
+    const c = await caches.open('pulse-nav');
+    const key = new URL('./__nav', location.href).href;
+    const r = await c.match(key);
+    if (r) {
+      const j = await r.json();
+      await c.delete(key);
+      if (!url && j && j.url && Date.now() - (+j.at || 0) < NAV_MAX_MS) url = j.url;
+    }
+  } catch (e) { /* no Cache API (private mode, sandbox) */ }
+  if (!url) return;
+  let h = '';
+  try { h = new URL(url, location.href).hash; } catch (e) { return; }
+  if (!h || !h.startsWith('#/')) return;
+  if (h === navLast.h && Date.now() - navLast.at < 4000) return;
+  navLast = { h, at: Date.now() };
+  if (h === (window.__pulseHash ?? location.hash)) return;
+  if (window.__pulseGo) window.__pulseGo(h); else location.hash = h;
+}
 function autoRender() {
   /* under an open sheet the screen below is repainted once the sheet is closed (the request is kept, not dropped) */
   if (!pageBusy() && !sheetOpen()) { autoFor = null; rerender({ soft: true, auto: true }); return; }
@@ -986,7 +1018,12 @@ async function boot() {
   });
   window.addEventListener('online', () => { state.fromCache = false; poll(); });
   window.addEventListener('offline', () => toast(t('common.youAreOffline')));
-  try { navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'NAVIGATE') location.href = e.data.url; }); } catch (e) { /* sandboxed preview */ }
+  try { navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data?.type === 'NAVIGATE') takeNav(e.data.url); }); } catch (e) { /* sandboxed preview */ }
+  /* 1.16.4: a tapped notification always lands on its screen. The service worker leaves the address in the cache
+     'pulse-nav' (an iPhone opens the icon on its first screen and drops the address); it is read once here - on start,
+     when the app comes to the front and on the worker's message - and only while it is fresh (two minutes). */
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') takeNav(); });
+  takeNav();
   window.addEventListener('scroll', () => {
     document.querySelector('.topbar')?.classList.toggle('is-scrolled', window.scrollY > 4);
   }, { passive: true });

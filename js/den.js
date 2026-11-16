@@ -8,7 +8,7 @@
 import * as F from './format.js';
 import * as D from './domain.js';
 import { t, lang } from './i18n/index.js';
-import { icon, openSheet, closeTopSheet } from './ui.js';
+import { icon, openSheet, closeTopSheet, toast } from './ui.js';
 import { ownTicket } from './views/terminal.js';
 import * as Live from './live.js';
 import * as M from './market.js';
@@ -189,7 +189,9 @@ export function sigState(j, s, now = D.clock()) {
   const outD = nyClock(s?.vystup, s?.cas_signalu || j?.vytvoreno);
   const base = { today, at, m: mktName(s?.trh), until: untilMs ? F.time(new Date(untilMs)) : '–', out: outD ? F.time(outD) : '–', outMs: outD ? +outD : null };
   if (canTrade(j, s, now)) return { ...base, code: 'go' };
-  if (isLate(s)) return { ...base, code: 'late' };
+  /* 1.16.4: "came late" only for a signal that was late already when written (never offered). A signal that was offered
+     and whose entry time has passed says "entry over" - on Dnes, Signály and #/den alike (the robot marks both 'pozde') */
+  if (isLate(s)) return { ...base, code: s.pozde_pri_zapisu !== true && untilMs && +now > untilMs ? 'over' : 'late' };
   const k = s?.stav;
   if (k === 'uzavreno') { const o = outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
   if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
@@ -253,15 +255,54 @@ export function demoOk(sym) {
 }
 /* plural-aware "minut" */
 const minW = (n) => tp('den.minW', n);
+/* 1.16.4 "Zbývá 3 minuty" – how long the entry of an offered signal still holds */
+function leftText(s, now) {
+  const u = ms(s?.vstup?.plati_do);
+  if (!u) return '';
+  const m = Math.floor((u - +now) / 60000);
+  return m < 1 ? t('den.left0') : tp('den.left', m);
+}
+/* 1.16.4 what of TODAY needs the first place on the screen: `go` = signals that can be entered right now,
+   `gone` = signals whose entry ended in the last three hours (the person who comes from the notification must read why
+   there is nothing to do), newest first. A signal that was already late when written was never offered -> not listed. */
+const GONE_MS = 3 * 3600000;
+export function hotOf(j, now = D.clock()) {
+  const none = { go: [], gone: [] };
+  try {
+    if (!j || !fresh(j, now) || j.robot?.stav === 'pozastaveno') return none;
+    const xs = arr(j.signaly).map((s) => ({ s, x: sigState(j, s, now) })).filter((o) => o.x.today);
+    /* a signal the robot keeps out of its result (mimo_vysledek) gets no notification -> it is offered in the card's usual place, not at the top */
+    const go = xs.filter((o) => o.x.code === 'go' && !o.s.mimo_vysledek);
+    const gone = xs.filter((o) => {
+      if (!['late', 'over', 'held'].includes(o.x.code) || o.s.pozde_pri_zapisu === true) return false;
+      const u = ms(o.s.vstup?.plati_do);
+      return !!u && +now - u < GONE_MS && +now >= ms(o.s.cas_signalu || 0);
+    }).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
+    return { go, gone };
+  } catch { return none; }
+}
 /* the full block of an actionable signal: direction, entry table (or the broker sentence) and the button "Koupit v demo" */
-function sigBlock(j, s) {
+function sigBlock(j, s, now = D.clock()) {
+  const left = leftText(s, now);
+  /* 1.16.4 the price the demo would trade at right now, against the signal's limit - only from a price of the last five
+     minutes (never a stored one): "is it still worth tapping?" must not need a broker's app */
+  let nowHtml = '';
+  try {
+    const q = Live.quote(s.trh);
+    const lim0 = side(s) === 'SELL' ? +s.vstup?.nejniz : +s.vstup?.nejvys;
+    if (q && !q.cached && q.p > 0 && lim0 > 0 && Math.abs(+now - q.t) < 5 * 60000) {
+      const fine = side(s) === 'SELL' ? q.p >= lim0 : q.p <= lim0;
+      nowHtml = `<p class="den-now num ${fine ? 'is-ok' : 'is-no'}" data-den-now="${fine ? 'ok' : 'no'}">${F.esc(t(fine ? 'den.now.ok' : 'den.now.no', { p: px(q.p), v: px(lim0) }))}</p>`;
+    }
+  } catch { /* no price line */ }
+  const leftHtml = (left ? `<p class="den-left num" data-den-left="1">${icon('clock', 'icon-xs')}<span>${F.esc(left)}</span></p>` : '') + nowHtml;
   const sell = side(s) === 'SELL';
   const v = s.vstup || {};
   const until = ms(v.plati_do) ? F.time(new Date(ms(v.plati_do))) : '–';
   const out = nyClock(s.vystup, s.cas_signalu || j.vytvoreno);
   const entry = sell ? t('den.e.min', { v: px(v.nejniz) }) : t('den.e.max', { v: px(v.nejvys) });
   const btn = demoOk(s.trh)
-    ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
+    ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-id="${F.esc(s.id || '')}" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
     : `<p class="den-note den-nodemo" data-den-nodemo="1">${t('den.noDemo')}</p>`;
   const title = `<p class="den-sig-t${demoOk(s.trh) ? '' : ' is-info'}"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span>${isPB(s) ? pbTag() : ''}</p>${isPB(s) ? `<p class="den-st den-pb-l">${t('den.pb.line')}</p>` : ''}`;
   if (s.stav === 'over_u_brokera') {
@@ -269,12 +310,13 @@ function sigBlock(j, s) {
     const n = Number.isFinite(+s.data_zpozdena_min) ? Math.round(+s.data_zpozdena_min) : 0;
     const p = { at: at ? F.time(new Date(at)) : '–', n, w: minW(n), v: px(sell ? v.nejniz : v.nejvys), until };
     const txt = t(`den.brk${n > 0 ? '' : '0'}.${sell ? 'sell' : 'buy'}`, p);
-    return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go" data-den-variant="broker">${title}
+    return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go" data-den-variant="broker">${title}${leftHtml}
     <p class="den-brk">${F.esc(txt)}</p>
     <dl class="den-kv num"><dt>${t('den.k.stop')}</dt><dd>${px(s.stop)}</dd>
-      <dt>${t('den.k.exit')}</dt><dd>${F.esc(out ? t('den.exitAt', { v: F.time(out) }) : '–')}</dd></dl>${btn}</div>`;
+      <dt>${t('den.k.exit')}</dt><dd>${F.esc(out ? t('den.exitAt', { v: F.time(out) }) : '–')}</dd></dl>${btn}
+    <p class="den-st den-why">${F.esc(t(`den.why${n > 0 ? '' : '0'}`, p))}</p></div>`;
   }
-  return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go">${title}
+  return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go">${title}${leftHtml}
     <dl class="den-kv num"><dt>${t('den.k.entry')}</dt><dd>${F.esc(entry)}</dd>
       <dt>${t('den.k.until')}</dt><dd>${F.esc(until)}</dd>
       <dt>${t('den.k.stop')}</dt><dd>${px(s.stop)}</dd>
@@ -283,7 +325,7 @@ function sigBlock(j, s) {
     <p class="den-st tone-up">${t('den.st.plati')}</p>${btn}</div>`;
 }
 /* "Dnes" body shared by the card and the page: actionable blocks, else at most two grey lines */
-function todayBody(j, now, { cap = TODAY_CAP, lead = true } = {}) {
+function todayBody(j, now, { cap = TODAY_CAP, lead = true, onlyGo = false } = {}) {
   if (!j || !fresh(j, now)) {
     const last = j ? lastOld(j, now) : null;
     return `<p class="den-note" data-den-state="nodata">${t('den.noData')}</p>${last ? `<p class="den-note den-note-2">${F.esc(lastText(last))}</p>` : ''}`;
@@ -299,9 +341,11 @@ function todayBody(j, now, { cap = TODAY_CAP, lead = true } = {}) {
   const rest = xs.filter((o) => o.x.code !== 'go' && o.x.today).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
   /* 1.15.3: up to four of today's signals (the playbook can give four a day), the rest behind "a další N" -> #/den */
   const goShown = go.slice(0, cap);
-  const restShown = rest.slice(0, Math.max(0, cap - goShown.length));
+  /* 1.16.4 onlyGo (the card at the top of Dnes): only what can be entered now - a grey "nic nedělej" about another signal
+     right under the button reads as if it spoke about the button; the other signals stay behind "a další N" (#/den) */
+  const restShown = onlyGo && goShown.length ? [] : rest.slice(0, Math.max(0, cap - goShown.length));
   const more = go.length + rest.length - goShown.length - restShown.length;
-  let html = goShown.map((o) => sigBlock(j, o.s)).join('');
+  let html = goShown.map((o) => sigBlock(j, o.s, now)).join('');
   html += todayLines(restShown, goShown.length > 0, lead);
   if (more > 0) html += `<p class="den-note den-more-n"><a href="#/den">${F.esc(tp('den.moreN', more))}${icon('chev-right', 'icon-xs')}</a></p>`;
   if (!go.length && !rest.length) {
@@ -316,19 +360,53 @@ function headHtml(link = true) {
     <p class="den-warn">${icon('alert', 'icon-xs')}<span>${t('den.label')}</span></p>`;
 }
 
-/* the Dnes card (always below the tested signals) */
-export function cardHtml(now = D.clock()) {
+/* the Dnes card (below the tested signals; 1.16.4: at the very top of Dnes while a signal can be entered – topHtml) */
+export function cardHtml(now = D.clock(), { top = false } = {}) {
   const j = st.j;
   if (!st.tried) return `<section class="den-card is-quiet" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}<p class="den-off">${t('common.loading')}</p></section>`;
   try {
-    const body = todayBody(j, now);
+    const body = todayBody(j, now, { onlyGo: top });
     const live = body.includes('data-den-state="go"');
     /* the card says once that signals came late: when today's lines already list them, the result line does not repeat it */
-    const saysLate = body.includes('data-den-state="late"');
-    return `<section class="den-card${live ? '' : ' is-quiet'}" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}${j ? `<p class="den-res">${F.esc(resultLine(j, { late: !saysLate }))}</p>` : ''}${body}</section>`;
+    const saysLate = body.includes('data-den-state="late"') || body.includes('data-den-state="over"');
+    const res = j ? `<p class="den-res">${F.esc(resultLine(j, { late: !saysLate }))}</p>` : '';
+    /* at the top the offer comes first (the button must be on the first screen of a small phone), the robot's result right under it */
+    return `<section class="den-card${live ? '' : ' is-quiet'}${top ? ' den-top' : ''}" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}${top ? body + res : res + body}</section>`;
   } catch {
     return `<section class="den-card is-quiet" id="den-card">${headHtml()}<p class="den-off">${t('den.noData')}</p></section>`;
   }
+}
+/* 1.16.4 (16. 11. 2026: a tester got the notification "KOUPIT DAX", opened the app and did not find the signal - the card
+   was 2 400 px down on Dnes and the entry ended eight minutes after the notification).
+   atTop: a signal can be entered right now -> the whole card moves to the very top of Dnes (home.js leaves the lower
+   place empty). topHtml: that card, or - for three hours after the entry ended - one line saying so. */
+export const atTop = (now = D.clock()) => st.tried && hotOf(st.j, now).go.length > 0;
+function goneHtml(j, now) {
+  const g = hotOf(j, now).gone;
+  if (!g.length) return '';
+  const at = (o) => (ms(o.s.cas_signalu) ? F.time(new Date(ms(o.s.cas_signalu))) : '–');
+  const txt = g.length === 1
+    ? t('den.gone1', { m: g[0].x.m, at: at(g[0]), until: g[0].x.until })
+    : t('den.goneN', { list: g.map((o) => t('den.goneLi', { m: o.x.m, until: o.x.until })).join(', ') });
+  return `<a class="den-gone" id="den-gone" href="#/den" data-den-gone="${g.length}">${icon('clock', 'icon-sm')}<span><b>${t('den.goneH')}</b> ${F.esc(txt)}</span>${icon('chev-right', 'icon-xs')}</a>`;
+}
+export function topHtml(now = D.clock()) {
+  if (!st.tried || !st.j) return '';
+  try {
+    if (atTop(now)) return cardHtml(now, { top: true });
+    return goneHtml(st.j, now);
+  } catch { return ''; }
+}
+/* 1.16.4 Signály: today's signals of the daily robot are listed there too (people look for "a signal" under Signály);
+   the card is put right under the page head, only on a day that has such a signal */
+export function inSignals(html, now = D.clock()) {
+  try {
+    if (!st.tried || !st.j || !fresh(st.j, now)) return html;
+    if (!arr(st.j.signaly).some((s) => sigState(st.j, s, now).today)) return html;
+    const i = html.indexOf('</header>');
+    if (i < 0) return html;
+    return `${html.slice(0, i + 9)}<div class="den-insig">${cardHtml(now)}</div>${html.slice(i + 9)}`;
+  } catch { return html; }
 }
 
 /* Dnes mount. The card is part of the Dnes HTML (cardHtml); when the robot's file brings something new, Dnes is repainted
@@ -339,8 +417,36 @@ export function cardHtml(now = D.clock()) {
    each of them fetched den.json and swapped the card in place for ever – also under a finger. */
 let cardTimer = null;
 let cardLiveOff = null;
+/* 1.16.4: the screens that show the daily robot (Dnes, Signály, #/den) */
+const onDenPage = () => !!document.querySelector('#view .den-page, #view > .den-off');
+const host = () => !!(document.getElementById('den-card') || document.getElementById('den-gone') || document.querySelector('#view .ph-tabs') || onDenPage());
+let lastRepaint = null;
+/* 1.16.4 ONE timer for all three screens: every 20 s the countdown / the end of an entry is repainted while a signal is
+   hot, every 60 s the robot's file is read again (it used to be every 5 minutes - a signal with an eight-minute entry
+   could appear on an open screen after most of its time). Nothing runs while the app is in the background. */
+function startTimer() {
+  if (cardTimer) return;
+  let n = 0;
+  cardTimer = setInterval(() => {
+    if (!host()) { clearInterval(cardTimer); cardTimer = null; return; }   // the screens of the daily robot were left
+    if (document.visibilityState === 'hidden') return;
+    n += 1;
+    const paint = () => { if (host() && lastRepaint) lastRepaint(); };
+    if (n % 3 === 0) load(true).then(paint).catch(() => {});
+    else { const h = hotOf(st.j, D.clock()); if (h.go.length || h.gone.length || document.querySelector('[data-den-state="go"]')) paint(); }
+  }, 20000);
+}
+/* 1.16.4: the app came back to the front (an iPhone freezes it in the background) -> read the robot's file at once */
+try {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !lastRepaint || !host()) return;
+    if (st.tried && Date.now() - st.at < 15000) return;
+    load(true).then(() => { if (host() && lastRepaint) lastRepaint(); }).catch(() => {});
+  });
+} catch { /* no document (checks outside a browser) */ }
 export function mount(el, repaint) {
-  const fresh = () => { if (document.getElementById('den-card')) repaint(); };
+  lastRepaint = repaint;
+  const fresh = () => { if (host()) repaint(); };
   const had = st.at;
   const tried = st.tried;
   load().then((s) => { if (!tried || s.at !== had) fresh(); }).catch(() => {});
@@ -350,12 +456,7 @@ export function mount(el, repaint) {
     cardLiveOff = stop;
     setTimeout(stop, 120000);
   }
-  if (!cardTimer) {
-    cardTimer = setInterval(() => {
-      if (!document.getElementById('den-card')) { clearInterval(cardTimer); cardTimer = null; return; }   // Dnes was left
-      load(true).then(fresh).catch(() => {});
-    }, 5 * 60000);
-  }
+  startTimer();
 }
 
 /* ---------- #/den ---------- */
@@ -437,7 +538,10 @@ export function render(ctx) {
   const now = ctx.now();
   const j = st.j;
   const sub = arr(j?.robot?.trhy).length ? t('den.sub2', { m: mktList(j.robot.trhy) }) : t('den.sub0');
-  const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('den.h')}</h1><p class="page-sub">${F.esc(sub)}</p></div></header>`;
+  /* 1.16.4: while a signal can be entered the page starts with it (no sub-line, no "Dnes" heading) - the button must be on
+     the first screen of a small iPhone; the same words stand under "Co dělá" below */
+  const hotNow = st.tried && hotOf(j, now).go.length > 0;
+  const head = `<header class="page-head"><div><a class="back" href="#/dnes">${icon('chev-left', 'icon-xs')}${t('nav.dnes')}</a><h1 class="page-title">${t('den.h')}</h1>${hotNow ? '' : `<p class="page-sub">${F.esc(sub)}</p>`}</div></header>`;
   if (!st.tried) return head + `<p class="den-off">${t('common.loading')}</p>`;
   if (!j) return head + `<section class="den-card den-page is-quiet">${headHtml(false)}<p class="den-note" data-den-state="nodata">${t('den.noData')}</p></section>`;
   try {
@@ -460,8 +564,8 @@ export function render(ctx) {
     const body = todayBody(j, now, { cap: 99, lead: false });
     return head + `<div class="den-page">
       <section class="den-card${body.includes('data-den-state="go"') ? '' : ' is-quiet'}">${headHtml(false)}
+        ${hotNow ? '' : `<h2 class="den-h2">${t('den.s.today')}</h2>`}${body}
         <h2 class="den-h2">${t('den.s.what')}</h2><p class="den-p">${F.esc(t('den.what', { m: mktList(j.robot?.trhy) }))}</p>
-        <h2 class="den-h2">${t('den.s.today')}</h2>${body}
         <h2 class="den-h2">${t('den.s.res')}</h2><p class="den-p">${F.esc(resultLine(j))}</p><p class="den-st">${F.esc(safe)}</p>
       </section>
       <details class="den-adv card"><summary>${t('den.adv')}</summary>
@@ -482,9 +586,11 @@ export function render(ctx) {
    finger or while the page glides, the reading place is kept, the same HTML paints nothing) - it used to call
    ctx.rerender at once, also under a finger and after #/den was left (#view is always connected). Only the first answer,
    which replaces "Načítám…" (nothing to read yet), is painted at once. No timer of its own. */
-const onDenPage = () => !!document.querySelector('#view .den-page, #view > .den-off');
 export function mountPage(el, ctx, repaint) {
-  if (st.tried && Date.now() - st.at < 120000) return;
+  if (typeof repaint === 'function') lastRepaint = repaint;
+  startTimer();
+  /* 1.16.4: the page is where a notification leads - a file older than 20 s is read again (it was two minutes) */
+  if (st.tried && Date.now() - st.at < 20000) return;
   load(true).then(() => {
     if (!onDenPage()) return;   // #/den was left meanwhile
     if (document.querySelector('#view > .den-off') || typeof repaint !== 'function') ctx.rerender({ soft: true });
@@ -518,5 +624,11 @@ export const actions = {
       onMount(sh) { sh.querySelector('[data-close]').addEventListener('click', () => closeTopSheet()); },
     });
   },
-  'den-trade'(el, ev, ctx) { ownTicket(ctx, el.dataset.side, el.dataset.sym, { sl: +el.dataset.sl || null, tp: null }); },
+  'den-trade'(el, ev, ctx) {
+    /* 1.16.4: the button may outlive its offer by a few seconds (the screen is repainted every 20 s, never under a finger) -
+       the entry is checked again at the tap */
+    const s = el.dataset.id ? arr(st.j?.signaly).find((x) => x && x.id === el.dataset.id) : null;
+    if (s && !canTrade(st.j, s, D.clock())) { toast(t('den.goneToast')); if (lastRepaint) lastRepaint(); return; }
+    ownTicket(ctx, el.dataset.side, el.dataset.sym, { sl: +el.dataset.sl || null, tp: null });
+  },
 };

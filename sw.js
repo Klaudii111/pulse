@@ -4,7 +4,7 @@
  * - Web push: shows notification from JSON payload {title, body, url, tag}
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'pulse-v1.16.3';
+const VERSION = 'pulse-v1.16.4';
 const SHELL = `${VERSION}-shell`;
 const DATA = 'pulse-data';
 const IMG = 'pulse-img'; /* 1.15.0: illustrations, stale-while-revalidate (kept across versions) */
@@ -21,6 +21,7 @@ const SHELL_FILES = [
   './css/v1154.css',
   './css/v1155.css',
   './css/v1160.css',
+  './css/v1164.css',
   './js/app.js',
   './js/ui.js',
   './js/format.js',
@@ -110,6 +111,8 @@ const SHELL_FILES = [
   './js/i18n/en1155.js',
   './js/i18n/cs1160.js',
   './js/i18n/en1160.js',
+  './js/i18n/cs1164.js',
+  './js/i18n/en1164.js',
   './js/elektrina.js',
   './js/portfolio.js',
   './js/views/portfolio.js',
@@ -248,14 +251,24 @@ self.addEventListener('notificationclick', (event) => {
   else if (d.signal && event.action === 'open') url = `./#/signaly?s=${encodeURIComponent(d.signal)}`;
   const target = new URL(url, self.registration.scope).href;
   event.waitUntil((async () => {
+    /* 1.16.4: the address is also left for the app (cache 'pulse-nav', read once by app.js takeNav): an iPhone opens the
+       home-screen icon on its first screen and drops the address, and a frozen app may miss the message */
+    /* written alongside, never before the window is brought up: a browser allows opening a window only right after the tap */
+    const saved = (async () => {
+      try {
+        const c = await caches.open('pulse-nav');
+        await c.put(new URL('./__nav', self.registration.scope).href, new Response(JSON.stringify({ url: target, at: Date.now() }), { headers: { 'Content-Type': 'application/json' } }));
+      } catch (e) { /* the navigation below still runs */ }
+    })();
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {
       if (c.url.startsWith(self.registration.scope)) {
-        await c.focus();
-        c.navigate ? c.navigate(target) : c.postMessage({ type: 'NAVIGATE', url: target });
+        try { await c.focus(); } catch (e) { /* not allowed to focus: the app reads the address when it comes to the front */ }
+        await saved;
+        try { c.postMessage({ type: 'NAVIGATE', url: target }); } catch (e) { /* same */ }
         return;
       }
     }
-    await self.clients.openWindow(target);
+    try { await self.clients.openWindow(target); } finally { await saved; }
   })());
 });
