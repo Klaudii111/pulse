@@ -1,0 +1,10 @@
+/* 1.16.5 Daily robot: "what happened with the signal" blocks. Noční tyrkys variables only. */
+.den-story { display: grid; gap: 4px; padding: 12px; border-radius: 14px; background: var(--raise-2); }
+.den-story .den-sig-t { font-size: 17px; }
+.den-y { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); }
+.den-y-now.up { color: var(--up); }
+.den-y-now.down { color: var(--down); }
+.den-y-do { color: var(--ink-2); }
+.den-y-tag { font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.den-nobuy { background: var(--raise); color: var(--ink-2); border: 1px solid var(--line); opacity: 1; cursor: default; }
+.den-y-do a { color: var(--den-accent); white-space: nowrap; }

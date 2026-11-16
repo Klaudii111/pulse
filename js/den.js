@@ -11,6 +11,7 @@ import { t, lang } from './i18n/index.js';
 import { icon, openSheet, closeTopSheet, toast } from './ui.js';
 import { ownTicket } from './views/terminal.js';
 import * as Live from './live.js';
+import * as W from './wallet.js';
 import * as M from './market.js';
 
 const URL0 = './data/den.json';
@@ -191,8 +192,15 @@ export function sigState(j, s, now = D.clock()) {
   if (canTrade(j, s, now)) return { ...base, code: 'go' };
   /* 1.16.4: "came late" only for a signal that was late already when written (never offered). A signal that was offered
      and whose entry time has passed says "entry over" - on Dnes, Signály and #/den alike (the robot marks both 'pozde') */
-  if (isLate(s)) return { ...base, code: s.pozde_pri_zapisu !== true && untilMs && +now > untilMs ? 'over' : 'late' };
   const k = s?.stav;
+  /* 1.16.5: what the robot did with the trade comes before "the entry is over" - the robot marks vstup_stav 'pozde' on
+     every signal after its entry time, also on one it entered and holds (16. 11. 2026: DAX read "entry over, do nothing"
+     while the robot was in the trade). Only a signal that was late already when written stays "came late". */
+  if (s?.pozde_pri_zapisu !== true) {
+    if (k === 'uzavreno') { const o = s.vysledek_R == null ? 'none' : outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
+    if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
+  }
+  if (isLate(s)) return { ...base, code: s.pozde_pri_zapisu !== true && untilMs && +now > untilMs ? 'over' : 'late' };
   if (k === 'uzavreno') { const o = outcome(+s.vysledek_R); return { ...base, code: o === 'none' ? 'other' : o }; }
   if (k === 'otevreno') return { ...base, code: base.outMs && +now >= base.outMs ? 'other' : 'held' };
   if (ENTRY_OPEN.includes(k)) {
@@ -227,6 +235,50 @@ function todayLines(list, afterGo = false, lead = true) {
     return `<p class="den-note den-line" data-den-state="${g.code}">${txt}</p>`;
   }).join('');
   return `${lead || afterGo ? `<p class="den-note den-lead">${t(afterGo ? 'den.todayLead2' : 'den.todayLead')}</p>` : ''}${lines}`;
+}
+/* 1.16.5 "what happened with the signal" – one block per signal of today that cannot be entered (any more): the name with
+   the direction and the time the signal was sent, what the robot did (bought for X, holds until HH:MM / closed with a
+   profit / did not enter), how the trade stands now (only from a price of the last 20 minutes) and ONE sentence what to
+   do. Replaces the grey grouped lines ("Vstup už skončil: DAX, Ropa WTI – nic nedělej"), which named the signal a
+   notification had announced without saying what became of it. */
+function storyHtml(j, o, now) {
+  const s = o.s, x = o.x, sell = side(s) === 'SELL';
+  const sent = ms(s.videl_jsem_v) || ms(s.cas_signalu);
+  const ent = +s.vstup?.robot_vstoupil_za;
+  const has = ent > 0;
+  const p = { until: x.until, out: x.out, e: px(ent) };
+  const lines = [];
+  let tone = '';
+  if (x.code === 'held') {
+    lines.push(t(sell ? (has ? 'den.y.heldS' : 'den.y.held0') : (has ? 'den.y.heldB' : 'den.y.held0'), p));
+    try {
+      const q = Live.quote(s.trh);
+      const risk = Math.abs(ent - +s.stop);
+      if (has && q && !q.cached && q.p > 0 && risk > 0 && Math.abs(+now - q.t) < 20 * 60000) {
+        const r = ((q.p - ent) * (sell ? -1 : 1)) / risk;
+        tone = r > 0.1 ? 'up' : r < -0.1 ? 'down' : '';
+        lines.push(`<b class="den-y-now ${tone}" data-den-ynow="${tone || 'flat'}">${F.esc(t(r > 0.1 ? 'den.y.nowUp' : r < -0.1 ? 'den.y.nowDown' : 'den.y.nowFlat', { p: px(q.p) }))}</b>`);
+      }
+    } catch { /* no "now" line */ }
+  } else if (x.code === 'win' || x.code === 'loss' || x.code === 'flat') {
+    tone = x.code === 'win' ? 'up' : x.code === 'loss' ? 'down' : '';
+    lines.push(`<b class="den-y-now ${tone}">${F.esc(t(`den.y.${x.code}${has ? '' : '0'}`, p))}</b>`);
+  } else if (x.code === 'over') lines.push(t('den.y.over', p));
+  else if (x.code === 'late') lines.push(t('den.y.late', p));
+  else lines.push(String(t(`den.l1.${x.code}`, { m: '', until: x.until, out: x.out })).replace(/^\s*[–-]\s*/, '').replace(/^./, (c) => c.toUpperCase()));
+  /* what to do: the person's own demo trade on this market (bought while the entry was open) is named; else "nic nedělej" */
+  let mine = false;
+  /* the same market, the same direction and opened since this signal - an older or opposite trade is not "this one" */
+  try { const since = (ms(s.cas_signalu) || 0) - 60000; mine = arr(W.get()?.positions).some((q) => q && q.sym === s.trh && (q.side || 'BUY') === (sell ? 'SELL' : 'BUY') && +q.openedAt >= since); } catch { /* no wallet */ }
+  const untilMs0 = ms(s.vstup?.plati_do);
+  const todo = x.code === 'held' ? t(mine ? 'den.y.doMine' : (untilMs0 && +now < untilMs0 ? 'den.y.doNothing' : 'den.y.doHeld'), p)
+    : x.code === 'over' || x.code === 'late' ? t('den.y.doNothing')
+      : ['win', 'loss', 'flat'].includes(x.code) ? t(mine ? 'den.y.doMineEnd' : 'den.y.doEnd') : '';
+  return `<div class="den-story" data-den-state="${x.code}" data-den-story="${F.esc(s.id || '')}">
+    <p class="den-sig-t is-info"><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span><span class="den-y-tag">${sell ? '↓' : '↑'} ${t(sell ? 'den.y.tagS' : 'den.y.tagB')}</span>${isPB(s) ? pbTag() : ''}</p>
+    ${sent ? `<p class="den-st num">${F.esc(t('den.y.sent', { at: F.time(new Date(sent)) }))}</p>` : ''}
+    ${lines.map((l) => (l.startsWith('<b') ? `<p class="den-y">${l}</p>` : `<p class="den-y">${F.esc(l)}</p>`)).join('')}
+    ${todo ? `<p class="den-y den-y-do">${F.esc(todo)}${mine && ['held', 'win', 'loss', 'flat'].includes(x.code) ? ` <a href="#/portfolio">${t('den.y.pf')}</a>` : ''}</p>` : ''}</div>`;
 }
 /* "Poslední: čt 12. 11. · DAX · přišel pozdě" */
 const lastText = (x) => t('den.last', { d: dayLabel(x.at), m: x.m, o: t(`den.o.${x.code}`) });
@@ -273,10 +325,15 @@ export function hotOf(j, now = D.clock()) {
     const xs = arr(j.signaly).map((s) => ({ s, x: sigState(j, s, now) })).filter((o) => o.x.today);
     /* a signal the robot keeps out of its result (mimo_vysledek) gets no notification -> it is offered in the card's usual place, not at the top */
     const go = xs.filter((o) => o.x.code === 'go' && !o.s.mimo_vysledek);
+    /* 1.16.5: a trade the robot holds keeps the card at the top for as long as it is held; a signal that ended (entry over
+       without a trade, closed trade) for three hours after its entry time */
     const gone = xs.filter((o) => {
-      if (!['late', 'over', 'held'].includes(o.x.code) || o.s.pozde_pri_zapisu === true) return false;
+      /* the "yellow band" group sends no notification and trades up to four times a day - it never lifts the card by itself */
+      if (o.x.code === 'go' || o.s.pozde_pri_zapisu === true || o.s.mimo_vysledek || isPB(o.s)) return false;
+      if (o.x.code === 'held') return true;
+      if (!['late', 'over', 'win', 'loss', 'flat'].includes(o.x.code)) return false;
       const u = ms(o.s.vstup?.plati_do);
-      return !!u && +now - u < GONE_MS && +now >= ms(o.s.cas_signalu || 0);
+      return !!u && +now - u < GONE_MS;
     }).sort((a, b) => (b.x.at || 0) - (a.x.at || 0));
     return { go, gone };
   } catch { return none; }
@@ -287,11 +344,13 @@ function sigBlock(j, s, now = D.clock()) {
   /* 1.16.4 the price the demo would trade at right now, against the signal's limit - only from a price of the last five
      minutes (never a stored one): "is it still worth tapping?" must not need a broker's app */
   let nowHtml = '';
+  let priceGone = false;   // 1.16.5: the demo price is past the signal's limit -> the buy button is switched off (a red "do not enter" above a glowing button contradicted itself)
   try {
     const q = Live.quote(s.trh);
     const lim0 = side(s) === 'SELL' ? +s.vstup?.nejniz : +s.vstup?.nejvys;
     if (q && !q.cached && q.p > 0 && lim0 > 0 && Math.abs(+now - q.t) < 5 * 60000) {
       const fine = side(s) === 'SELL' ? q.p >= lim0 : q.p <= lim0;
+      priceGone = !fine;
       nowHtml = `<p class="den-now num ${fine ? 'is-ok' : 'is-no'}" data-den-now="${fine ? 'ok' : 'no'}">${F.esc(t(fine ? 'den.now.ok' : 'den.now.no', { p: px(q.p), v: px(lim0) }))}</p>`;
     }
   } catch { /* no price line */ }
@@ -301,7 +360,9 @@ function sigBlock(j, s, now = D.clock()) {
   const until = ms(v.plati_do) ? F.time(new Date(ms(v.plati_do))) : '–';
   const out = nyClock(s.vystup, s.cas_signalu || j.vytvoreno);
   const entry = sell ? t('den.e.min', { v: px(v.nejniz) }) : t('den.e.max', { v: px(v.nejvys) });
-  const btn = demoOk(s.trh)
+  const btn = priceGone
+    ? `<button type="button" class="btn btn-block den-nobuy" disabled data-den-nobuy="1">${t('den.b.gone')}</button>`
+    : demoOk(s.trh)
     ? `<button type="button" class="btn btn-primary btn-block" data-action="den-trade" data-id="${F.esc(s.id || '')}" data-sym="${F.esc(s.trh || '')}" data-side="${sell ? 'SELL' : 'BUY'}" data-sl="${+s.stop || ''}">${icon('spark', 'icon-sm')}<span>${t(sell ? 'den.b.sell' : 'den.b.buy')}</span></button><p class="den-st">${t('den.own')}</p>`
     : `<p class="den-note den-nodemo" data-den-nodemo="1">${t('den.noDemo')}</p>`;
   const title = `<p class="den-sig-t${demoOk(s.trh) ? '' : ' is-info'}"><span class="${sell ? 'down' : 'up'}">${sell ? '↓' : '↑'} ${t(sell ? 'den.sell' : 'den.buy')}</span><span>${F.esc(mkt(s.trh) !== '–' ? mkt(s.trh) : s.nazev || '–')}</span>${isPB(s) ? pbTag() : ''}</p>${isPB(s) ? `<p class="den-st den-pb-l">${t('den.pb.line')}</p>` : ''}`;
@@ -313,8 +374,7 @@ function sigBlock(j, s, now = D.clock()) {
     return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go" data-den-variant="broker">${title}${leftHtml}
     <p class="den-brk">${F.esc(txt)}</p>
     <dl class="den-kv num"><dt>${t('den.k.stop')}</dt><dd>${px(s.stop)}</dd>
-      <dt>${t('den.k.exit')}</dt><dd>${F.esc(out ? t('den.exitAt', { v: F.time(out) }) : '–')}</dd></dl>${btn}
-    <p class="den-st den-why">${F.esc(t(`den.why${n > 0 ? '' : '0'}`, p))}</p></div>`;
+      <dt>${t('den.k.exit')}</dt><dd>${F.esc(out ? t('den.exitAt', { v: F.time(out) }) : '–')}</dd></dl>${btn}</div>`;
   }
   return `<div class="den-sig" data-den-sig="${F.esc(s.id || '')}" data-den-state="go">${title}${leftHtml}
     <dl class="den-kv num"><dt>${t('den.k.entry')}</dt><dd>${F.esc(entry)}</dd>
@@ -346,7 +406,8 @@ function todayBody(j, now, { cap = TODAY_CAP, lead = true, onlyGo = false } = {}
   const restShown = onlyGo && goShown.length ? [] : rest.slice(0, Math.max(0, cap - goShown.length));
   const more = go.length + rest.length - goShown.length - restShown.length;
   let html = goShown.map((o) => sigBlock(j, o.s, now)).join('');
-  html += todayLines(restShown, goShown.length > 0, lead);
+  /* 1.16.5: every other signal of today tells what happened with it (storyHtml) */
+  html += (goShown.length && restShown.length ? `<p class="den-note den-lead">${t('den.todayLead2')}</p>` : '') + restShown.map((o) => storyHtml(j, o, now)).join('');
   if (more > 0) html += `<p class="den-note den-more-n"><a href="#/den">${F.esc(tp('den.moreN', more))}${icon('chev-right', 'icon-xs')}</a></p>`;
   if (!go.length && !rest.length) {
     const last = lastOld(j, now);
@@ -365,11 +426,13 @@ export function cardHtml(now = D.clock(), { top = false } = {}) {
   const j = st.j;
   if (!st.tried) return `<section class="den-card is-quiet" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}<p class="den-off">${t('common.loading')}</p></section>`;
   try {
-    const body = todayBody(j, now, { onlyGo: top });
+    const body = todayBody(j, now, { onlyGo: top, lead: false });
     const live = body.includes('data-den-state="go"');
     /* the card says once that signals came late: when today's lines already list them, the result line does not repeat it */
-    const saysLate = body.includes('data-den-state="late"') || body.includes('data-den-state="over"');
-    const res = j ? `<p class="den-res">${F.esc(resultLine(j, { late: !saysLate }))}</p>` : '';
+    /* 1.16.5: next to the stories of today's signals the count of late signals of other days would only confuse */
+    const saysLate = body.includes('data-den-state="late"') || body.includes('data-den-state="over"') || body.includes('data-den-story');
+    /* 1.16.5: the card on Dnes / Signály never adds "N signals came late" (a count over other days, it only confused); #/den keeps it */
+    const res = j ? `<p class="den-res">${F.esc(resultLine(j, { late: false }))}</p>` : '';
     /* at the top the offer comes first (the button must be on the first screen of a small phone), the robot's result right under it */
     return `<section class="den-card${live ? '' : ' is-quiet'}${top ? ' den-top' : ''}" id="den-card" aria-label="${F.esc(t('den.h'))}">${headHtml()}${top ? body + res : res + body}</section>`;
   } catch {
@@ -380,22 +443,16 @@ export function cardHtml(now = D.clock(), { top = false } = {}) {
    was 2 400 px down on Dnes and the entry ended eight minutes after the notification).
    atTop: a signal can be entered right now -> the whole card moves to the very top of Dnes (home.js leaves the lower
    place empty). topHtml: that card, or - for three hours after the entry ended - one line saying so. */
-export const atTop = (now = D.clock()) => st.tried && hotOf(st.j, now).go.length > 0;
-function goneHtml(j, now) {
-  const g = hotOf(j, now).gone;
-  if (!g.length) return '';
-  const at = (o) => (ms(o.s.cas_signalu) ? F.time(new Date(ms(o.s.cas_signalu))) : '–');
-  const txt = g.length === 1
-    ? t('den.gone1', { m: g[0].x.m, at: at(g[0]), until: g[0].x.until })
-    : t('den.goneN', { list: g.map((o) => t('den.goneLi', { m: o.x.m, until: o.x.until })).join(', ') });
-  return `<a class="den-gone" id="den-gone" href="#/den" data-den-gone="${g.length}">${icon('clock', 'icon-sm')}<span><b>${t('den.goneH')}</b> ${F.esc(txt)}</span>${icon('chev-right', 'icon-xs')}</a>`;
+/* 1.16.5: the card is at the top also while the robot holds today's trade and for three hours after a signal ended - the
+   person who got the notification finds what happened with the signal (the one-line note of 1.16.4 said too little) */
+export function atTop(now = D.clock()) {
+  if (!st.tried) return false;
+  const h = hotOf(st.j, now);
+  return h.go.length > 0 || h.gone.length > 0;
 }
 export function topHtml(now = D.clock()) {
   if (!st.tried || !st.j) return '';
-  try {
-    if (atTop(now)) return cardHtml(now, { top: true });
-    return goneHtml(st.j, now);
-  } catch { return ''; }
+  try { return atTop(now) ? cardHtml(now, { top: true }) : ''; } catch { return ''; }
 }
 /* 1.16.4 Signály: today's signals of the daily robot are listed there too (people look for "a signal" under Signály);
    the card is put right under the page head, only on a day that has such a signal */
@@ -508,7 +565,7 @@ function factsHtml(j, s, now) {
       ${row(t('den.k.state'), t(`den.o.${x.code}`))}
       ${Number.isFinite(r) && s.vysledek_R != null ? row(t('den.k.R'), `${r > 0 ? '+' : r < 0 ? '−' : ''}${n2(Math.abs(r), 2)} R`) : ''}</dl>
     ${Number.isFinite(r) && s.vysledek_R != null ? `<p class="den-st">${t('den.Rexpl')}</p>` : ''}
-    ${isLate(s) ? `<p class="den-st">${t('den.lateExpl')}</p>` : ''}`;
+    ${s.pozde_pri_zapisu === true ? `<p class="den-st">${t('den.lateExpl')}</p>` : ''}`;
 }
 /* jistota_pct: 94 -> "94 %", "88–98" -> "88–98 %", a Czech word ("nízká – …") only in Czech */
 function certainty(v) {

@@ -1,0 +1,26 @@
+/* 1.16.5 Denní robot: u každého dnešního signálu, do kterého (už) nejde vstoupit, stojí krátce, co se s ním stalo a co má
+   člověk udělat – místo šedé věty „Vstup už skončil: DAX – nic nedělej“. Tom 16. 11.: „v jednoduchosti je síla“. */
+export default {
+  'den.y.sent': 'Signál dnes v {at}',
+  'den.y.heldB': 'Robot koupil za {e}. Drží do {out}.',
+  'den.y.heldS': 'Robot sází na pokles od {e}. Drží do {out}.',
+  'den.y.held0': 'Robot je v obchodu. Drží do {out}.',
+  'den.y.nowUp': 'Teď je v plusu.',
+  'den.y.nowDown': 'Teď je v mínusu.',
+  'den.y.nowFlat': 'Teď je kolem nuly.',
+  'den.y.win': 'Skončil ziskem.',
+  'den.y.loss': 'Skončil ztrátou.',
+  'den.y.flat': 'Skončil na nule.',
+  'den.y.win0': 'Skončil ziskem.', 'den.y.loss0': 'Skončil ztrátou.', 'den.y.flat0': 'Skončil na nule.',
+  'den.y.over': 'Přidat se šlo do {until}. Robot ho vynechal.',
+  'den.y.late': 'Přišel pozdě, přidat se nešlo.',
+  'den.y.doHeld': 'Přidat se šlo do {until}. Teď nic nedělej.',
+  'den.y.doMine': 'Ty ho máš taky.',
+  'den.y.doNothing': 'Teď nic nedělej.',
+  'den.y.tagB': 'nákup', 'den.y.tagS': 'sázka na pokles',
+  'den.b.gone': 'Cena utekla – teď nekupuj',
+  'den.y.doEnd': 'Hotovo, nic nedělej.',
+  'den.y.doMineEnd': 'Svůj obchod máš ještě otevřený.',
+  'den.y.pf': 'Zobrazit v Portfoliu',
+  'den.todayLead2': 'Další dnešní signály:',
+};

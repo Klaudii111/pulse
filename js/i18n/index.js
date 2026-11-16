@@ -47,13 +47,15 @@ import cs1160 from './cs1160.js';
 import en1160 from './en1160.js';
 import cs1164 from './cs1164.js';
 import en1164 from './en1164.js';
+import cs1165 from './cs1165.js';
+import en1165 from './en1165.js';
 
 export const LOCALES = [
   { id: 'cs', label: 'Čeština', tag: 'cs-CZ' },
   { id: 'en', label: 'English', tag: 'en-GB' },
 ];
 /* 1.9.0 texts live in cs19.js / en19.js and win over older keys of the same name (e.g. nav.terminalShort) */
-const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111, ...cs112, ...cs113, ...cs114, ...cs115, ...cs116, ...cs117, ...cs118, ...cs119, ...cs120, ...cs121, ...cs1139, ...cs1150, ...cs1151, ...cs1152, ...cs1153, ...cs1154, ...cs1155, ...cs1160, ...cs1164 }, en: { ...en, ...en19, ...en110, ...en111, ...en112, ...en113, ...en114, ...en115, ...en116, ...en117, ...en118, ...en119, ...en120, ...en121, ...en1139, ...en1150, ...en1151, ...en1152, ...en1153, ...en1154, ...en1155, ...en1160, ...en1164 } };
+const DICTS = { cs: { ...cs, ...cs19, ...cs110, ...cs111, ...cs112, ...cs113, ...cs114, ...cs115, ...cs116, ...cs117, ...cs118, ...cs119, ...cs120, ...cs121, ...cs1139, ...cs1150, ...cs1151, ...cs1152, ...cs1153, ...cs1154, ...cs1155, ...cs1160, ...cs1164, ...cs1165 }, en: { ...en, ...en19, ...en110, ...en111, ...en112, ...en113, ...en114, ...en115, ...en116, ...en117, ...en118, ...en119, ...en120, ...en121, ...en1139, ...en1150, ...en1151, ...en1152, ...en1153, ...en1154, ...en1155, ...en1160, ...en1164, ...en1165 } };
 const FALLBACK = 'cs';
 
 function detect() {
